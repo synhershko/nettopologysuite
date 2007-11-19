@@ -1,4 +1,4 @@
-#summary Suggested SVN cliente properties for integration with issue tracker
+#summary Suggested SVN client properties for integration with issue tracker
 
 ||*Property*||*Value*||
 ||bugtraq:label||Issue:||
