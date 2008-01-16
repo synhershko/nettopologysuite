@@ -1,10 +1,10 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Operation;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
@@ -12,115 +12,88 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// Models a collection of <c>Point</c>s.
     /// </summary>
     [Serializable]
-    public class MultiPoint : GeometryCollection, IMultiPoint
+    public class MultiPoint<TCoordinate> : GeometryCollection<TCoordinate>, IMultiPoint<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>, 
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
         /// Represents an empty <c>MultiPoint</c>.
         /// </summary>
-        public static new readonly IMultiPoint Empty = new GeometryFactory().CreateMultiPoint(new IPoint[] { });
-        
+        public new static readonly IMultiPoint Empty = new GeometryFactory<TCoordinate>().CreateMultiPoint();
+
         /// <summary>
-        /// Constructs a <c>MultiPoint</c>.
+        /// Constructs an empty <see cref="MultiPoint{TCoordinate}"/>.
         /// </summary>
-        /// <param name="points">
-        /// The <c>Point</c>s for this <c>MultiPoint</c>
-        /// , or <c>null</c> or an empty array to create the empty point.
-        /// Elements may be empty <c>Point</c>s, but not <c>null</c>s.
-        /// </param>
-        /// <param name="factory"></param>
-        public MultiPoint(IPoint[] points, IGeometryFactory factory) : base(points, factory) { }
+        public MultiPoint(IGeometryFactory<TCoordinate> factory)
+            : base(factory) { }
 
         /// <summary>
         /// Constructs a <c>MultiPoint</c>.
         /// </summary>
         /// <param name="points">
         /// The <c>Point</c>s for this <c>MultiPoint</c>
-        /// , or <c>null</c> or an empty array to create the empty point.
-        /// Elements may be empty <c>Point</c>s, but not <c>null</c>s.
+        /// , or <see langword="null" /> or an empty array to create the empty point.
+        /// Elements may be empty <c>Point</c>s, but not <see langword="null" />s.
+        /// </param>
+        public MultiPoint(IEnumerable<IPoint<TCoordinate>> points, IGeometryFactory<TCoordinate> factory)
+            : base(Enumerable.Upcast<IGeometry<TCoordinate>, IPoint<TCoordinate>>(points), factory) { }
+
+        /// <summary>
+        /// Constructs a <c>MultiPoint</c>.
+        /// </summary>
+        /// <param name="points">
+        /// The <see cref="Point{TCoordinate}"/>s for this <see cref="MultiPoint{TCoordinate}"/>, 
+        /// or <see langword="null" /> or an empty array to create the empty point.
+        /// Elements may be empty <see cref="Point{TCoordinate}"/>s, but not <see langword="null" />s.
         /// </param>
         /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="IPrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public MultiPoint(IPoint[] points) : this(points, DefaultFactory) { }  
+        public MultiPoint(IEnumerable<IPoint<TCoordinate>> points) 
+            : this(points, DefaultFactory) {}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override Dimensions Dimension 
+        public MultiPoint(IEnumerable<TCoordinate> points)
+            : this(DefaultFactory.CreateMultiPoint(points), DefaultFactory) { }
+
+        public override Dimensions Dimension
         {
-            get
-            {
-                return Dimensions.Point;
-            }
+            get { return Dimensions.Point; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public override Dimensions BoundaryDimension
         {
-            get
-            {
-                return Dimensions.False;
-            }
+            get { return Dimensions.False; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override string GeometryType
+        public override OgcGeometryType GeometryType
         {
-            get
-            {
-                return "MultiPoint";
-            }
+            get { return OgcGeometryType.MultiPoint; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override IGeometry Boundary
+        public override IGeometry<TCoordinate> Boundary
         {
-            get
-            {
-                return Factory.CreateGeometryCollection(null);
-            }
+            get { return Factory.CreateGeometryCollection(null); }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsSimple
+        public override Boolean IsSimple
         {
-            get
-            {
-                return (new IsSimpleOp()).IsSimple(this);
-            }
+            get { return (new IsSimpleOp<TCoordinate>()).IsSimple(this); }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsValid
+        public override Boolean IsValid
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
         {
-            if (!IsEquivalentClass(other)) 
-                return false;            
-            return base.EqualsExact(other, tolerance);
+            if (!IsEquivalentClass(other))
+            {
+                return false;
+            }
+
+            return base.Equals(other, tolerance);
         }
 
         /// <summary>
@@ -129,9 +102,45 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <param name="n">The index of the <c>Coordinate</c> to retrieve, beginning at 0.
         /// </param>
         /// <returns>The <c>n</c>th <c>Coordinate</c>.</returns>
-        protected ICoordinate GetCoordinate(int n) 
+        protected TCoordinate GetCoordinate(Int32 n)
         {
-            return geometries[n].Coordinate;
+            return this[n].Coordinate;
+        }
+
+        public new IEnumerator<IPoint<TCoordinate>> GetEnumerator()
+        {
+            foreach (IPoint<TCoordinate> point in this)
+            {
+                yield return point;
+            }
+        }
+
+        #region IMultiPoint<TCoordinate> Members
+
+        public new IPoint<TCoordinate> this[Int32 index]
+        {
+            get { return base[index] as IPoint<TCoordinate>; }
+            set { base[index] = value; }
+        }
+
+        #endregion
+
+        #region IMultiPoint Members
+
+        IPoint IMultiPoint.this[Int32 index]
+        {
+            get { throw new NotImplementedException(); }
+            set { throw new NotImplementedException(); }
+        }
+
+        #endregion
+
+        IEnumerator<IPoint> IEnumerable<IPoint>.GetEnumerator()
+        {
+            foreach (IPoint point in this)
+            {
+                yield return point;
+            }
         }
     }
 }

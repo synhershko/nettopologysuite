@@ -1,158 +1,134 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph
 {
     /// <summary>
-    /// A sorted collection of <c>DirectedEdge</c>s which leave a <c>Node</c>
-    /// in a <c>PlanarGraph</c>.
+    /// A sorted collection of <see cref="DirectedEdge{TCoordinate}"/>s 
+    /// which leave a <see cref="Node{TCoordinate}"/>
+    /// in a <see cref="PlanarGraph{TCoordinate}"/>.
     /// </summary>
-    public class DirectedEdgeStar
+    public class DirectedEdgeStar<TCoordinate> : IEnumerable<DirectedEdge<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
         /// The underlying list of outgoing DirectedEdges.
         /// </summary>
-        protected IList outEdges = new ArrayList();
-
-        private bool sorted = false;
-
-        /// <summary>
-        /// Constructs a DirectedEdgeStar with no edges.
-        /// </summary>
-        public DirectedEdgeStar() { }
+        private readonly List<DirectedEdge<TCoordinate>> _outEdges = new List<DirectedEdge<TCoordinate>>();
+        private Boolean _isSorted = false;
 
         /// <summary>
         /// Adds a new member to this DirectedEdgeStar.
         /// </summary>
-        /// <param name="de"></param>
-        public void Add(DirectedEdge de)
-        {            
-            outEdges.Add(de);
-            sorted = false;
+        public void Add(DirectedEdge<TCoordinate> de)
+        {
+            _outEdges.Add(de);
+            _isSorted = false;
         }
 
         /// <summary>
         /// Drops a member of this DirectedEdgeStar.
         /// </summary>
-        /// <param name="de"></param>
-        public void Remove(DirectedEdge de)
+        public void Remove(DirectedEdge<TCoordinate> de)
         {
-            outEdges.Remove(de);
+            _outEdges.Remove(de);
         }
 
         /// <summary>
-        /// Returns an Iterator over the DirectedEdges, in ascending order by angle with the positive x-axis.
+        /// Returns an Iterator over the DirectedEdges, in ascending order by 
+        /// angle with the positive x-axis.
         /// </summary>
-        public IEnumerator GetEnumerator()
-        {            
-            SortEdges();
-            return outEdges.GetEnumerator();
-        }
-        
-        /// <summary>
-        /// Returns the number of edges around the Node associated with this DirectedEdgeStar.
-        /// </summary>
-        public int Degree
+        public IEnumerator<DirectedEdge<TCoordinate>> GetEnumerator()
         {
-            get
-            {
-                return outEdges.Count;
-            }
+            sortEdges();
+            return _outEdges.GetEnumerator();
+        }
+
+        /// <summary>
+        /// Returns the number of edges around the Node associated with this 
+        /// DirectedEdgeStar.
+        /// </summary>
+        public Int32 Degree
+        {
+            get { return _outEdges.Count; }
         }
 
         /// <summary>
         /// Returns the coordinate for the node at wich this star is based.
         /// </summary>
-        public ICoordinate Coordinate
+        public TCoordinate Coordinate
         {
             get
             {
-                IEnumerator it = GetEnumerator();
-                if (!it.MoveNext()) 
-                    return null;
-                DirectedEdge e = (DirectedEdge) it.Current;
-                return e.Coordinate;
+                if(_outEdges.Count == 0)
+                {
+                    return default(TCoordinate);
+                }
+                else
+                {
+                    sortEdges();
+                    return _outEdges[0].Coordinate;
+                }
             }
         }
 
         /// <summary>
-        /// Returns the DirectedEdges, in ascending order by angle with the positive x-axis.
+        /// Returns the DirectedEdges, in ascending order by angle with the positive 
+        /// x-axis.
         /// </summary>
-        public IList Edges
+        public IList<DirectedEdge<TCoordinate>> Edges
         {
             get
             {
-                SortEdges();
-                return outEdges;
+                sortEdges();
+                return _outEdges.AsReadOnly();
             }
         }
 
         /// <summary>
-        /// 
+        /// Returns the zero-based index of the given Edge, after sorting in 
+        /// ascending order by angle with the positive x-axis.
         /// </summary>
-        private void SortEdges()
+        public Int32 GetIndex(Edge<TCoordinate> edge)
         {
-            if (!sorted)
-            {
-                ArrayList list  = (ArrayList) outEdges;
-                list.Sort();
-                sorted = true;                
-            }
-        }
+            sortEdges();
 
-        /// <summary>
-        /// Returns the zero-based index of the given Edge, after sorting in ascending order
-        /// by angle with the positive x-axis.
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <returns></returns>
-        public int GetIndex(Edge edge)
-        {
-            SortEdges();
-            for (int i = 0; i < outEdges.Count; i++)
-            {
-                DirectedEdge de = (DirectedEdge)outEdges[i];
-                if (de.Edge == edge)
-                    return i;
-            }
-            return -1;
+            return _outEdges.FindIndex(delegate(DirectedEdge<TCoordinate> query) { return query.Edge == edge; });
         }
 
         /// <summary>
         /// Returns the zero-based index of the given DirectedEdge, after sorting in ascending order
         /// by angle with the positive x-axis.
         /// </summary>
-        /// <param name="dirEdge"></param>
-        /// <returns></returns>
-        public int GetIndex(DirectedEdge dirEdge)
+        public Int32 GetIndex(DirectedEdge<TCoordinate> directedEdge)
         {
-            SortEdges();
-            for (int i = 0; i < outEdges.Count; i++)
+            if (directedEdge == null)
             {
-                DirectedEdge de = (DirectedEdge)outEdges[i];
-                if (de == dirEdge)
-                    return i;
+                throw new ArgumentNullException("directedEdge");
             }
-            return -1;
+
+            sortEdges();
+
+            return _outEdges.FindIndex(delegate(DirectedEdge<TCoordinate> query) { return directedEdge == query; });
         }
 
         /// <summary> 
         /// Returns the remainder when i is divided by the number of edges in this
         /// DirectedEdgeStar. 
         /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public int GetIndex(int i)
+        public Int32 GetIndex(Int32 i)
         {
-            int modi = i % outEdges.Count;
+            Int32 modi = i % _outEdges.Count;
+
             //I don't think modi can be 0 (assuming i is positive) [Jon Aquino 10/28/2003] 
-            if (modi < 0) 
-                modi += outEdges.Count;
+            if (modi < 0)
+            {
+                modi += _outEdges.Count;
+            }
+
             return modi;
         }
 
@@ -160,12 +136,28 @@ namespace GisSharpBlog.NetTopologySuite.Planargraph
         /// Returns the DirectedEdge on the left-hand side of the given DirectedEdge (which
         /// must be a member of this DirectedEdgeStar). 
         /// </summary>
-        /// <param name="dirEdge"></param>
-        /// <returns></returns>
-        public DirectedEdge GetNextEdge(DirectedEdge dirEdge)
+        public DirectedEdge<TCoordinate> GetNextEdge(DirectedEdge<TCoordinate> dirEdge)
         {
-            int i = GetIndex(dirEdge);
-            return (DirectedEdge)outEdges[GetIndex(i + 1)];
+            Int32 i = GetIndex(dirEdge);
+            return _outEdges[GetIndex(i + 1)];
         }
+
+        private void sortEdges()
+        {
+            if (!_isSorted)
+            {
+                _outEdges.Sort();
+                _isSorted = true;
+            }
+        }
+
+        #region IEnumerable Members
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        #endregion
     }
 }

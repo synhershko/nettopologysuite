@@ -1,6 +1,5 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.Collections.Generic;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Sweepline
 {
@@ -10,86 +9,75 @@ namespace GisSharpBlog.NetTopologySuite.Index.Sweepline
     /// </summary>
     public class SweepLineIndex
     {
-        private ArrayList events = new ArrayList();
-        private bool indexBuilt;
+        private readonly List<SweepLineEvent> _events = new List<SweepLineEvent>();
+        private Boolean _isIndexBuilt;
 
         // statistics information
-        private int nOverlaps;
+        private Int32 _overlapCount;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public SweepLineIndex() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sweepInt"></param>
-        public void Add(SweepLineInterval sweepInt)
+        public void Add(SweepLineInterval sweepLineInterval)
         {
-            SweepLineEvent insertEvent = new SweepLineEvent(sweepInt.Min, null, sweepInt);
-            events.Add(insertEvent);
-            events.Add(new SweepLineEvent(sweepInt.Max, insertEvent, sweepInt));
+            SweepLineEvent insertEvent 
+                = new SweepLineEvent(sweepLineInterval.Min, null, sweepLineInterval);
+            _events.Add(insertEvent);
+            _events.Add(new SweepLineEvent(sweepLineInterval.Max, insertEvent, sweepLineInterval));
         }
 
-        /// <summary>
-        /// Because Delete Events have a link to their corresponding Insert event,
-        /// it is possible to compute exactly the range of events which must be
-        /// compared to a given Insert event object.
-        /// </summary>
-        private void BuildIndex()
-        {
-            if (indexBuilt) 
-                return;
-            events.Sort();
-            for (int i = 0; i < events.Count; i++)
-            {
-                SweepLineEvent ev = (SweepLineEvent)events[i];
-                if (ev.IsDelete)                
-                    ev.InsertEvent.DeleteEventIndex = i;                
-            }
-            indexBuilt = true;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="action"></param>
         public void ComputeOverlaps(ISweepLineOverlapAction action)
         {
-            nOverlaps = 0;
-            BuildIndex();
+            _overlapCount = 0;
+            buildIndex();
 
-            for (int i = 0; i < events.Count; i++)
+            for (Int32 i = 0; i < _events.Count; i++)
             {
-                SweepLineEvent ev = (SweepLineEvent)events[i];
-                if (ev.IsInsert)               
-                    ProcessOverlaps(i, ev.DeleteEventIndex, ev.Interval, action);                
+                SweepLineEvent ev = _events[i];
+
+                if (ev.IsInsert)
+                {
+                    processOverlaps(i, ev.DeleteEventIndex, ev.Interval, action);
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="start"></param>
-        /// <param name="end"></param>
-        /// <param name="s0"></param>
-        /// <param name="action"></param>
-        private void ProcessOverlaps(int start, int end, SweepLineInterval s0, ISweepLineOverlapAction action)
+        // Because Delete Events have a link to their corresponding Insert event,
+        // it is possible to compute exactly the range of events which must be
+        // compared to a given Insert event object.
+        private void buildIndex()
         {
-            /*
-             * Since we might need to test for self-intersections,
-             * include current insert event object in list of event objects to test.
-             * Last index can be skipped, because it must be a Delete event.
-             */
-            for (int i = start; i < end; i++)
+            if (_isIndexBuilt)
             {
-                SweepLineEvent ev = (SweepLineEvent)events[i];
+                return;
+            }
+
+            _events.Sort();
+
+            for (Int32 i = 0; i < _events.Count; i++)
+            {
+                SweepLineEvent ev = _events[i];
+
+                if (ev.IsDelete)
+                {
+                    ev.InsertEvent.DeleteEventIndex = i;
+                }
+            }
+
+            _isIndexBuilt = true;
+        }
+
+        private void processOverlaps(Int32 start, Int32 end, SweepLineInterval s0, ISweepLineOverlapAction action)
+        {
+            // Since we might need to test for self-intersections,
+            // include current insert event object in list of event objects to test.
+            // Last index can be skipped, because it must be a Delete event.
+            for (Int32 i = start; i < end; i++)
+            {
+                SweepLineEvent ev = _events[i];
+
                 if (ev.IsInsert)
                 {
                     SweepLineInterval s1 = ev.Interval;
                     action.Overlap(s0, s1);
-                    nOverlaps++;
+                    _overlapCount++;
                 }
             }
         }

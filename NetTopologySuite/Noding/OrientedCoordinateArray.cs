@@ -1,94 +1,120 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
+    // TODO: make this a coordinate sequence filter?
+
     /// <summary>
-    ///  Allows comparing <see cref="Coordinate" /> arrays in an orientation-independent way.
+    /// Allows comparing <typeparamref name="TCoordinate"/> arrays in an orientation-independent way.
     /// </summary>
-    public class OrientedCoordinateArray : IComparable
+    public class OrientedCoordinateArray<TCoordinate> : IComparable<OrientedCoordinateArray<TCoordinate>>, IEquatable<OrientedCoordinateArray<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<TCoordinate>, IConvertible
     {
-        private ICoordinate[] pts = null;
-        private bool orientation = false;
+        private readonly IEnumerable<TCoordinate> _coordinates = null;
+        private readonly Boolean _orientation = false;
 
         /// <summary>
-        /// Creates a new <see cref="OrientedCoordinateArray" />}
-        /// for the given <see cref="Coordinate" /> array.
+        /// Creates a new <see cref="OrientedCoordinateArray{TCoordinate}" />}
+        /// for the given <typeparamref name="TCoordinate"/> set.
         /// </summary>
-        /// <param name="pts"></param>
-        public OrientedCoordinateArray(ICoordinate[] pts)
+        public OrientedCoordinateArray(IEnumerable<TCoordinate> pts)
         {
-            this.pts = pts;
-            orientation = Orientation(pts);
+            _coordinates = pts;
+            _orientation = orientation(pts);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as OrientedCoordinateArray<TCoordinate>);
         }
 
         /// <summary>
-        /// Computes the canonical orientation for a coordinate array.
+        /// Compares two <see cref="OrientedCoordinateArray{TCoordinate}" />s 
+        /// for their relative order.
         /// </summary>
-        /// <param name="pts"></param>
-        /// <returns>
-        /// <c>true</c> if the points are oriented forwards, or
-        /// <c>false</c>if the points are oriented in reverse.
-        /// </returns>
-        private static bool Orientation(ICoordinate[] pts)
-        {
-            return CoordinateArrays.IncreasingDirection(pts) == 1;
-        }
-
-        /// <summary>
-        /// Compares two <see cref="OrientedCoordinateArray" />s for their relative order.
-        /// </summary>
-        /// <param name="o1"></param>
         /// <returns>
         /// -1 this one is smaller, or
         ///  0 the two objects are equal, or
         ///  1 this one is greater.
         /// </returns>
-        public int CompareTo(object o1)
+        public Int32 CompareTo(OrientedCoordinateArray<TCoordinate> other)
         {
-            OrientedCoordinateArray oca = (OrientedCoordinateArray) o1;
-            return CompareOriented(pts, orientation, oca.pts, oca.orientation);            
+            if (other == null)
+            {
+                throw new ArgumentNullException("other");
+            }
+
+            return compareOriented(_coordinates, _orientation, other._coordinates, other._orientation);
+        }
+
+
+        #region IEquatable<OrientedCoordinateArray<TCoordinate>> Members
+
+        public bool Equals(OrientedCoordinateArray<TCoordinate> other)
+        {
+            if(ReferenceEquals(other, null))
+            {
+                return false;
+            }
+
+            return CompareTo(other) == 0;
+        }
+
+        #endregion
+
+        private static Int32 compareOriented(IEnumerable<TCoordinate> pts1, Boolean orientation1,
+            IEnumerable<TCoordinate> pts2, Boolean orientation2)
+        {
+            pts1 = orientation1 ? pts1 : Slice.Reverse(pts1);
+            pts2 = orientation2 ? pts2 : Slice.Reverse(pts2);
+
+            IEnumerator<TCoordinate> p1Enumerator = pts1.GetEnumerator();
+            IEnumerator<TCoordinate> p2Enumerator = pts2.GetEnumerator();
+
+            Boolean done1, done2;
+
+            do
+            {
+                done1 = p1Enumerator.MoveNext();
+                done2 = p2Enumerator.MoveNext();
+
+                if (done1 && !done2)
+                {
+                    return -1;
+                }
+
+                if (!done1 && done2)
+                {
+                    return 1;
+                }
+
+                Int32 compare = p1Enumerator.Current.CompareTo(p2Enumerator.Current);
+
+                if (compare != 0)
+                {
+                    return compare;
+                }
+
+            } while (!(done1 & done2));
+
+            return 0;
         }
 
         /// <summary>
-        /// 
+        /// Computes the canonical orientation for a coordinate array.
         /// </summary>
-        /// <param name="pts1"></param>
-        /// <param name="orientation1"></param>
-        /// <param name="pts2"></param>
-        /// <param name="orientation2"></param>
-        /// <returns></returns>
-        private static int CompareOriented(ICoordinate[] pts1, bool orientation1, ICoordinate[] pts2, bool orientation2)
+        /// <returns>
+        /// <see langword="true"/> if the points are oriented forwards, or
+        /// <c>false</c>if the points are oriented in reverse.
+        /// </returns>
+        private static Boolean orientation(IEnumerable<TCoordinate> pts)
         {
-            int dir1 = orientation1 ? 1 : -1;
-            int dir2 = orientation2 ? 1 : -1;
-            int limit1 = orientation1 ? pts1.Length : -1;
-            int limit2 = orientation2 ? pts2.Length : -1;
-
-            int i1 = orientation1 ? 0 : pts1.Length - 1;
-            int i2 = orientation2 ? 0 : pts2.Length - 1;            
-            while (true)
-            {
-                int compPt = pts1[i1].CompareTo(pts2[i2]);
-                if (compPt != 0)
-                    return compPt;
-
-                i1 += dir1;
-                i2 += dir2;
-                bool done1 = i1 == limit1;
-                bool done2 = i2 == limit2;
-                if(done1 && !done2) 
-                    return -1;
-                if(!done1 && done2) 
-                    return 1;
-                if(done1 && done2) 
-                    return 0;
-            }
+            return CoordinateArrays.IncreasingDirection(pts) == 1;
         }
     }
 }

@@ -1,347 +1,274 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.Collections.Generic;
 using System.IO;
-using System.Diagnostics;
-
+using System.Text;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
+using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
-using GisSharpBlog.NetTopologySuite.Algorithm;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public class Edge : GraphComponent
+    public class Edge<TCoordinate> : GraphComponent<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary> 
-        /// Updates an IM from the label for an edge.
+        /// Updates an <see cref="IntersectionMatrix"/> from the label for an edge.
         /// Handles edges from both L and A geometries.
         /// </summary>
-        /// <param name="im"></param>
-        /// <param name="label"></param>
-        public static void UpdateIM(Label label, IntersectionMatrix im)
+        public static void UpdateIntersectionMatrix(Label label, IntersectionMatrix im)
         {
-            im.SetAtLeastIfValid(label.GetLocation(0, Positions.On), label.GetLocation(1, Positions.On), Dimensions.Curve);
+            im.SetAtLeastIfValid(label[0, Positions.On], label[1, Positions.On],
+                                 Dimensions.Curve);
+
             if (label.IsArea())
             {
-                im.SetAtLeastIfValid(label.GetLocation(0, Positions.Left), label.GetLocation(1, Positions.Left), Dimensions.Surface);
-                im.SetAtLeastIfValid(label.GetLocation(0, Positions.Right), label.GetLocation(1, Positions.Right), Dimensions.Surface);
+                im.SetAtLeastIfValid(label[0, Positions.Left], label[1, Positions.Left],
+                                     Dimensions.Surface);
+
+                im.SetAtLeastIfValid(label[0, Positions.Right], label[1, Positions.Right],
+                                     Dimensions.Surface);
             }
         }
 
-        private ICoordinate[] pts;
-        
-        private IEnvelope env;
-        private EdgeIntersectionList eiList = null;
-      
-        private string name;
-        private MonotoneChainEdge mce;
-        private bool isIsolated = true;
-        private Depth depth = new Depth();
-        private int depthDelta = 0;   // the change in area depth from the R to Curve side of this edge
+        private readonly ICoordinateSequence<TCoordinate> _coordinates;
+        private readonly EdgeIntersectionList<TCoordinate> _edgeIntersectionList = null;
+        private IExtents<TCoordinate> _extents;
+        private string _name;
+        private MonotoneChainEdge<TCoordinate> _monotoneChainEdge;
+        private Boolean _isIsolated = true;
+        private readonly Depth _depth = new Depth();
+        private Int32 _depthDelta = 0; // the change in area depth from the R to Curve side of this edge
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="label"></param>
-        public Edge(ICoordinate[] pts, Label label)
+        public Edge(ICoordinateSequence<TCoordinate> coordinates, Label? label)
         {
-            this.eiList = new EdgeIntersectionList(this);
-
-            this.pts = pts;
-            this.label = label;
+            _edgeIntersectionList = new EdgeIntersectionList<TCoordinate>(this);
+            _coordinates = coordinates;
+            Label = label;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        public Edge(ICoordinate[] pts) : this(pts, null) { }
+        public Edge(ICoordinateSequence<TCoordinate> coordinates) 
+            : this(coordinates, null) { }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate[] Points
+        //public IList<TCoordinate> Points
+        //{
+        //    get { return _coordinates; }
+        //    set
+        //    {
+        //        _coordinates.Clear();
+        //        _coordinates.AddRange(value);
+        //    }
+        //}
+
+        public Int32 PointCount
         {
-            get
-            {
-                return pts;
-            }
-            set
-            {
-                pts = value;
-            }
+            get { return _coordinates.Count; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int NumPoints
-        {
-            get
-            {
-                return Points.Length; 
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         public string Name
         {
-            get
-            {
-                return this.name;
-            }
-            set
-            {
-                name = value; 
-            }
+            get { return _name; }
+            set { _name = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate[] Coordinates
+        public ICoordinateSequence<TCoordinate> Coordinates
         {
             get
             {
-                return Points;  
+                return _coordinates;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public ICoordinate GetCoordinate(int i)
-        {            
-            return Points[i];
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override ICoordinate Coordinate
+        public ICoordinateSequence<TCoordinate> CoordinatesReversed
         {
             get
             {
-                if (Points.Length > 0)
-                    return Points[0];
-                return null;
+                return _coordinates.Reversed;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IEnvelope Envelope
+        //public TCoordinate GetCoordinate(Int32 i)
+        //{
+        //    return Points[i];
+        //}
+
+        public override TCoordinate Coordinate
+        {
+            get
+            {
+                if (Coordinates.Count > 0)
+                {
+                    return Coordinates[0];
+                }
+
+                return default(TCoordinate);
+            }
+        }
+
+        public IExtents<TCoordinate> Extents
         {
             get
             {
                 // compute envelope lazily
-                if (env == null) 
+                if (_extents == null)
                 {
-                    env = new Envelope();
-                    for (int i = 0; i < Points.Length; i++) 
-                        env.ExpandToInclude(Points[i]);                
+                    _extents = new Extents<TCoordinate>();
+                    _extents.ExpandToInclude(_coordinates);
                 }
-                return env;
+
+                return _extents;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public Depth Depth
         {
-            get
-            {
-                return depth; 
-            }
+            get { return _depth; }
         }
 
         /// <summary>
-        /// The depthDelta is the change in depth as an edge is crossed from R to L.
+        /// The <see cref="DepthDelta"/> is the change in depth as an edge is 
+        /// crossed from R to L.
         /// </summary>
         /// <returns>The change in depth as the edge is crossed from R to L.</returns>
-        public int DepthDelta
+        public Int32 DepthDelta
         {
-            get
-            {
-                return depthDelta;  
-            }
-            set
-            {
-                depthDelta = value;
-            }
-        }        
+            get { return _depthDelta; }
+            set { _depthDelta = value; }
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int MaximumSegmentIndex
+        public Int32 MaximumSegmentIndex
+        {
+            get { return _coordinates.Count - 1; }
+        }
+
+        public EdgeIntersectionList<TCoordinate> EdgeIntersectionList
+        {
+            get { return _edgeIntersectionList; }
+        }
+
+        public MonotoneChainEdge<TCoordinate> MonotoneChainEdge
         {
             get
             {
-                return Points.Length - 1;
+                if (_monotoneChainEdge == null)
+                {
+                    _monotoneChainEdge = new MonotoneChainEdge<TCoordinate>(this);
+                }
+
+                return _monotoneChainEdge;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeIntersectionList EdgeIntersectionList
+        public Boolean IsClosed
         {
-            get
-            {
-                return eiList; 
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public MonotoneChainEdge MonotoneChainEdge
-        {
-            get
-            {
-                if (mce == null) 
-                    mce = new MonotoneChainEdge(this);
-                return mce;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsClosed
-        {
-            get
-            {
-                return Points[0].Equals(Points[Points.Length - 1]);
-            }
+            get { return Slice.GetFirst(Coordinates).Equals(Slice.GetLast(Coordinates)); }
         }
 
         /// <summary> 
         /// An Edge is collapsed if it is an Area edge and it consists of
         /// two segments which are equal and opposite (eg a zero-width V).
         /// </summary>
-        public bool IsCollapsed
+        public Boolean IsCollapsed
         {
             get
             {
-                if (!label.IsArea()) 
+                if (!Label.Value.IsArea())
+                {
                     return false;
-                if (Points.Length != 3) 
+                }
+
+                if (Coordinates.Count != 3)
+                {
                     return false;
-                if (Points[0].Equals(Points[2]) )
+                }
+
+                if (Coordinates[0].Equals(Coordinates[2]))
+                {
                     return true;
+                }
+
                 return false;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public Edge CollapsedEdge
+        public Edge<TCoordinate> CollapsedEdge
         {
             get
             {
-                ICoordinate[] newPts = new ICoordinate[2];
-                newPts[0] = Points[0];
-                newPts[1] = Points[1];
-                Edge newe = new Edge(newPts, Label.ToLineLabel(label));
-                return newe;
+                ICoordinateSequence<TCoordinate> newPts = Coordinates.Slice(0, 1);
+                Label lineLabel = GeometriesGraph.Label.ToLineLabel(Label.Value);
+                Edge<TCoordinate> newEdge = new Edge<TCoordinate>(newPts, lineLabel);
+                return newEdge;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool Isolated
+        public Boolean Isolated
         {
-            get
-            {
-                return isIsolated;
-            }
-            set
-            {
-                isIsolated = value;
-            }
+            get { return _isIsolated; }
+            set { _isIsolated = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsIsolated
+        public override Boolean IsIsolated
         {
-            get
-            {
-                return isIsolated;
-            }
+            get { return _isIsolated; }
         }
 
         /// <summary>
-        /// Adds EdgeIntersections for one or both
+        /// Adds <see cref="EdgeIntersection{TCoordinate}"/>s for one or both
         /// intersections found for a segment of an edge to the edge intersection list.
         /// </summary>
-        /// <param name="li"></param>
-        /// <param name="segmentIndex"></param>
-        /// <param name="geomIndex"></param>
-        public void AddIntersections(LineIntersector li, int segmentIndex, int geomIndex)
+        public void AddIntersections(Intersection<TCoordinate> intersection, Int32 segmentIndex, Int32 geometryIndex)
         {
-            for (int i = 0; i < li.IntersectionNum; i++) 
-                AddIntersection(li, segmentIndex, geomIndex, i);            
+            for (Int32 i = 0; i < (Int32)intersection.IntersectionType; i++)
+            {
+                AddIntersection(intersection, segmentIndex, geometryIndex, i);
+            }
         }
 
         /// <summary>
-        /// Add an EdgeIntersection for intersection intIndex.
+        /// Add an <see cref="EdgeIntersection{TCoordinate}"/> for intersection 
+        /// <paramref name="intersectionIndex"/>.
         /// An intersection that falls exactly on a vertex of the edge is normalized
-        /// to use the higher of the two possible segmentIndexes.
+        /// to use the higher of the two possible <paramref name="segmentIndex"/>es.
         /// </summary>
-        /// <param name="li"></param>
-        /// <param name="segmentIndex"></param>
-        /// <param name="geomIndex"></param>
-        /// <param name="intIndex"></param>
-        public void AddIntersection(LineIntersector li, int segmentIndex, int geomIndex, int intIndex)
+        public void AddIntersection(Intersection<TCoordinate> intersection, 
+            Int32 segmentIndex, Int32 geometryIndex, Int32 intersectionIndex)
         {
-            ICoordinate intPt = new Coordinate(li.GetIntersection(intIndex));
-            int normalizedSegmentIndex = segmentIndex;
-            double dist = li.GetEdgeDistance(geomIndex, intIndex);        
-            
+            TCoordinate intersectionPoint = intersection.GetIntersectionPoint(intersectionIndex);
+            Int32 normalizedSegmentIndex = segmentIndex;
+            Double dist = intersection.GetEdgeDistance(geometryIndex, intersectionIndex);
+
             // normalize the intersection point location
-            int nextSegIndex = normalizedSegmentIndex + 1;
-            if (nextSegIndex < Points.Length) 
+            Int32 nextSegIndex = normalizedSegmentIndex + 1;
+
+            if (nextSegIndex < Coordinates.Count)
             {
-                ICoordinate nextPt = Points[nextSegIndex];        
+                TCoordinate nextPt = Coordinates[nextSegIndex];
 
                 // Normalize segment index if intPt falls on vertex
                 // The check for point equality is 2D only - Z values are ignored
-                if (intPt.Equals2D(nextPt)) 
-                {       
+                if (intersection.Equals(nextPt))
+                {
                     normalizedSegmentIndex = nextSegIndex;
                     dist = 0.0;
                 }
+
                 // Add the intersection point to edge intersection list.                
-                this.EdgeIntersectionList.Add(intPt, normalizedSegmentIndex, dist);
-            }            
+                EdgeIntersectionList.Add(intersectionPoint, normalizedSegmentIndex, dist);
+            }
         }
 
         /// <summary>
         /// Update the IM with the contribution for this component.
-        /// A component only contributes if it has a labelling for both parent geometries.
+        /// A component only contributes if it has a labeling for both parent geometries.
         /// </summary>
-        /// <param name="im"></param>
-        public override void ComputeIM(IntersectionMatrix im)
+        public override void ComputeIntersectionMatrix(IntersectionMatrix im)
         {
-            UpdateIM(label, im);
+            UpdateIntersectionMatrix(Label.Value, im);
         }
 
         /// <summary>
@@ -350,131 +277,133 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// iff
         /// the coordinates of e1 are the same or the reverse of the coordinates in e2.
         /// </summary>
-        /// <param name="o"></param>
-        public override bool Equals(object o)
+        public override Boolean Equals(object o)
         {
-            if (o == null)
-                return false;
-            if (!(o is Edge)) 
-                return false;
-            return Equals(o as Edge);
-        }
+            Edge<TCoordinate> other = o as Edge<TCoordinate>;
 
-        /// <summary>
-        /// Equals is defined to be:
-        /// e1 equals e2
-        /// iff
-        /// the coordinates of e1 are the same or the reverse of the coordinates in e2.
-        /// </summary>
-        /// <param name="e"></param>
-        protected bool Equals(Edge e)
-        {                     
-            if (Points.Length != e.Points.Length)
-                return false;
-
-            bool isEqualForward = true;
-            bool isEqualReverse = true;
-            int iRev = Points.Length;
-            for (int i = 0; i < Points.Length; i++)
+            if (other == null)
             {
-                if (!Points[i].Equals2D(e.Points[i]))
-                    isEqualForward = false;
-                if (!Points[i].Equals2D(e.Points[--iRev]))
-                    isEqualReverse = false;
-                if (!isEqualForward && !isEqualReverse)
-                    return false;
+                return false;
             }
-            return true;
-        }   
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator ==(Edge obj1, Edge obj2)
-        {
-            return Object.Equals(obj1, obj2);
+
+            return Equals(other as Edge<TCoordinate>);
         }
 
         /// <summary>
-        /// 
+        /// Equals is defined to be:
+        /// e1 equals e2
+        /// iff
+        /// the coordinates of e1 are the same or the reverse of the coordinates in e2.
         /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator !=(Edge obj1, Edge obj2)
+        protected Boolean Equals(Edge<TCoordinate> e)
+        {
+            if (Coordinates.Count != e.Coordinates.Count)
+            {
+                return false;
+            }
+
+            Boolean isEqualForward = true;
+            Boolean isEqualReverse = true;
+            Int32 iRev = Coordinates.Count;
+
+            for (Int32 i = 0; i < Coordinates.Count; i++)
+            {
+                if (!Coordinates[i].Equals(e.Coordinates[i]))
+                {
+                    isEqualForward = false;
+                }
+
+                if (!Coordinates[i].Equals(e.Coordinates[--iRev]))
+                {
+                    isEqualReverse = false;
+                }
+
+                if (!isEqualForward && !isEqualReverse)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static Boolean operator ==(Edge<TCoordinate> obj1, Edge<TCoordinate> obj2)
+        {
+            return Equals(obj1, obj2);
+        }
+
+        public static Boolean operator !=(Edge<TCoordinate> obj1, Edge<TCoordinate> obj2)
         {
             return !(obj1 == obj2);
-        }        
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
         }
 
         /// <returns> 
-        /// <c>true</c> if the coordinate sequences of the Edges are identical.
+        /// <see langword="true"/> if the coordinate sequences of the Edges are identical.
         /// </returns>
-        /// <param name="e"></param>
-        public bool IsPointwiseEqual(Edge e)
+        public Boolean IsPointwiseEqual(Edge<TCoordinate> e)
         {
-            if (Points.Length != e.Points.Length) 
+            if (Coordinates.Count != e.Coordinates.Count)
+            {
                 return false;
-            for (int i = 0; i < Points.Length; i++) 
-                if (! Points[i].Equals2D(e.Points[i])) 
-                    return false;                        
+            }
+
+            for (Int32 i = 0; i < Coordinates.Count; i++)
+            {
+                if (!Coordinates[i].Equals(e.Coordinates[i]))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
         public void Write(StreamWriter outstream)
         {
-            outstream.Write("edge " + name + ": ");
+            outstream.Write("edge " + _name + ": ");
             outstream.Write("LINESTRING (");
-            for (int i = 0; i < Points.Length; i++)
+
+            for (Int32 i = 0; i < Coordinates.Count; i++)
             {
-                if (i > 0)  outstream.Write(",");
-                outstream.Write(Points[i].X + " " + Points[i].Y);
+                if (i > 0)
+                {
+                    outstream.Write(",");
+                }
+                outstream.Write(Coordinates[i][Ordinates.X] + " " + Coordinates[i][Ordinates.Y]);
             }
-            outstream.Write(")  " + label + " " + depthDelta);
+
+            outstream.Write(")  " + Label + " " + _depthDelta);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
         public void WriteReverse(StreamWriter outstream)
         {
-            outstream.Write("edge " + name + ": ");
-            for (int i = Points.Length - 1; i >= 0; i--) 
-                outstream.Write(Points[i] + " ");            
+            outstream.Write("edge " + _name + ": ");
+
+            for (Int32 i = Coordinates.Count - 1; i >= 0; i--)
+            {
+                outstream.Write(Coordinates[i] + " ");
+            }
+
             outstream.WriteLine(String.Empty);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
-            sb.Append("edge " + name + ": ");
+            sb.Append("edge " + _name + ": ");
             sb.Append("LINESTRING (");
-            for (int i = 0; i < Points.Length; i++)
+
+            for (Int32 i = 0; i < Coordinates.Count; i++)
             {
-                if (i > 0) sb.Append(",");
-                sb.Append(Points[i].X + " " + Points[i].Y);
+                if (i > 0)
+                {
+                    sb.Append(",");
+                }
+
+                sb.Append(Coordinates[i][Ordinates.X] + " " + Coordinates[i][Ordinates.Y]);
             }
-            sb.Append(")  " + label + " " + depthDelta);
+
+            sb.Append(")  " + Label + " " + _depthDelta);
             return sb.ToString();
         }
     }

@@ -1,5 +1,10 @@
 using System;
+using System.Collections;
+using System.Diagnostics;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.IO
@@ -8,10 +13,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
 	/// Converts a Shapefile point to a OGIS Polygon.
 	/// </summary>
 	public class MultiPointHandler : ShapeHandler
-	{
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MultiPointHandler"/> class.
-        /// </summary>
+	{		
+		/// <summary>
+        /// Initializes a new instance of the MultiPointHandler class.
+		/// </summary>
 		public MultiPointHandler() { }
 				
 		/// <summary>
@@ -19,7 +24,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		/// </summary>
         public override ShapeGeometryTypes ShapeType
 		{
-			get { return ShapeGeometryTypes.MultiPoint; }
+			get
+			{
+                return ShapeGeometryTypes.MultiPoint;
+			}
 		}		
 
 		/// <summary>
@@ -62,14 +70,14 @@ namespace GisSharpBlog.NetTopologySuite.IO
 
             // Slow and maybe not useful...
 			// if (!geometry.IsValid)
-			// Trace.WriteLine("Invalid multipoint being written.");
+			// 	Trace.WriteLine("Invalid multipoint being written.");
 
             IMultiPoint mpoint = geometry as IMultiPoint;
             
-            file.Write(int.Parse(Enum.Format(typeof(ShapeGeometryTypes), ShapeType, "d")));
+            file.Write(int.Parse(Enum.Format(typeof(ShapeGeometryTypes), this.ShapeType, "d")));
 
             IEnvelope box = geometry.EnvelopeInternal;
-			IEnvelope bounds = GetEnvelopeExternal(geometryFactory.PrecisionModel, box);
+			IEnvelope bounds = ShapeHandler.GetEnvelopeExternal(geometryFactory.PrecisionModel, box);
 			file.Write(bounds.MinX);
 			file.Write(bounds.MinY);
 			file.Write(bounds.MaxX);
@@ -94,7 +102,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		/// <returns>The length in bytes this geometry is going to use when written out as a shapefile record.</returns>
 		public override int GetLength(IGeometry geometry)
 		{			
-			return (20 + geometry.NumPoints * 8); // 20 => shapetype(2) + bbox (4*4) + numpoints
+			return (22 + geometry.NumPoints * 8);
 		}					
 	}
 }

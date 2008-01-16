@@ -1,120 +1,109 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
-
     /// <summary>
-    /// Nodes a set of <see cref="SegmentString" />s completely.
-    /// The set of <see cref="SegmentString" />s is fully noded;
+    /// Nodes a set of <see cref="NodedSegmentString{TCoordinate}" />s completely.
+    /// The set of <see cref="NodedSegmentString{TCoordinate}" />s is fully noded;
     /// i.e. noding is repeated until no further intersections are detected.
+    /// </summary>
+    /// <remarks>
     /// <para>
-    /// Iterated noding using a <see cref="PrecisionModels.Floating" /> precision model is not guaranteed to converge,
-    /// due to roundoff error. This problem is detected and an exception is thrown.
+    /// Iterated noding using a <see cref="PrecisionModelType.Floating" /> precision model 
+    /// is not guaranteed to converge, due to roundoff error. This problem is detected 
+    /// and an exception is thrown.
     /// Clients can choose to rerun the noding using a lower precision model.
     /// </para>
-    /// </summary>
-    public class IteratedNoder : INoder
+    /// </remarks>
+    public class IteratedNoder<TCoordinate> : INoder<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
+        public static readonly Int32 DefaultMaxIterations = 5;
+
+        private readonly LineIntersector<TCoordinate> _li = null;
+        //private IEnumerable<SegmentString<TCoordinate>> _nodedSegStrings = null;
+        private Int32 _maxIter = DefaultMaxIterations;
 
         /// <summary>
-        /// 
+        /// Initializes a new instance of the <see cref="IteratedNoder{TCoordinate}"/> class.
         /// </summary>
-        public const int MaxIterations = 5;
-
-        private LineIntersector li = null;
-        private IList nodedSegStrings = null;
-        private int maxIter = MaxIterations;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="IteratedNoder"/> class.
-        /// </summary>
-        /// <param name="pm"></param>
-        public IteratedNoder(PrecisionModel pm)
+        public IteratedNoder(IPrecisionModel<TCoordinate> pm)
         {
-            li = new RobustLineIntersector();
-            li.PrecisionModel = pm;
+            _li = CGAlgorithms<TCoordinate>.CreateRobustLineIntersector();
+            _li.PrecisionModel = pm;
         }
 
         /// <summary>
-        /// Gets/Sets the maximum number of noding iterations performed before
+        /// Gets or sets the maximum number of noding iterations performed before
         /// the noding is aborted. Experience suggests that this should rarely need to be changed
-        /// from the default. The default is <see cref="MaxIterations" />.
+        /// from the default. The default is <see cref="DefaultMaxIterations" />.
         /// </summary>
-        public int MaximumIterations
+        public Int32 MaximumIterations
         {
-            get
-            {
-                return maxIter;
-            }
-            set
-            {
-                maxIter = value;
-            }
+            get { return _maxIter; }
+            set { _maxIter = value; }
         }
 
         /// <summary>
-        /// Returns a <see cref="IList"/> of fully noded <see cref="SegmentString"/>s.
-        /// The <see cref="SegmentString"/>s have the same context as their parent.
+        /// Fully nodes a set of <see cref="NodedSegmentString{TCoordinate}" />s, 
+        /// i.e. peforms noding iteratively until no intersections are found between 
+        /// segments.
+        /// Maintains labeling of edges correctly through the noding.
+        /// The <see cref="NodedSegmentString{TCoordinate}" />s have the same context as their parent.
         /// </summary>
-        /// <returns></returns>
-        public IList GetNodedSubstrings() 
-        { 
-            return nodedSegStrings; 
-        }
-
-        /// <summary>
-        /// Fully nodes a list of <see cref="SegmentString" />s, i.e. peforms noding iteratively
-        /// until no intersections are found between segments.
-        /// Maintains labelling of edges correctly through the noding.
-        /// </summary>
-        /// <param name="segStrings">A collection of SegmentStrings to be noded.</param>
+        /// <param name="segStrings">
+        /// An enumeration of <see cref="NodedSegmentString{TCoordinate}"/>s to be noded.
+        /// </param>
         /// <exception cref="TopologyException">If the iterated noding fails to converge.</exception>
-        public void ComputeNodes(IList segStrings)    
+        public IEnumerable<NodedSegmentString<TCoordinate>> Node(IEnumerable<NodedSegmentString<TCoordinate>> segStrings)
         {
-            int[] numInteriorIntersections = new int[1];
-            nodedSegStrings = segStrings;
-            int nodingIterationCount = 0;
-            int lastNodesCreated = -1;
-            do 
+            //_nodedSegStrings = segStrings;
+            Int32 nodingIterationCount = 0;
+            Int32 lastNodesCreated = -1;
+
+            do
             {
-              Node(nodedSegStrings, numInteriorIntersections);
-              nodingIterationCount++;
-              int nodesCreated = numInteriorIntersections[0];
+                Int32 numInteriorIntersections;
+                segStrings = node(segStrings, out numInteriorIntersections);
+                nodingIterationCount++;
+                Int32 nodesCreated = numInteriorIntersections;
 
-              /*
-               * Fail if the number of nodes created is not declining.
-               * However, allow a few iterations at least before doing this
-               */       
-              if (lastNodesCreated > 0
-                  && nodesCreated >= lastNodesCreated
-                  && nodingIterationCount > maxIter) 
-                throw new TopologyException("Iterated noding failed to converge after "
-                                            + nodingIterationCount + " iterations");              
-              lastNodesCreated = nodesCreated;
+               /*
+                * Fail if the number of nodes created is not declining.
+                * However, allow a few iterations at least before doing this
+                */
+                if (lastNodesCreated > 0
+                    && nodesCreated >= lastNodesCreated
+                    && nodingIterationCount > _maxIter)
+                {
+                    throw new TopologyException("Iterated noding failed to converge after "
+                                                + nodingIterationCount + " iterations");
+                }
 
-            } 
-            while (lastNodesCreated > 0);        
+                lastNodesCreated = nodesCreated;
+            } while (lastNodesCreated > 0);
+
+            return segStrings;
         }
 
         /// <summary>
         /// Node the input segment strings once
         /// and create the split edges between the nodes.
         /// </summary>
-        /// <param name="segStrings"></param>
-        /// <param name="numInteriorIntersections"></param>
-        private void Node(IList segStrings, int[] numInteriorIntersections)
+        private IEnumerable<NodedSegmentString<TCoordinate>> node(IEnumerable<NodedSegmentString<TCoordinate>> segStrings, out Int32 interiorIntersectionsCount)
         {
-            IntersectionAdder si = new IntersectionAdder(li);
-            MCIndexNoder noder = new MCIndexNoder(si);            
-            noder.ComputeNodes(segStrings);
-            nodedSegStrings = noder.GetNodedSubstrings();
-            numInteriorIntersections[0] = si.NumInteriorIntersections;            
+            IntersectionAdder<TCoordinate> si = new IntersectionAdder<TCoordinate>(_li);
+            MonotoneChainIndexNoder<TCoordinate> noder = new MonotoneChainIndexNoder<TCoordinate>(si);
+            IEnumerable<NodedSegmentString<TCoordinate>> nodedSegments = noder.Node(segStrings);
+            interiorIntersectionsCount = si.InteriorIntersectionCount;
+            return nodedSegments;
         }
-
     }
 }

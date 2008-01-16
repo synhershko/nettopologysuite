@@ -1,11 +1,9 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
@@ -13,32 +11,33 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
     /// A RelateNode is a Node that maintains a list of EdgeStubs
     /// for the edges that are incident on it.
     /// </summary>
-    public class RelateNode : Node
+    public class RelateNode<TCoordinate> : Node<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="coord"></param>
-        /// <param name="edges"></param>
-        public RelateNode(ICoordinate coord, EdgeEndStar edges) :
-            base(coord, edges) { }
+        public RelateNode(TCoordinate coord, EdgeEndStar<TCoordinate> edges) :
+            base(coord, edges) {}
 
         /// <summary>
-        /// Update the IM with the contribution for this component.
-        /// A component only contributes if it has a labelling for both parent geometries.
+        /// Update the <see cref="IntersectionMatrix"/> with the 
+        /// contribution for this component. A component only 
+        /// contributes if it has a labeling for both parent geometries.
         /// </summary>
-        public override void ComputeIM(IntersectionMatrix im)
+        public override void ComputeIntersectionMatrix(IntersectionMatrix im)
         {
-            im.SetAtLeastIfValid(label.GetLocation(0), label.GetLocation(1), Dimensions.Point);
+            Debug.Assert(Label != null);
+            im.SetAtLeastIfValid(Label.Value[0].On, Label.Value[1].On, Dimensions.Point);
         }
 
         /// <summary>
-        /// Update the IM with the contribution for the EdgeEnds incident on this node.
+        /// Update the IM with the contribution for the 
+        /// <see cref="EdgeEnd{TCoordinate}"/>s incident on this node.
         /// </summary>
-        /// <param name="im"></param>
-        public void UpdateIMFromEdges(IntersectionMatrix im)
+        public void UpdateIntersectionMatrixFromEdges(IntersectionMatrix im)
         {
-            ((EdgeEndBundleStar) edges).UpdateIM(im);
+            EdgeEndBundleStar<TCoordinate> star = Edges as EdgeEndBundleStar<TCoordinate>;
+            Debug.Assert(star != null);
+            star.UpdateIntersectionMatrix(im);
         }
     }
 }

@@ -1,150 +1,119 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.Index.Sweepline;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 {
     /// <summary>
-    /// Tests whether any of a set of <c>LinearRing</c>s are
+    /// Tests whether any of a set of <see cref="LinearRing{TCoordinate}"/>s are
     /// nested inside another ring in the set, using a <c>SweepLineIndex</c>
     /// index to speed up the comparisons.
     /// </summary>
-    public class SweeplineNestedRingTester
+    public class SweeplineNestedRingTester<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private GeometryGraph graph;  // used to find non-node vertices
-        private IList rings = new ArrayList();
-        private IEnvelope totalEnv = new Envelope();
-        private SweepLineIndex sweepLine;
-        private ICoordinate nestedPt = null;
+        private readonly GeometryGraph<TCoordinate> _graph; // used to find non-node vertices
+        private readonly List<ILinearRing<TCoordinate>> _rings
+            = new List<ILinearRing<TCoordinate>>();
+        //private IExtents<TCoordinate> _totalExtents = new Extents<TCoordinate>();
+        private SweepLineIndex _sweepLine;
+        private TCoordinate _nestedPoint = default(TCoordinate);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="graph"></param>
-        public SweeplineNestedRingTester(GeometryGraph graph)
+        public SweeplineNestedRingTester(GeometryGraph<TCoordinate> graph)
         {
-            this.graph = graph;
+            _graph = graph;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate NestedPoint 
+        public TCoordinate NestedPoint
         {
-            get
-            {
-                return nestedPt; 
-            }
+            get { return _nestedPoint; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ring"></param>
-        public void Add(ILinearRing ring)
+        public void Add(ILinearRing<TCoordinate> ring)
         {
-            rings.Add(ring);
+            _rings.Add(ring);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool IsNonNested()
+        public Boolean IsNonNested()
         {
-            BuildIndex();
+            buildIndex();
             OverlapAction action = new OverlapAction(this);
-            sweepLine.ComputeOverlaps(action);
+            _sweepLine.ComputeOverlaps(action);
             return action.IsNonNested;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildIndex()
+        private void buildIndex()
         {
-            sweepLine = new SweepLineIndex();
-            for (int i = 0; i < rings.Count; i++) 
+            _sweepLine = new SweepLineIndex();
+            foreach (ILinearRing<TCoordinate> ring in _rings)
             {
-                ILinearRing ring = (ILinearRing) rings[i];
-                Envelope env = (Envelope) ring.EnvelopeInternal;
-                SweepLineInterval sweepInt = new SweepLineInterval(env.MinX, env.MaxX, ring);
-                sweepLine.Add(sweepInt);
+                //Extents env = (Extents) ring.EnvelopeInternal;
+                IExtents<TCoordinate> extents = ring.Extents;
+                SweepLineInterval sweepInt = new SweepLineInterval(
+                    extents.GetMin(Ordinates.X), extents.GetMax(Ordinates.Y), ring);
+                _sweepLine.Add(sweepInt);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="innerRing"></param>
-        /// <param name="searchRing"></param>
-        /// <returns></returns>
-        private bool IsInside(ILinearRing innerRing, ILinearRing searchRing)
+        private Boolean isInside(ILinearRing<TCoordinate> innerRing, ILinearRing<TCoordinate> searchRing)
         {
-            ICoordinate[] innerRingPts = innerRing.Coordinates;
-            ICoordinate[] searchRingPts = searchRing.Coordinates;
-            if (!innerRing.EnvelopeInternal.Intersects(searchRing.EnvelopeInternal))
-                return false;
-            ICoordinate innerRingPt = IsValidOp.FindPointNotNode(innerRingPts, searchRing, graph);
-            Assert.IsTrue(innerRingPt != null, "Unable to find a ring point not a node of the search ring");
-            bool isInside = CGAlgorithms.IsPointInRing(innerRingPt, searchRingPts);
-            if (isInside) 
+            IEnumerable<TCoordinate> innerRingCoordinates = innerRing.Coordinates;
+            IEnumerable<TCoordinate> searchRingCoordinates = searchRing.Coordinates;
+
+            if (!innerRing.Extents.Intersects(searchRing.Extents))
             {
-                nestedPt = innerRingPt;
+                return false;
+            }
+
+            TCoordinate innerRingPt = IsValidOp<TCoordinate>.FindPointNotNode(innerRingCoordinates, searchRing, _graph);
+            Assert.IsTrue(!Equals(innerRingPt, default(TCoordinate)), 
+                "Unable to find a ring point not a node of the search ring");
+            Boolean isInside = CGAlgorithms<TCoordinate>.IsPointInRing(innerRingPt, searchRingCoordinates);
+
+            if (isInside)
+            {
+                _nestedPoint = innerRingPt;
                 return true;
             }
+
             return false;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public class OverlapAction : ISweepLineOverlapAction
         {
-            private SweeplineNestedRingTester container = null;
-            bool isNonNested = true;
+            private readonly SweeplineNestedRingTester<TCoordinate> _container = null;
+            private Boolean _isNonNested = true;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            public bool IsNonNested
+            public Boolean IsNonNested
             {
-                get 
-                { 
-                    return isNonNested; 
-                }
+                get { return _isNonNested; }
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public OverlapAction(SweeplineNestedRingTester container)
+            public OverlapAction(SweeplineNestedRingTester<TCoordinate> container)
             {
-                this.container = container;
+                _container = container;
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="s0"></param>
-            /// <param name="s1"></param>
             public void Overlap(SweepLineInterval s0, SweepLineInterval s1)
             {
-                ILinearRing innerRing = (ILinearRing) s0.Item;
-                ILinearRing searchRing = (ILinearRing) s1.Item;
-                if (innerRing == searchRing) 
+                ILinearRing<TCoordinate> innerRing = s0.Item as ILinearRing<TCoordinate>;
+                ILinearRing<TCoordinate> searchRing = s1.Item as ILinearRing<TCoordinate>;
+
+                if (innerRing == searchRing)
+                {
                     return;
-                if (container.IsInside(innerRing, searchRing))
-                    isNonNested = false;
+                }
+                if (_container.isInside(innerRing, searchRing))
+                {
+                    _isNonNested = false;
+                }
             }
         }
     }

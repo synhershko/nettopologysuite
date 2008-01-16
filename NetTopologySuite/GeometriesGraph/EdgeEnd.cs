@@ -1,190 +1,114 @@
 using System;
-using System.Collections;
-using System.Text;
 using System.IO;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using System.Text;
+using GeoAPI.Coordinates;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary> 
     /// Models the end of an edge incident on a node.
-    /// EdgeEnds have a direction
-    /// determined by the direction of the ray from the initial
-    /// point to the next point.
-    /// EdgeEnds are IComparable under the ordering
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EdgeEnd{TCoordinate}"/>s have a direction determined by the direction of the ray 
+    /// from the initial point to the next point.
+    /// EdgeEnds are <see cref="IComparable{EdgeEnd}"/> under the ordering
     /// "a has a greater angle with the x-axis than b".
     /// This ordering is used to sort EdgeEnds around a node.
-    /// </summary>
-    public class EdgeEnd : IComparable
+    /// </remarks>
+    public class EdgeEnd<TCoordinate> : IComparable<EdgeEnd<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// The parent edge of this edge end.
-        /// </summary>
-        protected Edge edge = null;        
+        private Edge<TCoordinate> _edge = null;
+        private Label? _label;
+        private Node<TCoordinate> _origin; // the node this edge end originates at
+        private TCoordinate _p0, _p1; // points of initial line segment
+        private TCoordinate _direction; // the direction vector for this edge from its starting point
+        private Quadrants _quadrant;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        protected Label label = null;
-
-        private Node node;          // the node this edge end originates at
-        private ICoordinate p0, p1;  // points of initial line segment
-        private double dx, dy;      // the direction vector for this edge from its starting point
-        private int quadrant;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        protected EdgeEnd(Edge edge)
+        protected EdgeEnd(Edge<TCoordinate> edge)
         {
-            this.edge = edge;
+            _edge = edge;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        public EdgeEnd(Edge edge, ICoordinate p0, ICoordinate p1) : 
+        public EdgeEnd(Edge<TCoordinate> edge, TCoordinate p0, TCoordinate p1) :
             this(edge, p0, p1, null) { }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <param name="label"></param>
-        public EdgeEnd(Edge edge, ICoordinate p0, ICoordinate p1, Label label)
+        public EdgeEnd(Edge<TCoordinate> edge, TCoordinate p0, TCoordinate p1, Label? label)
             : this(edge)
         {
             Init(p0, p1);
-            this.label = label;
+            _label = label;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        protected void Init(ICoordinate p0, ICoordinate p1)
+        protected void Init(TCoordinate p0, TCoordinate p1)
         {
-            this.p0 = p0;
-            this.p1 = p1;
-            dx = p1.X - p0.X;
-            dy = p1.Y - p0.Y;
-            quadrant = QuadrantOp.Quadrant(dx, dy);
-            Assert.IsTrue(! (dx == 0 && dy == 0), "EdgeEnd with identical endpoints found");
+            _p0 = p0;
+            _p1 = p1;
+            //Double dx = p1[Ordinates.X] - p0[Ordinates.X];
+            //Double dy = p1[Ordinates.Y] - p0[Ordinates.Y];
+            //_direction = _edge.Coordinates.CoordinateFactory.Create(dx, dy);
+            _direction = p1.Subtract(p0);
+            _quadrant = QuadrantOp<TCoordinate>.Quadrant(_direction);
+
+            Assert.IsTrue(!_direction.Equals(((ICoordinate)_direction).Zero), 
+                "EdgeEnd with identical endpoints found.");
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public Edge Edge
+        public Edge<TCoordinate> Edge
         {
-            get
-            {
-                return edge;
-            }
+            get { return _edge; }
+            protected set { _edge = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public Label Label
+        public Label? Label
         {
-            get
-            {
-                return label;
-            }
+            get { return _label; }
+            set { _label = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate Coordinate
+        public TCoordinate Coordinate
         {
-            get
-            {
-                return p0;
-            }
+            get { return _p0; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate DirectedCoordinate
+        public TCoordinate DirectedCoordinate
         {
-            get
-            {
-                return p1;
-            }
+            get { return _p1; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int Quadrant
+        public Quadrants Quadrant
         {
-            get
-            {
-                return quadrant;
-            }
+            get { return _quadrant; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double Dx
+        //public Double Dx
+        //{
+        //    get { return dx; }
+        //}
+
+        //public Double Dy
+        //{
+        //    get { return dy; }
+        //}
+
+        public TCoordinate Direction
         {
-            get
-            {
-                return dx;
-            }
+            get { return _direction; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double Dy
+        public Node<TCoordinate> Node
         {
-            get
-            {
-                return dy;
-            }
+            get { return _origin; }
+            set { _origin = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public Node Node
+        public Int32 CompareTo(EdgeEnd<TCoordinate> other)
         {
-            get
-            {
-                return node;
-            }
-            set
-            {
-                this.node = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public int CompareTo(object obj)
-        {
-            EdgeEnd e = (EdgeEnd) obj;
-            return CompareDirection(e);
+            return CompareDirection(other);
         }
 
         /// <summary> 
@@ -198,19 +122,28 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// - if the vectors lie in the same quadrant, the computeOrientation function
         /// can be used to decide the relative orientation of the vectors.
         /// </summary>
-        /// <param name="e"></param>
-        public int CompareDirection(EdgeEnd e)
+        public Int32 CompareDirection(EdgeEnd<TCoordinate> e)
         {
-            if (dx == e.dx && dy == e.dy)
+            if (Direction.Equals(e.Direction))
+            {
                 return 0;
+            }
+
             // if the rays are in different quadrants, determining the ordering is trivial
-            if (quadrant > e.quadrant)
+            if (_quadrant > e.Quadrant)
+            {
                 return 1;
-            if (quadrant < e.quadrant)
+            }
+
+            if (_quadrant < e.Quadrant)
+            {
                 return -1;
+            }
+
             // vectors are in the same quadrant - check relative orientation of direction vectors
             // this is > e if it is CCW of e
-            return CGAlgorithms.ComputeOrientation(e.p0, e.p1, p1);
+            return (Int32)CGAlgorithms<TCoordinate>.ComputeOrientation(
+                e.Coordinate, e.DirectedCoordinate, _p1);
         }
 
         /// <summary>
@@ -218,32 +151,24 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// </summary>
         public virtual void ComputeLabel() { }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
         public virtual void Write(StreamWriter outstream)
-        {            
-            double angle = Math.Atan2(dy, dx);
-            string fullname = this.GetType().FullName;
-            int lastDotPos = fullname.LastIndexOf('.');
+        {
+            Double angle = Math.Atan2(_direction[Ordinates.Y], _direction[Ordinates.X]);
+            string fullname = GetType().FullName;
+            Int32 lastDotPos = fullname.LastIndexOf('.');
             string name = fullname.Substring(lastDotPos + 1);
-            outstream.Write("  " + name + ": " + p0 + " - " + p1 + " " + quadrant + ":" + angle + "   " + label);
+            outstream.Write("  " + name + ": " + _p0 + " - " + _p1 + " " + _quadrant + ":" + angle + "   " + Label);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append(('['));
-            sb.Append(p0.X);
+            sb.Append(_p0[Ordinates.X]);
             sb.Append((' '));
-            sb.Append(p1.Y);
+            sb.Append(_p1[Ordinates.Y]);
             sb.Append((']'));
             return sb.ToString();
-        }  
+        }
     }
 }

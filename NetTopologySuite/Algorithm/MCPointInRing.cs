@@ -1,162 +1,140 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Index.Bintree;
 using GisSharpBlog.NetTopologySuite.Index.Chain;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary>
-    /// Implements <c>IPointInRing</c>
-    /// using a <c>MonotoneChain</c>s and a <c>BinTree</c> index to increase performance.
+    /// Implements <see cref="IPointInRing{TCoordinate}"/>
+    /// using a <see cref="MonotoneChain{TCoordinate}"/> and a <see cref="BinTree{TCoordinate}"/> 
+    /// index to increase performance.
     /// </summary>
-    public class MCPointInRing : IPointInRing 
+    public class MCPointInRing<TCoordinate> : IPointInRing<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        private class MCSelecter : MonotoneChainSelectAction
+        //private class MCSelector : MonotoneChainSelectAction<TCoordinate>
+        //{
+        //    private readonly MCPointInRing<TCoordinate> _container = null;
+        //    private readonly TCoordinate _p = default(TCoordinate);
+
+        //    public MCSelector(MCPointInRing<TCoordinate> container, TCoordinate p)
+        //    {
+        //        _container = container;
+        //        _p = p;
+        //    }
+
+        //    public override void Select(LineSegment<TCoordinate> ls)
+        //    {
+        //        _container.testLineSegment(_p, ls);
+        //    }
+        //}
+
+        private readonly ILinearRing<TCoordinate> _ring;
+        private readonly BinTree<MonotoneChain<TCoordinate>> _tree = new BinTree<MonotoneChain<TCoordinate>>();
+        private Int32 _crossings = 0; // number of segment/ray crossings
+
+        private Interval _interval = new Interval();
+
+        public MCPointInRing(ILinearRing<TCoordinate> ring)
         {
-            private MCPointInRing container = null;
-            private ICoordinate p = null;
+            _ring = ring;
+            buildIndex();
+        }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            /// <param name="p"></param>
-            public MCSelecter(MCPointInRing container, ICoordinate p)
-            {
-                this.container = container;
-                this.p = p;
-            }
+        private void buildIndex()
+        {
+            ICoordinateSequence<TCoordinate> coordinates = _ring.Coordinates.WithoutRepeatedPoints();
+            IEnumerable<MonotoneChain<TCoordinate>> chains = MonotoneChainBuilder.GetChains(coordinates);
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="ls"></param>
-            public override void Select(LineSegment ls)
+            foreach (MonotoneChain<TCoordinate> chain in chains)
             {
-                container.TestLineSegment(p, ls);
+                IExtents<TCoordinate> extents = chain.Extents;
+                Double min = extents.GetMin(Ordinates.Y);
+                Double max = extents.GetMax(Ordinates.Y);
+                _interval = new Interval(min, max);
+                _tree.Insert(_interval, chain);
             }
         }
 
-        private ILinearRing ring;
-        private Bintree tree;
-        private int crossings = 0;  // number of segment/ray crossings
-
-        private Interval interval = new Interval();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ring"></param>
-        public MCPointInRing(ILinearRing ring)
+        public Boolean IsInside(TCoordinate pt)
         {
-            this.ring = ring;
-            BuildIndex();
-        }
+            _crossings = 0;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildIndex()
-        {
-            tree = new Bintree();
-
-            ICoordinate[] pts = CoordinateArrays.RemoveRepeatedPoints(ring.Coordinates);
-            IList mcList = MonotoneChainBuilder.GetChains(pts);
-
-            for (int i = 0; i < mcList.Count; i++) 
-            {
-                MonotoneChain mc = (MonotoneChain) mcList[i];
-                IEnvelope mcEnv = mc.Envelope;
-                interval.Min = mcEnv.MinY;
-                interval.Max = mcEnv.MaxY;
-                tree.Insert(interval, mc);
-            }
-        }        
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pt"></param>
-        /// <returns></returns>
-        public bool IsInside(ICoordinate pt)
-        {
-            crossings = 0;
+            Double y = pt[Ordinates.Y];
 
             // test all segments intersected by ray from pt in positive x direction
-            IEnvelope rayEnv = new Envelope(Double.NegativeInfinity, Double.PositiveInfinity, pt.Y, pt.Y);
-            interval.Min = pt.Y;
-            interval.Max = pt.Y;
-            IList segs = tree.Query(interval);
+            IExtents<TCoordinate> rayExtents = new Extents<TCoordinate>(
+                Double.NegativeInfinity, Double.PositiveInfinity, y, y);
 
-            MCSelecter mcSelecter = new MCSelecter(this, pt);
-            for (IEnumerator i = segs.GetEnumerator(); i.MoveNext(); ) 
+            _interval = new Interval(y, y);
+
+            IEnumerable<MonotoneChain<TCoordinate>> chains = _tree.Query(_interval);
+
+            foreach (MonotoneChain<TCoordinate> chain in chains)
             {
-                MonotoneChain mc = (MonotoneChain) i.Current;
-                TestMonotoneChain(rayEnv, mcSelecter, mc);
+                testMonotoneChain(rayExtents, pt, chain);
             }
 
             /*
             *  p is inside if number of crossings is odd.
             */
-            if ((crossings % 2) == 1) 
-                return true;            
+            if ((_crossings % 2) == 1)
+            {
+                return true;
+            }
+
             return false;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rayEnv"></param>
-        /// <param name="mcSelecter"></param>
-        /// <param name="mc"></param>
-        private void TestMonotoneChain(IEnvelope rayEnv, MCSelecter mcSelecter, MonotoneChain mc)
+        private void testMonotoneChain(IExtents<TCoordinate> rayExtents, TCoordinate point, MonotoneChain<TCoordinate> chain)
         {
-            mc.Select(rayEnv, mcSelecter);
+            foreach (LineSegment<TCoordinate> segment in chain.Select(rayExtents))
+            {
+                testLineSegment(point, segment);
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="seg"></param>
-        private void TestLineSegment(ICoordinate p, LineSegment seg) 
+        private void testLineSegment(TCoordinate p, LineSegment<TCoordinate> seg)
         {
-            double xInt;  // x intersection of segment with ray
-            double x1;    // translated coordinates
-            double y1;
-            double x2;
-            double y2;
+            Double x1; // translated coordinates
+            Double y1;
+            Double x2;
+            Double y2;
 
             /*
             *  Test if segment crosses ray from test point in positive x direction.
             */
-            ICoordinate p1 = seg.P0;
-            ICoordinate p2 = seg.P1;
-            x1 = p1.X - p.X;
-            y1 = p1.Y - p.Y;
-            x2 = p2.X - p.X;
-            y2 = p2.Y - p.Y;
+            TCoordinate p1 = seg.P0;
+            TCoordinate p2 = seg.P1;
 
-            if (((y1 > 0) && (y2 <= 0)) || ((y2 > 0) && (y1 <= 0))) 
+            x1 = p1[Ordinates.X] - p[Ordinates.X];
+            y1 = p1[Ordinates.Y] - p[Ordinates.Y];
+            x2 = p2[Ordinates.X] - p[Ordinates.X];
+            y2 = p2[Ordinates.Y] - p[Ordinates.Y];
+
+            if (((y1 > 0) && (y2 <= 0)) || ((y2 > 0) && (y1 <= 0)))
             {
+                Double xInt; // x intersection of segment with ray
+
                 /*
                 *  segment straddles x axis, so compute intersection.
                 */
                 xInt = RobustDeterminant.SignOfDet2x2(x1, y1, x2, y2) / (y2 - y1);
-                
+
                 /*
                 *  crosses ray if strictly positive intersection.
                 */
-                if(0.0 < xInt) 
-                    crossings++;            
+                if (0.0 < xInt)
+                {
+                    _crossings++;
+                }
             }
         }
     }

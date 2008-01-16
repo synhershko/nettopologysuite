@@ -1,25 +1,20 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Precision
 {
     /// <summary>
-    /// Allow computing and removing common mantissa bits from one or more Geometries.
+    /// Allow computing and removing common significand bits from one or more 
+    /// <see cref="IGeometry{TCoordinate}"/> instances.
     /// </summary>
-    public class CommonBitsRemover
+    public class CommonBitsRemover<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<TCoordinate>, IConvertible
     {
-        private ICoordinate commonCoord = null;
-        private CommonCoordinateFilter ccFilter = new CommonCoordinateFilter();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public CommonBitsRemover() { }
+        private TCoordinate _commonCoordinate;
+        private readonly CommonCoordinateFilter<TCoordinate> _filter = new CommonCoordinateFilter<TCoordinate>();
 
         /// <summary>
         /// Add a point to the set of geometries whose common bits are
@@ -28,21 +23,18 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// geometries.
         /// </summary>
         /// <param name="geom">A Geometry to test for common bits.</param>
-        public void Add(IGeometry geom)
+        public void Add(IGeometry<TCoordinate> geom)
         {
-            geom.Apply(ccFilter);
-            commonCoord = ccFilter.CommonCoordinate;
+            geom.Apply(_filter);
+            _commonCoordinate = _filter.CommonCoordinate;
         }
 
         /// <summary>
         /// The common bits of the Coordinates in the supplied Geometries.
         /// </summary>
-        public ICoordinate CommonCoordinate
+        public TCoordinate CommonCoordinate
         {
-            get
-            {
-                return commonCoord; 
-            }
+            get { return _commonCoordinate; }
         }
 
         /// <summary>
@@ -51,16 +43,17 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// </summary>
         /// <param name="geom">The Geometry from which to remove the common coordinate bits.</param>
         /// <returns>The shifted Geometry.</returns>
-        public IGeometry RemoveCommonBits(IGeometry geom)
+        public IGeometry<TCoordinate> RemoveCommonBits(IGeometry<TCoordinate> geom)
         {
-            if (commonCoord.X == 0.0 && commonCoord.Y == 0.0)
+            if (_commonCoordinate[Ordinates.X] == 0.0 && _commonCoordinate[Ordinates.Y] == 0.0)
+            {
                 return geom;
-            ICoordinate invCoord = new Coordinate(commonCoord);
-            invCoord.X = -invCoord.X;
-            invCoord.Y = -invCoord.Y;
-            Translater trans = new Translater(invCoord);            
+            }
+
+            TCoordinate invCoord = new TCoordinate(_commonCoordinate.Negative());
+            Translater<TCoordinate> trans = new Translater<TCoordinate>(invCoord);
             geom.Apply(trans);
-            geom.GeometryChanged();
+            //geom.GeometryChanged();
             return geom;
         }
 
@@ -70,67 +63,64 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// </summary>
         /// <param name="geom">The Geometry to which to add the common coordinate bits.</param>
         /// <returns>The shifted Geometry.</returns>
-        public void AddCommonBits(IGeometry geom)
+        public void AddCommonBits(IGeometry<TCoordinate> geom)
         {
-            Translater trans = new Translater(commonCoord);
+            Translater<TCoordinate> trans = new Translater<TCoordinate>(_commonCoordinate);
             geom.Apply(trans);
-            geom.GeometryChanged();
+            //geom.GeometryChanged();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public class CommonCoordinateFilter : ICoordinateFilter
+        public class CommonCoordinateFilter<TCoordinate> : ICoordinateFilter<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<TCoordinate>, IConvertible
         {
-            private CommonBits commonBitsX = new CommonBits();
-            private CommonBits commonBitsY = new CommonBits();
+            private readonly CommonBits _commonBitsX = new CommonBits();
+            private readonly CommonBits _commonBitsY = new CommonBits();
+            private readonly CommonBits _commonBitsZ = new CommonBits();
+            private readonly CommonBits _commonBitsM = new CommonBits();
+            private Boolean _hasZ = false;
+            private Boolean _hasM = false;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="coord"></param>
-            public void Filter(ICoordinate coord)
-            {
-                commonBitsX.Add(coord.X);
-                commonBitsY.Add(coord.Y);
-            }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            public ICoordinate CommonCoordinate
+            public void Filter(TCoordinate coord)
             {
-                get
+                _commonBitsX.Add(coord[Ordinates.X]);
+                _commonBitsY.Add(coord[Ordinates.Y]);
+
+                if (_hasZ || coord.ContainsOrdinate(Ordinates.Z))
                 {
-                    return new Coordinate(commonBitsX.Common, commonBitsY.Common);
+                    _hasZ = true;
+                    _commonBitsZ.Add(coord[Ordinates.Z]);
+                }
+
+                if (_hasM || coord.ContainsOrdinate(Ordinates.M))
+                {
+                    _hasM = true;
+                    _commonBitsM.Add(coord[Ordinates.M]);
                 }
             }
+
+            public TCoordinate CommonCoordinate
+            {
+                get { return new TCoordinate(_commonBitsX.Common, _commonBitsY.Common); }
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        class Translater : ICoordinateFilter
+        private class Translater<TCoordinate> : ICoordinateFilter<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<TCoordinate>, IConvertible
         {
-            private ICoordinate trans = null;
+            private readonly TCoordinate _trans;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="trans"></param>
-            public Translater(ICoordinate trans)
+            public Translater(TCoordinate trans)
             {
-                this.trans = trans;
+                _trans = trans;
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="coord"></param>
-            public void Filter(ICoordinate coord)
+            public void Filter(TCoordinate coord)
             {
-                coord.X += trans.X;
-                coord.Y += trans.Y;
+                coord[Ordinates.X] += _trans[Ordinates.X];
+                coord[Ordinates.Y] += _trans[Ordinates.Y];
             }
         }
     }

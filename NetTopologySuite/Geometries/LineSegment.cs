@@ -1,15 +1,15 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
-
-using GeoAPI.Geometries;
-
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary> 
-    /// Represents a line segment defined by two <c>Coordinate</c>s.
+    /// Represents a line segment defined by two <typeparamref name="TCoordinate"/>s.
     /// Provides methods to compute various geometric properties
     /// and relationships of line segments.
     /// This class is designed to be easily mutable (to the extent of
@@ -19,117 +19,89 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// segments defined by arrays or lists of <c>Coordinate</c>s.
     /// </summary>    
     [Serializable]
-    public class LineSegment: IComparable
+    public struct LineSegment<TCoordinate> : IEquatable<LineSegment<TCoordinate>>, IComparable<LineSegment<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private ICoordinate p0 = null, p1 = null;
+        private readonly TCoordinate _p0, _p1;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate P1
+        public LineSegment(TCoordinate p0, TCoordinate p1)
         {
-            get { return p1; }
-            set { p1 = value; }
+            _p0 = p0;
+            _p1 = p1;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate P0
+        public LineSegment(Pair<TCoordinate> coordinates)
         {
-            get { return p0; }
-            set { p0 = value; }
+            _p0 = coordinates.First;
+            _p1 = coordinates.Second;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        public LineSegment(ICoordinate p0, ICoordinate p1) 
+        public LineSegment(LineSegment<TCoordinate> ls) : this(ls._p0, ls._p1) { }
+
+        public Pair<TCoordinate> Points
         {
-            this.p0 = p0;
-            this.p1 = p1;
+            get { return new Pair<TCoordinate>(P0, P1); }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ls"></param>
-        public LineSegment(LineSegment ls) : this(ls.p0, ls.p1) { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public LineSegment() : this(new Coordinate(), new Coordinate()) { }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public ICoordinate GetCoordinate(int i)
+        public TCoordinate P0
         {
-            if (i == 0) return P0;
-            return P1;
+            get { return _p0; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ls"></param>
-        public void SetCoordinates(LineSegment ls)
+        public TCoordinate P1
         {
-            SetCoordinates(ls.P0, ls.P1);
+            get { return _p1; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        public void SetCoordinates(ICoordinate p0, ICoordinate p1)
+        public TCoordinate this[Int32 index]
         {
-            this.P0.X = p0.X;
-            this.P0.Y = p0.Y;
-            this.P1.X = p1.X;
-            this.P1.Y = p1.Y;
+            get
+            {
+                checkIndex(index);
+
+                if (index == 0)
+                {
+                    return P0;
+                }
+                else
+                {
+                    return P1;
+                }
+            }
+        }
+
+        public static LineSegment<TCoordinate> SetCoordinates(TCoordinate p0, TCoordinate p1)
+        {
+            LineSegment<TCoordinate> newSegment =  new LineSegment<TCoordinate>(p0, p1);
+            return newSegment;
         }
 
         /// <summary>
         /// Computes the length of the line segment.
         /// </summary>
         /// <returns>The length of the line segment.</returns>
-        public double Length
+        public Double Length
         {
-            get
-            {
-                return P0.Distance(P1);
-            }
+            get { return P0.Distance(P1); }
         }
 
         /// <summary> 
         /// Tests whether the segment is horizontal.
         /// </summary>
-        /// <returns><c>true</c> if the segment is horizontal.</returns>
-        public bool IsHorizontal
+        /// <returns><see langword="true"/> if the segment is horizontal.</returns>
+        public Boolean IsHorizontal
         {
-            get
-            {
-                return P0.Y == P1.Y;
-            }
+            get { return P0[Ordinates.Y] == P1[Ordinates.Y]; }
         }
 
         /// <summary>
         /// Tests whether the segment is vertical.
         /// </summary>
-        /// <returns><c>true</c> if the segment is vertical.</returns>
-        public bool IsVertical
+        /// <returns><see langword="true"/> if the segment is vertical.</returns>
+        public Boolean IsVertical
         {
-            get
-            {
-                return P0.X == P1.X;
-            }
+            get { return P0[Ordinates.X] == P1[Ordinates.X]; }
         }
 
         /// <summary> 
@@ -149,16 +121,23 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// -1 if <c>seg</c> is to the right of this segment,
         /// 0 if <c>seg</c> has indeterminate orientation relative to this segment.
         /// </returns>
-        public int OrientationIndex(LineSegment seg)
+        public Int32 OrientationIndex(LineSegment<TCoordinate> seg)
         {
-            int orient0 = CGAlgorithms.OrientationIndex(P0, P1, seg.P0);
-            int orient1 = CGAlgorithms.OrientationIndex(P0, P1, seg.P1);
+            Int32 orient0 = CGAlgorithms<TCoordinate>.OrientationIndex(P0, P1, seg.P0);
+            Int32 orient1 = CGAlgorithms<TCoordinate>.OrientationIndex(P0, P1, seg.P1);
+
             // this handles the case where the points are Curve or collinear
             if (orient0 >= 0 && orient1 >= 0)
+            {
                 return Math.Max(orient0, orient1);
+            }
+
             // this handles the case where the points are R or collinear
             if (orient0 <= 0 && orient1 <= 0)
+            {
                 return Math.Max(orient0, orient1);
+            }
+
             // points lie on opposite sides ==> indeterminate orientation
             return 0;
         }
@@ -166,11 +145,12 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <summary> 
         /// Reverses the direction of the line segment.
         /// </summary>
-        public void Reverse()
+        public LineSegment<TCoordinate> Reversed
         {
-            ICoordinate temp = P0;
-            P0 = P1;
-            P1 = temp;
+            get
+            {
+                return new LineSegment<TCoordinate>(_p1, _p0);
+            }
         }
 
         /// <summary> 
@@ -178,50 +158,52 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// This is useful for using line segments in maps and indexes when
         /// topological equality rather than exact equality is desired.
         /// </summary>
-        public void Normalize()
+        public LineSegment<TCoordinate> Normalized
         {
-            if (P1.CompareTo(P0) < 0) 
-                Reverse();
+            get
+            {
+                if (P1.CompareTo(P0) < 0)
+                {
+                    return Reversed;
+                }
+                else
+                {
+                    return this;
+                }
+            }
         }
 
         /// <returns> 
         /// The angle this segment makes with the x-axis (in radians).
         /// </returns>
-        public double Angle
+        public Double Angle
         {
-            get
-            {
-               return Math.Atan2(P1.Y - P0.Y, P1.X - P0.X);
-            }
+            get { return Math.Atan2(P1[Ordinates.Y] - P0[Ordinates.Y], P1[Ordinates.X] - P0[Ordinates.X]); }
         }
 
         /// <summary> 
         /// Computes the distance between this line segment and another one.
         /// </summary>
-        /// <param name="ls"></param>
-        /// <returns></returns>
-        public double Distance(LineSegment ls)
+        public Double Distance(LineSegment<TCoordinate> ls)
         {
-            return CGAlgorithms.DistanceLineLine(P0, P1, ls.P0, ls.P1);
+            return CGAlgorithms<TCoordinate>.DistanceLineLine(P0, P1, ls.P0, ls.P1);
         }
 
         /// <summary> 
         /// Computes the distance between this line segment and a point.
         /// </summary>
-        public double Distance(ICoordinate p)
+        public Double Distance(TCoordinate p)
         {
-            return CGAlgorithms.DistancePointLine(p, P0, P1);
+            return CGAlgorithms<TCoordinate>.DistancePointLine(p, P0, P1);
         }
 
         /// <summary> 
         /// Computes the perpendicular distance between the (infinite) line defined
         /// by this line segment and a point.
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
-        public double DistancePerpendicular(ICoordinate p)
+        public Double DistancePerpendicular(TCoordinate p)
         {
-            return CGAlgorithms.DistancePointLinePerpendicular(p, P0, P1);
+            return CGAlgorithms<TCoordinate>.DistancePointLinePerpendicular(p, P0, P1);
         }
 
         /// <summary>
@@ -230,12 +212,17 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// by which the vector for this segment must be multiplied to
         /// equal the vector for the projection of p.
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
-        public double ProjectionFactor(ICoordinate p)
+        public Double ProjectionFactor(TCoordinate p)
         {
-            if (p.Equals(P0)) return 0.0;
-            if (p.Equals(P1)) return 1.0;
+            if (p.Equals(P0))
+            {
+                return 0.0;
+            }
+
+            if (p.Equals(P1))
+            {
+                return 1.0;
+            }
 
             // Otherwise, use comp.graphics.algorithms Frequently Asked Questions method
             /*     	          AC dot AB
@@ -248,10 +235,11 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
                         r>1 Point is on the forward extension of AB
                         0<r<1 Point is interior to AB
             */
-            double dx = P1.X - P0.X;
-            double dy = P1.Y - P0.Y;
-            double len2 = dx * dx + dy * dy;
-            double r = ((p.X - P0.X) * dx + (p.Y - P0.Y) * dy) / len2;
+            Double dx = P1[Ordinates.X] - P0[Ordinates.X];
+            Double dy = P1[Ordinates.Y] - P0[Ordinates.Y];
+            Double len2 = dx * dx + dy * dy;
+            Double r = ((p[Ordinates.X] - P0[Ordinates.X]) * dx 
+                + (p[Ordinates.Y] - P0[Ordinates.Y]) * dy) / len2;
             return r;
         }
 
@@ -262,17 +250,19 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// may lie outside the line segment.  If this is the case,
         /// the projection factor will lie outside the range [0.0, 1.0].
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
-        public ICoordinate Project(ICoordinate p)
+        public TCoordinate Project(TCoordinate p)
         {
-            if (p.Equals(P0) || p.Equals(P1)) 
-                return new Coordinate(p);
+            if (p.Equals(P0) || p.Equals(P1))
+            {
+                return Coordinates<TCoordinate>.DefaultCoordinateFactory.Create(p);
+            }
 
-            double r = ProjectionFactor(p);
-            ICoordinate coord = new Coordinate();
-            coord.X = P0.X + r * (P1.X - P0.X);
-            coord.Y = P0.Y + r * (P1.Y - P0.Y);
+            Double r = ProjectionFactor(p);
+            Double x = P0[Ordinates.X] + r * (P1[Ordinates.X] - P0[Ordinates.X]);
+            Double y = P0[Ordinates.Y] + r * (P1[Ordinates.Y] - P0[Ordinates.Y]);
+
+            TCoordinate coord 
+                = Coordinates<TCoordinate>.DefaultCoordinateFactory.Create(x, y);
             return coord;
         }
 
@@ -285,24 +275,48 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// This can happen for instance if the lines are perpendicular to one another.
         /// </summary>
         /// <param name="seg">The line segment to project.</param>
-        /// <returns>The projected line segment, or <c>null</c> if there is no overlap.</returns>
-        public LineSegment Project(LineSegment seg)
+        /// <returns>The projected line segment, or <see langword="null" /> if there is no overlap.</returns>
+        public LineSegment<TCoordinate>? Project(LineSegment<TCoordinate> seg)
         {
-            double pf0 = ProjectionFactor(seg.P0);
-            double pf1 = ProjectionFactor(seg.P1);
+            Double pf0 = ProjectionFactor(seg.P0);
+            Double pf1 = ProjectionFactor(seg.P1);
+
             // check if segment projects at all
-            if (pf0 >= 1.0 && pf1 >= 1.0) return null;
-            if (pf0 <= 0.0 && pf1 <= 0.0) return null;
+            if (pf0 >= 1.0 && pf1 >= 1.0)
+            {
+                return null;
+            }
 
-            ICoordinate newp0 = Project(seg.P0);
-            if (pf0 < 0.0) newp0 = P0;
-            if (pf0 > 1.0) newp0 = P1;
+            if (pf0 <= 0.0 && pf1 <= 0.0)
+            {
+                return null;
+            }
 
-            ICoordinate newp1 = Project(seg.P1);
-            if (pf1 < 0.0) newp1 = P0;
-            if (pf1 > 1.0) newp1 = P1;
+            TCoordinate newp0 = Project(seg.P0);
 
-            return new LineSegment(newp0, newp1);
+            if (pf0 < 0.0)
+            {
+                newp0 = P0;
+            }
+
+            if (pf0 > 1.0)
+            {
+                newp0 = P1;
+            }
+
+            TCoordinate newp1 = Project(seg.P1);
+
+            if (pf1 < 0.0)
+            {
+                newp1 = P0;
+            }
+
+            if (pf1 > 1.0)
+            {
+                newp1 = P1;
+            }
+
+            return new LineSegment<TCoordinate>(newp0, newp1);
         }
 
         /// <summary> 
@@ -312,156 +326,189 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <returns>
         /// A Coordinate which is the closest point on the line segment to the point p.
         /// </returns>
-        public ICoordinate ClosestPoint(ICoordinate p)
+        public TCoordinate ClosestPoint(TCoordinate p)
         {
-            double factor = ProjectionFactor(p);
-            if (factor > 0 && factor < 1) 
+            Double factor = ProjectionFactor(p);
+
+            if (factor > 0 && factor < 1)
+            {
                 return Project(p);
-            double dist0 = P0.Distance(p);
-            double dist1 = P1.Distance(p);
+            }
+
+            Double dist0 = P0.Distance(p);
+            Double dist1 = P1.Distance(p);
+
             if (dist0 < dist1)
+            {
                 return P0;
-            else return P1;
+            }
+            else
+            {
+                return P1;
+            }
         }
 
         /// <summary>
         /// Computes the closest points on a line segment.
         /// </summary>
-        /// <param name="line"></param>
         /// <returns>
         /// A pair of Coordinates which are the closest points on the line segments.
         /// </returns>
-        public ICoordinate[] ClosestPoints(LineSegment line)
+        public IEnumerable<TCoordinate> ClosestPoints(LineSegment<TCoordinate> line)
         {
             // test for intersection
-            ICoordinate intPt = Intersection(line);
-            if (intPt != null)
-                return new ICoordinate[] { intPt, intPt };            
+            TCoordinate intersection = Intersection(line);
+
+            if (Coordinates<TCoordinate>.IsEmpty(intersection))
+            {
+                yield return intersection;
+                yield return intersection;
+                yield break;
+            }
 
             /*
             *  if no intersection closest pair contains at least one endpoint.
             * Test each endpoint in turn.
             */
-            ICoordinate[] closestPt = new ICoordinate[2];
-            double minDistance = Double.MaxValue;
-            double dist;
+            Double minDistance;
+            Double dist;
 
-            ICoordinate close00 = ClosestPoint(line.P0);
+            TCoordinate closestPoint1;
+            TCoordinate closestPoint2;
+
+            TCoordinate close00 = ClosestPoint(line.P0);
             minDistance = close00.Distance(line.P0);
-            closestPt[0] = close00;
-            closestPt[1] = line.P0;
+            closestPoint1 = close00;
+            closestPoint2 = line.P0;
 
-            ICoordinate close01 = ClosestPoint(line.P1);
+            TCoordinate close01 = ClosestPoint(line.P1);
             dist = close01.Distance(line.P1);
-            if (dist < minDistance) 
+
+            if (dist < minDistance)
             {
                 minDistance = dist;
-                closestPt[0] = close01;
-                closestPt[1] = line.P1;
+                closestPoint1 = close01;
+                closestPoint2 = line.P1;
             }
 
-            ICoordinate close10 = line.ClosestPoint(P0);
+            TCoordinate close10 = line.ClosestPoint(P0);
             dist = close10.Distance(P0);
-            if (dist < minDistance) 
+
+            if (dist < minDistance)
             {
                 minDistance = dist;
-                closestPt[0] = P0;
-                closestPt[1] = close10;
+                closestPoint1 = P0;
+                closestPoint2 = close10;
             }
 
-            ICoordinate close11 = line.ClosestPoint(P1);
+            TCoordinate close11 = line.ClosestPoint(P1);
             dist = close11.Distance(P1);
-            if (dist < minDistance) 
-            {
-                minDistance = dist;
-                closestPt[0] = P1;
-                closestPt[1] = close11;
-            }
 
-            return closestPt;
+            if (dist < minDistance)
+            {
+                closestPoint1 = P1;
+                closestPoint2 = close11;
+            }
+            
+            yield return closestPoint1;
+            yield return closestPoint2;
         }
 
         /// <summary>
         /// Computes an intersection point between two segments, if there is one.
-        /// There may be 0, 1 or many intersection points between two segments.
-        /// If there are 0, null is returned. If there is 1 or more, a single one
-        /// is returned (chosen at the discretion of the algorithm).  If
-        /// more information is required about the details of the intersection,
-        /// the {RobustLineIntersector} class should be used.
         /// </summary>
-        /// <param name="line"></param>
-        /// <returns> An intersection point, or <c>null</c> if there is none.</returns>
-        public ICoordinate Intersection(LineSegment line)
+        /// <remarks>
+        /// There may be 0, 1 or many intersection points between two segments.
+        /// If there are 0, a default <typeparamref name="TCoordinate"/> is returned. 
+        /// If there is 1 or more, a single one is returned (chosen at the discretion 
+        /// of the algorithm).  If more information is required about the details of the 
+        /// intersection, the <see cref="RobustLineIntersector{TCoordinate}"/> class should 
+        /// be used, which returns an <see cref="Intersection{TCoordinate}"/> instance,
+        /// which contains a variety of contextual data about the intersection.
+        /// </remarks>
+        /// <returns>
+        /// An intersection point, or a default 
+        /// <typeparamref name="TCoordinate"/> if there is none.
+        /// </returns>
+        public TCoordinate Intersection(LineSegment<TCoordinate> line)
         {
-            LineIntersector li = new RobustLineIntersector();
-            li.ComputeIntersection(P0, P1, line.P0, line.P1);
-            if (li.HasIntersection)
-            return li.GetIntersection(0);
-            return null;
+            LineIntersector<TCoordinate> li = CGAlgorithms<TCoordinate>.CreateRobustLineIntersector();
+            Intersection<TCoordinate> intersection = li.ComputeIntersection(P0, P1, line.P0, line.P1);
+
+            if (intersection.HasIntersection)
+            {
+                return intersection.GetIntersectionPoint(0);
+            }
+
+            return default(TCoordinate);
+        }
+
+        public override Int32 GetHashCode()
+        {
+            return 37 + _p0.GetHashCode() ^ 17 + _p1.GetHashCode();
         }
 
         /// <summary>  
-        /// Returns <c>true</c> if <c>o</c> has the same values for its points.
+        /// Returns <see langword="true"/> if <paramref name="other"/> 
+        /// has the same values for its points.
         /// </summary>
-        /// <param name="o">A <c>LineSegment</c> with which to do the comparison.</param>
+        /// <param name="other">A <see cref="LineSegment{TCoordinate}"/> with
+        /// which to do the comparison.</param>
         /// <returns>
-        /// <c>true</c> if <c>o</c> is a <c>LineSegment</c>
+        /// <see langword="true"/> if <paramref name="other"/> is a <c>LineSegment</c>
         /// with the same values for the x and y ordinates.
         /// </returns>
-        public override bool Equals(object o) 
+        public override Boolean Equals(Object other)
         {
-            if (o == null)
+            if (!(other is LineSegment<TCoordinate>))
+            {
                 return false;
-            if (!(o is LineSegment)) 
-                return false;            
-            LineSegment other = (LineSegment) o;
-            return p0.Equals(other.p0) && p1.Equals(other.p1);
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator ==(LineSegment obj1, LineSegment obj2)
-        {
-            return Object.Equals(obj1, obj2);
+            }
+
+            return Equals((LineSegment<TCoordinate>)other);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator !=(LineSegment obj1, LineSegment obj2)
+        public Boolean Equals(LineSegment<TCoordinate> other)
         {
-            return !(obj1 == obj2);
-        }       
+            return _p0.Equals(other._p0) && _p1.Equals(other._p1);
+        }
+
+        public static Boolean operator ==(LineSegment<TCoordinate> left, LineSegment<TCoordinate> right)
+        {
+            return left.Equals(right);
+        }
+
+        public static Boolean operator !=(LineSegment<TCoordinate> left, LineSegment<TCoordinate> right)
+        {
+            return !(left == right);
+        }
 
         /// <summary>
         /// Compares this object with the specified object for order.
         /// Uses the standard lexicographic ordering for the points in the LineSegment.
         /// </summary>
-        /// <param name="o">
-        /// The <c>LineSegment</c> with which this <c>LineSegment</c>
+        /// <param name="other">
+        /// The <see cref="LineSegment{TCoordinate}"/> with which this <c>LineSegment</c>
         /// is being compared.
         /// </param>
         /// <returns>
         /// A negative integer, zero, or a positive integer as this <c>LineSegment</c>
         /// is less than, equal to, or greater than the specified <c>LineSegment</c>.
         /// </returns>
-        public int CompareTo(object o) 
+        public Int32 CompareTo(LineSegment<TCoordinate> other)
         {
-            LineSegment other = (LineSegment) o;
-            int comp0 = P0.CompareTo(other.P0);
-            if (comp0 != 0) return comp0;
+            Int32 comp0 = P0.CompareTo(other.P0);
+
+            if (comp0 != 0)
+            {
+                return comp0;
+            }
+
             return P1.CompareTo(other.P1);
         }
 
         /// <summary>
-        /// Returns <c>true</c> if <c>other</c> is
+        /// Returns <see langword="true"/> if <c>other</c> is
         /// topologically equal to this LineSegment (e.g. irrespective
         /// of orientation).
         /// </summary>
@@ -469,36 +516,33 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// A <c>LineSegment</c> with which to do the comparison.
         /// </param>
         /// <returns>
-        /// <c>true</c> if <c>other</c> is a <c>LineSegment</c>
+        /// <see langword="true"/> if <c>other</c> is a <c>LineSegment</c>
         /// with the same values for the x and y ordinates.
         /// </returns>
-        public bool EqualsTopologically(LineSegment other)
+        public Boolean EqualsTopologically(LineSegment<TCoordinate> other)
         {
             return
-                P0.Equals(other.P0) && P1.Equals(other.P1) || 
+                P0.Equals(other.P0) && P1.Equals(other.P1) ||
                 P0.Equals(other.P1) && P1.Equals(other.P0);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder("LINESTRING( ");
-            sb.Append(P0.X).Append(" ");
-            sb.Append(P0.Y).Append(", ");
-            sb.Append(P1.X).Append(" ");
-            sb.Append(P1.Y).Append(")");
+            sb.Append(P0[Ordinates.X]).Append(" ");
+            sb.Append(P0[Ordinates.Y]).Append(", ");
+            sb.Append(P1[Ordinates.X]).Append(" ");
+            sb.Append(P1[Ordinates.Y]).Append(")");
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Return HashCode.
-        /// </summary>
-        public override int GetHashCode()
+        private static void checkIndex(Int32 index)
         {
-            return base.GetHashCode();
+            if (index != 0 && index != 1)
+            {
+                throw new ArgumentOutOfRangeException("index", index,
+                                                      "Index must be 0 or 1.");
+            }
         }
     }
 }

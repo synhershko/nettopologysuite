@@ -1,42 +1,47 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
-
+using System.Diagnostics;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
+using GeoAPI.Coordinates;
 
 namespace GisSharpBlog.NetTopologySuite.LinearReferencing
 {
     /// <summary>
-    /// Represents a location along a <see cref="LineString" /> or <see cref="MultiLineString" />.
+    /// Represents a location along a <see cref="ILineString{TCoordinate}" /> 
+    /// or <see cref="IMultiLineString{TCoordinate}" />.
+    /// </summary>
+    /// <remarks>
     /// The referenced geometry is not maintained within this location, 
     /// but must be provided for operations which require it.
     /// Various methods are provided to manipulate the location value
     /// and query the geometry it references.
-    /// </summary>
-    public class LinearLocation : IComparable<LinearLocation>, IComparable, ICloneable
+    /// </remarks>
+    public struct LinearLocation<TCoordinate> : IEquatable<LinearLocation<TCoordinate>>, IComparable<LinearLocation<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
-        /// Gets a location which refers to the end of a linear <see cref="Geometry" />.
+        /// Gets a location which refers to the end of a linear <see cref="Geometry{TCoordinate}" />.
         /// </summary>
         /// <param name="linear">The linear geometry.</param>
         /// <returns>A new <c>LinearLocation</c>.</returns>
-        public static LinearLocation GetEndLocation(IGeometry linear)
+        public static LinearLocation<TCoordinate> GetEndLocation(IGeometry<TCoordinate> linear)
         {
-            if (! (linear is ILineString || linear is IMultiLineString))
+            if (!(linear is ILineString<TCoordinate> || linear is IMultiLineString<TCoordinate>))
             {
-                string message = String.Format("Expected {0} or {1}, but was {2}", 
-                    typeof(ILineString), typeof(IMultiLineString), linear.GetType());
+                string message = String.Format("Expected {0} or {1}, but was {2}",
+                                               typeof(ILineString<TCoordinate>), typeof(IMultiLineString<TCoordinate>),
+                                               linear.GetType());
+
                 throw new ArgumentException(message, "linear");
-            }            
-            LinearLocation loc = new LinearLocation();
-            loc.SetToEnd(linear);
-            return loc;
+            }
+
+            return setToEnd(linear);
         }
 
         /// <summary>
-        /// Computes the <see cref="Coordinate" /> of a point a given fraction
+        /// Computes the <typeparamref name="TCoordinate"/> of a point a given fraction
         /// along the line segment <c>(p0, p1)</c>.
         /// If the fraction is greater than 1.0 the last
         /// point of the segment is returned.
@@ -46,285 +51,314 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// <param name="p0">The first point of the line segment.</param>
         /// <param name="p1">The last point of the line segment.</param>
         /// <param name="fraction">The length to the desired point.</param>
-        /// <returns></returns>
-        public static ICoordinate PointAlongSegmentByFraction(ICoordinate p0, ICoordinate p1, double fraction)
+        public static TCoordinate PointAlongSegmentByFraction(TCoordinate p0, TCoordinate p1, Double fraction)
         {
-            if (fraction <= 0.0) return p0;
-            if (fraction >= 1.0) return p1;
+            if (fraction <= 0.0)
+            {
+                return p0;
+            }
 
-            double x = (p1.X - p0.X) * fraction + p0.X;
-            double y = (p1.Y - p0.Y) * fraction + p0.Y;
-            return new Coordinate(x, y);
+            if (fraction >= 1.0)
+            {
+                return p1;
+            }
+
+            Double x = (p1[Ordinates.X] - p0[Ordinates.X]) * fraction + p0[Ordinates.X];
+            Double y = (p1[Ordinates.Y] - p0[Ordinates.Y]) * fraction + p0[Ordinates.Y];
+            return Coordinates<TCoordinate>.DefaultCoordinateFactory.Create(x, y);
         }
 
-        private int componentIndex = 0;
-        private int segmentIndex = 0;
-        private double segmentFraction = 0.0;
+        private readonly Int32 _componentIndex;
+        private readonly Int32 _segmentIndex;
+        private readonly Double _segmentFraction;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:LinearLocation"/> class:
-        /// creates a location referring to the start of a linear geometry.
-        /// </summary>
-        public LinearLocation() { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="T:LinearLocation"/> class:
+        /// Initializes a new instance of the <see cref="LinearLocation{TCoordinate}"/> class:
         /// creates a location referring to the start of a linear geometry.
         /// </summary>
         /// <param name="segmentIndex">Index of the segment.</param>
         /// <param name="segmentFraction">The segment fraction.</param>
-        public LinearLocation(int segmentIndex, double segmentFraction) :
+        public LinearLocation(Int32 segmentIndex, Double segmentFraction) :
             this(0, segmentIndex, segmentFraction) { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:LinearLocation"/> class:
+        /// Initializes a new instance of the <see cref="LinearLocation{TCoordinate}"/> class:
         /// creates a location referring to the start of a linear geometry.
         /// </summary>
         /// <param name="componentIndex">Index of the component.</param>
         /// <param name="segmentIndex">Index of the segment.</param>
         /// <param name="segmentFraction">The segment fraction.</param>
-        public LinearLocation(int componentIndex, int segmentIndex, double segmentFraction)
+        public LinearLocation(Int32 componentIndex, Int32 segmentIndex, Double segmentFraction)
         {
-            this.componentIndex = componentIndex;
-            this.segmentIndex = segmentIndex;
-            this.segmentFraction = segmentFraction;
-            Normalize();
+            _componentIndex = componentIndex;
+            _segmentIndex = segmentIndex;
+            _segmentFraction = segmentFraction;
+
+            // Ensures the individual values are locally valid.
+            // Does not ensure that the indexes are valid for
+            // a particular linear geometry.
+
+            if (_segmentFraction < 0.0)
+            {
+                _segmentFraction = 0.0;
+            }
+
+            if (_segmentFraction > 1.0)
+            {
+                _segmentFraction = 1.0;
+            }
+
+            if (_componentIndex < 0)
+            {
+                _componentIndex = 0;
+                _segmentIndex = 0;
+                _segmentFraction = 0.0;
+            }
+
+            if (_segmentIndex < 0)
+            {
+                _segmentIndex = 0;
+                _segmentFraction = 0.0;
+            }
+
+            if (_segmentFraction == 1.0)
+            {
+                _segmentFraction = 0.0;
+                _segmentIndex += 1;
+            }
         }
 
         /// <summary>
-        /// Ensures the individual values are locally valid.
-        /// Does not ensure that the indexes are valid for
-        /// a particular linear geometry.
-        /// </summary>
-        private void Normalize()
-        {
-            if (segmentFraction < 0.0)
-                segmentFraction = 0.0;
-            
-            if (segmentFraction > 1.0)
-                segmentFraction = 1.0;
-            
-            if (componentIndex < 0)
-            {
-                componentIndex = 0;
-                segmentIndex = 0;
-                segmentFraction = 0.0;
-            }
-
-            if (segmentIndex < 0)
-            {
-                segmentIndex = 0;
-                segmentFraction = 0.0;
-            }
-
-            if (segmentFraction == 1.0)
-            {
-                segmentFraction = 0.0;
-                segmentIndex += 1;
-            }
-        }
-
-        /// <summary>
-        /// Ensures the indexes are valid for a given linear <see cref="Geometry" />.
+        /// Ensures the indexes are valid for a given linear <see cref="IGeometry{TCoordinate}" />.
         /// </summary>
         /// <param name="linear">A linear geometry.</param>
-        public void Clamp(IGeometry linear)
+        public LinearLocation<TCoordinate> Clamp(IGeometry<TCoordinate> linear)
         {
-            if (componentIndex >= linear.NumGeometries)
+            ILineString line = linear as ILineString;
+
+            if (line == null)
             {
-                SetToEnd(linear);
-                return;
+                IMultiLineString multiLine = linear as IMultiLineString;
+
+                Debug.Assert(multiLine != null);
+
+                if (_componentIndex >= multiLine.Count)
+                {
+                    return setToEnd(linear);
+                }
+                else
+                {
+                    line = multiLine[_componentIndex];
+                }
             }
 
-            if (segmentIndex >= linear.NumPoints)
+            if (_segmentIndex >= linear.PointCount)
             {
-                ILineString line = (ILineString) linear.GetGeometryN(componentIndex);
-                segmentIndex = line.NumPoints - 1;
-                segmentFraction = 1.0;
+                return new LinearLocation<TCoordinate>(_componentIndex, line.PointCount - 1, 1.0);
             }
+
+            return this;
         }
 
         /// <summary>
         /// Snaps the value of this location to
-        /// the nearest vertex on the given linear <see cref="Geometry" />,
+        /// the nearest vertex on the given linear <see cref="IGeometry{TCoordinate}" />,
         /// if the vertex is closer than <paramref name="minDistance" />.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
         /// <param name="minDistance">The minimum allowable distance to a vertex.</param>
-        public void SnapToVertex(IGeometry linearGeom, double minDistance)
+        public LinearLocation<TCoordinate> SnapToVertex(IGeometry<TCoordinate> linearGeom, Double minDistance)
         {
-            if (segmentFraction <= 0.0 || segmentFraction >= 1.0)
-                return;
+            if (_segmentFraction <= 0.0 || _segmentFraction >= 1.0)
+            {
+                return this;
+            }
 
-            double segLen = GetSegmentLength(linearGeom);
-            double lenToStart = segmentFraction * segLen;
-            double lenToEnd = segLen - lenToStart;
-            
+            Double segLen = GetSegmentLength(linearGeom);
+            Double lenToStart = _segmentFraction * segLen;
+            Double lenToEnd = segLen - lenToStart;
+
+            Double newFraction = _segmentFraction;
+
             if (lenToStart <= lenToEnd && lenToStart < minDistance)
-                segmentFraction = 0.0;            
+            {
+                newFraction = 0.0;
+            }
             else if (lenToEnd <= lenToStart && lenToEnd < minDistance)
-                segmentFraction = 1.0;            
+            {
+                newFraction = 1.0;
+            }
+
+            return new LinearLocation<TCoordinate>(_componentIndex, _segmentIndex, newFraction);
         }
-     
+
         /// <summary>
         /// Gets the length of the segment in the given
         /// Geometry containing this location.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
         /// <returns>The length of the segment.</returns>
-        public double GetSegmentLength(IGeometry linearGeom)
+        public Double GetSegmentLength(IGeometry<TCoordinate> linearGeom)
         {
-            ILineString lineComp = (ILineString) linearGeom.GetGeometryN(componentIndex);
+            ILineString<TCoordinate> lineComp = LinearHelper.GetLine(linearGeom, _componentIndex);
 
             // ensure segment index is valid
-            int segIndex = segmentIndex;
-            if (segmentIndex >= lineComp.NumPoints - 1)
-                segIndex = lineComp.NumPoints - 2;
+            Int32 segIndex = _segmentIndex;
+            Int32 pointCount = lineComp.PointCount;
 
-            ICoordinate p0 = lineComp.GetCoordinateN(segIndex);
-            ICoordinate p1 = lineComp.GetCoordinateN(segIndex + 1);
+            if (_segmentIndex >= pointCount - 1)
+            {
+                segIndex = pointCount - 2;
+            }
+
+            TCoordinate p0 = lineComp.Coordinates[segIndex];
+            TCoordinate p1 = lineComp.Coordinates[segIndex + 1];
+
             return p0.Distance(p1);
         }
 
         /// <summary>
-        /// Sets the value of this location to
-        /// refer the end of a linear geometry.
+        /// Creates a new <see cref="LinearLocation{TCoordinate}"/> with 
+        /// the value of this location to moved to refer the end of a linear geometry.
         /// </summary>
-        /// <param name="linear">The linear geometry to set.</param>
-        public void SetToEnd(IGeometry linear)
+        /// <param name="linear">The linear geometry to create a location for.</param>
+        private static LinearLocation<TCoordinate> setToEnd(IGeometry<TCoordinate> linear)
         {
-            componentIndex = linear.NumGeometries - 1;
-            ILineString lastLine = (ILineString) linear.GetGeometryN(componentIndex);
-            segmentIndex = lastLine.NumPoints - 1;
-            segmentFraction = 1.0;
+            Int32 componentIndex = LinearHelper.GetLineCount(linear) - 1;
+            ILineString<TCoordinate> line = LinearHelper.GetLine(linear, componentIndex);
+
+            Int32 segmentIndex = line.PointCount - 1;
+            Double segmentFraction = 1.0;
+
+            return new LinearLocation<TCoordinate>(componentIndex, segmentIndex, segmentFraction);
         }
-        
+
         /// <summary>
         /// Gets the component index for this location.
         /// </summary>
-        public int ComponentIndex
+        public Int32 ComponentIndex
         {
-            get
-            {
-                return componentIndex;
-            }
+            get { return _componentIndex; }
         }
 
         /// <summary>
         /// Gets the segment index for this location.
         /// </summary>
-        public int SegmentIndex
+        public Int32 SegmentIndex
         {
-            get
-            {
-                return segmentIndex;
-            }
+            get { return _segmentIndex; }
         }
 
         /// <summary>
         /// Gets the segment fraction for this location.
         /// </summary>
-        public double SegmentFraction
+        public Double SegmentFraction
         {
-            get
-            {
-                return segmentFraction;
-            }
+            get { return _segmentFraction; }
         }
 
         /// <summary>
         /// Tests whether this location refers to a vertex:
-        /// returns <c>true</c> if the location is a vertex.
+        /// returns <see langword="true"/> if the location is a vertex.
         /// </summary>        
-        public bool IsVertex
+        public Boolean IsVertex
         {
-            get
-            {
-                return segmentFraction <= 0.0 || segmentFraction >= 1.0;
-            }
+            get { return _segmentFraction <= 0.0 || _segmentFraction >= 1.0; }
         }
 
         /// <summary>
-        /// Gets the <see cref="Coordinate" /> along the
-        /// given linear <see cref="Geometry" /> which is
+        /// Gets the <typeparamref name="TCoordinate"/> along the
+        /// given linear <see cref="Geometry{TCoordinate}" /> which is
         /// referenced by this location.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
-        /// <returns>The <see cref="Coordinate" /> at the location.</returns>
-        public ICoordinate GetCoordinate(IGeometry linearGeom)
+        /// <returns>The <typeparamref name="TCoordinate"/> at the location.</returns>
+        public TCoordinate GetCoordinate(IGeometry<TCoordinate> linearGeom)
         {
-            ILineString lineComp = (ILineString) linearGeom.GetGeometryN(componentIndex);
-            ICoordinate p0 = lineComp.GetCoordinateN(segmentIndex);
-            if (segmentIndex >= lineComp.NumPoints - 1)
+            ILineString<TCoordinate> lineComp = LinearHelper.GetLine(linearGeom, _componentIndex);
+            TCoordinate p0 = lineComp.Coordinates[_segmentIndex];
+            
+            if (_segmentIndex >= lineComp.PointCount - 1)
+            {
                 return p0;
-            ICoordinate p1 = lineComp.GetCoordinateN(segmentIndex + 1);
-            return PointAlongSegmentByFraction(p0, p1, segmentFraction);
+            }
+
+            TCoordinate p1 = lineComp.Coordinates[_segmentIndex + 1];
+
+            return PointAlongSegmentByFraction(p0, p1, _segmentFraction);
         }
 
         /// <summary>
         /// Tests whether this location refers to a valid
-        /// location on the given linear <see cref="Geometry" />.
+        /// location on the given linear <see cref="Geometry{TCoordinate}" />.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
-        /// <returns><c>true</c> if this location is valid.</returns>
-        public bool IsValid(IGeometry linearGeom)
+        /// <returns><see langword="true"/> if this location is valid.</returns>
+        public Boolean IsValid(IGeometry<TCoordinate> linearGeom)
         {
-            if (componentIndex < 0 || componentIndex >= linearGeom.NumGeometries)
+            Int32 lineCount = LinearHelper.GetLineCount(linearGeom);
+
+            if (_componentIndex < 0 || _componentIndex >= lineCount)
+            {
                 return false;
-            ILineString lineComp = (ILineString) linearGeom.GetGeometryN(componentIndex);
-            if (segmentIndex < 0 || segmentIndex > lineComp.NumPoints)
+            }
+
+            ILineString<TCoordinate> lineComp = LinearHelper.GetLine(linearGeom, _componentIndex);
+
+            if (_segmentIndex < 0 || _segmentIndex > lineComp.PointCount)
+            {
                 return false;
-            if (segmentIndex == lineComp.NumPoints && segmentFraction != 0.0)
+            }
+
+            if (_segmentIndex == lineComp.PointCount && _segmentFraction != 0.0)
+            {
                 return false;
-            if (segmentFraction < 0.0 || segmentFraction > 1.0)
+            }
+
+            if (_segmentFraction < 0.0 || _segmentFraction > 1.0)
+            {
                 return false;
+            }
+
             return true;
         }
+
+        #region IEquatable<LinearLocation<TCoordinate>> Members
+
+        public Boolean Equals(LinearLocation<TCoordinate> other)
+        {
+            return other._componentIndex == _componentIndex &&
+                   other._segmentFraction == _segmentFraction &&
+                   other._segmentIndex == _segmentIndex;
+        }
+
+        #endregion
 
         /// <summary>
         /// Compares the current instance with another object of the same type.
         /// </summary>
-        /// <param name="obj">
-        /// The <c>LineStringLocation</c> with which this 
-        /// <c>Coordinate</c> is being compared.
-        /// </param>
-        /// <returns>
-        /// A negative integer, zero, or a positive integer as this 
-        /// <c>LineStringLocation</c> is less than, equal to, 
-        /// or greater than the specified <c>LineStringLocation</c>.
-        /// </returns>
-        /// <exception cref="T:System.ArgumentException">
-        /// <paramref name="obj" /> is not the same type as this instance. 
-        /// </exception>
-        public int CompareTo(object obj)
-        {
-            LinearLocation other = (LinearLocation) obj;
-            return CompareTo(other);
-        }
- 
-        /// <summary>
-        /// Compares the current instance with another object of the same type.
-        /// </summary>
         /// <param name="other">
-        /// The <c>LineStringLocation</c> with which this 
-        /// <c>Coordinate</c> is being compared.
+        /// The other <see cref="LinearLocation{TCoordinate}"/> being compared to.
         /// </param>
         /// <returns>
         /// A negative integer, zero, or a positive integer as this 
-        /// <c>LineStringLocation</c> is less than, equal to, 
-        /// or greater than the specified <c>LineStringLocation</c>.
+        /// <see cref="LinearLocation{TCoordinate}"/> is less than, equal to, 
+        /// or greater than the specified <see cref="LinearLocation{TCoordinate}"/>.
         /// </returns>
-        public int CompareTo(LinearLocation other)
-        {            
+        public Int32 CompareTo(LinearLocation<TCoordinate> other)
+        {
             // compare component indices
-            if (componentIndex < other.ComponentIndex) return -1;
-            if (componentIndex > other.ComponentIndex) return 1;
+            if (_componentIndex < other.ComponentIndex) { return -1; }
+            if (_componentIndex > other.ComponentIndex) { return 1; }
+
             // compare segments
-            if (segmentIndex < other.SegmentIndex) return -1;
-            if (segmentIndex > other.SegmentIndex) return 1;
+            if (_segmentIndex < other.SegmentIndex) { return -1; }
+            if (_segmentIndex > other.SegmentIndex) { return 1; }
+
             // same segment, so compare segment fraction
-            if (segmentFraction < other.SegmentFraction) return -1;
-            if (segmentFraction > other.SegmentFraction) return 1;
+            if (_segmentFraction < other.SegmentFraction) { return -1; }
+            if (_segmentFraction > other.SegmentFraction) { return 1; }
+
             // same location
             return 0;
         }
@@ -332,24 +366,27 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// <summary>
         /// Compares this object with the specified index values for order.
         /// </summary>
-        /// <param name="componentIndex1">The component index.</param>
-        /// <param name="segmentIndex1">The segment index.</param>
-        /// <param name="segmentFraction1">The segment fraction.</param>
+        /// <param name="componentIndex">The component index.</param>
+        /// <param name="segmentIndex">The segment index.</param>
+        /// <param name="segmentFraction">The segment fraction.</param>
         /// <returns>
-        /// A negative integer, zero, or a positive integer as this <c>LineStringLocation</c>
+        /// A negative integer, zero, or a positive integer as this <see cref="LinearLocation{TCoordinate}"/>
         /// is less than, equal to, or greater than the specified locationValues.
         /// </returns>
-        public int CompareLocationValues(int componentIndex1, int segmentIndex1, double segmentFraction1)
+        public Int32 CompareLocationValues(Int32 componentIndex, Int32 segmentIndex, Double segmentFraction)
         {
             // compare component indices
-            if (componentIndex < componentIndex1) return -1;
-            if (componentIndex > componentIndex1) return 1;
+            if (_componentIndex < componentIndex) { return -1; }
+            if (_componentIndex > componentIndex) { return 1; }
+
             // compare segments
-            if (segmentIndex < segmentIndex1) return -1;
-            if (segmentIndex > segmentIndex1) return 1;
+            if (_segmentIndex < segmentIndex) { return -1; }
+            if (_segmentIndex > segmentIndex) { return 1; }
+
             // same segment, so compare segment fraction
-            if (segmentFraction < segmentFraction1) return -1;
-            if (segmentFraction > segmentFraction1) return 1;
+            if (_segmentFraction < segmentFraction) { return -1; }
+            if (_segmentFraction > segmentFraction) { return 1; }
+
             // same location
             return 0;
         }
@@ -368,30 +405,24 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// as the first set of location values is less than, equal to, 
         /// or greater than the second set of locationValues.
         /// </returns>
-        public static int CompareLocationValues(
-            int componentIndex0, int segmentIndex0, double segmentFraction0,
-            int componentIndex1, int segmentIndex1, double segmentFraction1)
+        public static Int32 CompareLocationValues(
+            Int32 componentIndex0, Int32 segmentIndex0, Double segmentFraction0,
+            Int32 componentIndex1, Int32 segmentIndex1, Double segmentFraction1)
         {
             // compare component indices
-            if (componentIndex0 < componentIndex1) return -1;
-            if (componentIndex0 > componentIndex1) return 1;
+            if (componentIndex0 < componentIndex1) { return -1; }
+            if (componentIndex0 > componentIndex1) { return 1; }
+
             // compare segments
-            if (segmentIndex0 < segmentIndex1) return -1;
-            if (segmentIndex0 > segmentIndex1) return 1;
+            if (segmentIndex0 < segmentIndex1) { return -1; }
+            if (segmentIndex0 > segmentIndex1) { return 1; }
+
             // same segment, so compare segment fraction
-            if (segmentFraction0 < segmentFraction1) return -1;
-            if (segmentFraction0 > segmentFraction1) return 1;
+            if (segmentFraction0 < segmentFraction1) { return -1; }
+            if (segmentFraction0 > segmentFraction1) { return 1; }
+
             // same location
             return 0;
-        }
-     
-        /// <summary>
-        /// Copies this location.
-        /// </summary>
-        /// <returns>A copy of this location.</returns>
-        public object Clone()
-        {
-            return new LinearLocation(segmentIndex, segmentFraction);
         }
     }
 }

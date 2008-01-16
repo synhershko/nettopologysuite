@@ -1,74 +1,70 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
     /// Computes a point in the interior of an point point.
+    /// </summary>
+    /// <remarks>
     /// Algorithm:
     /// Find a point which is closest to the centroid of the point.
-    /// </summary>
-    public class InteriorPointPoint
+    /// </remarks>
+    public class InteriorPointPoint<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        private ICoordinate centroid;
-        private double minDistance = Double.MaxValue;
-        private ICoordinate interiorPoint = null;
+        private readonly TCoordinate _centroid;
+        private Double _minDistance = Double.MaxValue;
+        private TCoordinate _interiorPoint = default(TCoordinate);
+        private readonly ICoordinateFactory<TCoordinate> _factory;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        public InteriorPointPoint(IGeometry g)
+        public InteriorPointPoint(IGeometry<TCoordinate> g)
         {
-            centroid = g.Centroid.Coordinate;
-            Add(g);
+            _factory = g.Factory.CoordinateFactory;
+            _centroid = g.Centroid.Coordinate;
+            add(g);
+        }
+
+        public TCoordinate InteriorPoint
+        {
+            get { return _interiorPoint; }
         }
 
         /// <summary> 
-        /// Tests the point(s) defined by a Geometry for the best inside point.
-        /// If a Geometry is not of dimension 0 it is not tested.
+        /// Tests the point(s) defined by a Geometry for the best inside 
+        /// point. If a Geometry is not of dimension 0 it is not tested.
         /// </summary>
         /// <param name="geom">The point to add.</param>
-        private void Add(IGeometry geom)
+        private void add(IGeometry<TCoordinate> geom)
         {
-            if (geom is IPoint)
-                Add(geom.Coordinate);    
-            else if (geom is IGeometryCollection) 
+            if (geom is IPoint<TCoordinate>)
             {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
-                    Add(geometry);
+                IPoint<TCoordinate> point = geom as IPoint<TCoordinate>;
+                add(point.Coordinate);
+            }
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
+                    add(geometry);
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="point"></param>
-        private void Add(ICoordinate point)
+        private void add(TCoordinate point)
         {
-            double dist = point.Distance(centroid);
-            if (dist < minDistance)
-            {
-                interiorPoint = new Coordinate(point);
-                minDistance = dist;
-            }
-        }
+            Double dist = point.Distance(_centroid);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate InteriorPoint
-        {
-            get
+            if (dist < _minDistance)
             {
-                return interiorPoint;
+                _interiorPoint = _factory.Create(point);
+                _minDistance = dist;
             }
         }
-    }   
+    }
 }

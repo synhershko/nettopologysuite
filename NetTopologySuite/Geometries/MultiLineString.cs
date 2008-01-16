@@ -1,160 +1,188 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Operation;
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using GisSharpBlog.NetTopologySuite.Operation;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>
-    /// Basic implementation of <c>MultiLineString</c>.
+    /// Basic implementation of <see cref="IMultiLineString{TCoordinate}"/>.
     /// </summary>    
-    public class MultiLineString : GeometryCollection, IMultiLineString
+    public class MultiLineString<TCoordinate> : GeometryCollection<TCoordinate>, IMultiLineString<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                    IComputable<Double, TCoordinate>, IConvertible
+
     {
         /// <summary>
-        /// Represents an empty <c>MultiLineString</c>.
+        /// Represents an empty <see cref="MultiLineString{TCoordinate}"/>.
         /// </summary>
-        public static new readonly IMultiLineString Empty = new GeometryFactory().CreateMultiLineString(null);
+        public new static readonly IMultiLineString Empty = new GeometryFactory<TCoordinate>().CreateMultiLineString(null);
 
         /// <summary>
         /// Constructs a <c>MultiLineString</c>.
         /// </summary>
         /// <param name="lineStrings">
         /// The <c>LineString</c>s for this <c>MultiLineString</c>,
-        /// or <c>null</c> or an empty array to create the empty
+        /// or <see langword="null" /> or an empty array to create the empty
         /// point. Elements may be empty <c>LineString</c>s,
-        /// but not <c>null</c>s.
+        /// but not <see langword="null" />s.
         /// </param>
-        /// <param name="factory"></param>
-        public MultiLineString(ILineString[] lineStrings, IGeometryFactory factory) : base(lineStrings, factory) { }        
+        public MultiLineString(IEnumerable<ILineString<TCoordinate>> lineStrings, IGeometryFactory<TCoordinate> factory)
+            : base(Enumerable.Upcast<IGeometry<TCoordinate>, ILineString<TCoordinate>>(lineStrings), factory) { }
 
         /// <summary>
         /// Constructs a <c>MultiLineString</c>.
         /// </summary>
         /// <param name="lineStrings">
         /// The <c>LineString</c>s for this <c>MultiLineString</c>,
-        /// or <c>null</c> or an empty array to create the empty
+        /// or <see langword="null" /> or an empty array to create the empty
         /// point. Elements may be empty <c>LineString</c>s,
-        /// but not <c>null</c>s.
+        /// but not <see langword="null" />s.
         /// </param>
         /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> 
+        /// is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="IPrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
         /// </remarks>
-        public MultiLineString(ILineString[] lineStrings) : this(lineStrings, DefaultFactory) { }
+        public MultiLineString(IEnumerable<ILineString<TCoordinate>> lineStrings) 
+            : this(lineStrings, DefaultFactory) { }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public override Dimensions Dimension
+        public override IGeometry<TCoordinate> Boundary
         {
             get
             {
-                return Dimensions.Curve;
+                if (IsEmpty)
+                {
+                    return Factory.CreateGeometryCollection(null);
+                }
+
+                GeometryGraph<TCoordinate> g = new GeometryGraph<TCoordinate>(0, this);
+                IEnumerable<TCoordinate> pts = g.GetBoundaryPoints();
+                return Factory.CreateMultiPoint(pts);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
         public override Dimensions BoundaryDimension
         {
             get
             {
                 if (IsClosed)
-                    return Dimensions.False;                
+                {
+                    return Dimensions.False;
+                }
+
                 return Dimensions.Point;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public override string GeometryType
+        public override Dimensions Dimension
         {
-            get
-            {
-                return "MultiLineString";
-            }
+            get { return Dimensions.Curve; }
+        }
+
+        public override OgcGeometryType GeometryType
+        {
+            get { return OgcGeometryType.MultiLineString; }
         }
 
         /// <summary>
         /// Gets a value indicating whether this instance is closed.
         /// </summary>
-        /// <value><c>true</c> if this instance is closed; otherwise, <c>false</c>.</value>
-        public bool IsClosed
+        /// <value>
+        /// <see langword="true"/> if this instance is closed; otherwise, <see langword="false"/>.
+        /// </value>
+        public Boolean IsClosed
         {
             get
             {
-                if (IsEmpty) 
+                if (IsEmpty)
+                {
                     return false;
-                for (int i = 0; i < geometries.Length; i++)
-                    if (!((ILineString) geometries[i]).IsClosed)
-                        return false;                
+                }
+
+                foreach (ICurve curve in GeometriesInternal)
+                {
+                    Debug.Assert(curve != null);
+
+                    if(!curve.IsClosed)
+                    {
+                        return false;
+                    }
+                }
+
                 return true;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public override bool IsSimple
+        public override Boolean IsSimple
         {
-            get
-            {
-                return (new IsSimpleOp()).IsSimple((IMultiLineString) this);
-            }
+            get { return (new IsSimpleOp<TCoordinate>()).IsSimple(this); }
+        }
+
+        public new ILineString<TCoordinate> this[Int32 index]
+        {
+            get { return base[index] as ILineString<TCoordinate>; }
+            set { base[index] = value; }
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public override IGeometry Boundary
-        {
-            get
-            {
-                if(IsEmpty)
-                    return Factory.CreateGeometryCollection(null);
-                GeometryGraph g = new GeometryGraph(0, this);
-                ICoordinate[] pts = g.GetBoundaryPoints();
-                return Factory.CreateMultiPoint(pts);
-            }
-        }
-
-        /// <summary>
-        /// Creates a <see cref="MultiLineString" /> in the reverse order to this object.
+        /// Creates a <see cref="MultiLineString{TCoordinate}" /> in the reverse order to this object.
         /// Both the order of the component LineStrings
         /// and the order of their coordinate sequences are reversed.
         /// </summary>
-        /// <returns>a <see cref="MultiLineString" /> in the reverse order.</returns>
-        public IMultiLineString Reverse()
+        /// <returns>a <see cref="MultiLineString{TCoordinate}" /> in the reverse order.</returns>
+        public IMultiLineString<TCoordinate> Reverse()
         {
-            int nLines = geometries.Length;
-            ILineString[] revLines = new ILineString[nLines];
-            for (int i = 0; i < geometries.Length; i++)
-                revLines[nLines - 1 - i] = ((ILineString) geometries[i]).Reverse();            
-            return Factory.CreateMultiLineString(revLines);
+            IEnumerable<ILineString<TCoordinate>> reversed = Slice.Reverse(this as IEnumerable<ILineString<TCoordinate>>);
+            return Factory.CreateMultiLineString(reversed);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
         {
-            if (!IsEquivalentClass((IGeometry) other)) 
-                return false;            
-            return base.EqualsExact(other, tolerance);
+            if (!IsEquivalentClass(other))
+            {
+                return false;
+            }
+
+            return base.Equals(other, tolerance);
+        }
+
+        public new IEnumerator<ILineString<TCoordinate>> GetEnumerator()
+        {
+            foreach (ILineString<TCoordinate> line in GeometriesInternal)
+            {
+                yield return line;
+            }
+        }
+
+        IEnumerator<ILineString> IEnumerable<ILineString>.GetEnumerator()
+        {
+            foreach (ILineString<TCoordinate> lineString in this)
+            {
+                yield return lineString;
+            }
+        }
+
+        IMultiLineString IMultiLineString.Reverse()
+        {
+            return Reverse();
+        }
+
+        ILineString IMultiLineString.this[Int32 index]
+        {
+            get
+            {
+                return this[index];
+            }
+            set
+            {
+                this[index] = value as ILineString<TCoordinate>;
+            }
         }
     }
 }

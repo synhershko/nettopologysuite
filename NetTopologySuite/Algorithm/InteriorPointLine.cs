@@ -1,49 +1,48 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary>
     /// Computes a point in the interior of an linear point.
+    /// </summary>
+    /// <remarks>
     /// Algorithm:
     /// Find an interior vertex which is closest to
     /// the centroid of the linestring.
     /// If there is no interior vertex, find the endpoint which is
     /// closest to the centroid.
-    /// </summary>
-    public class InteriorPointLine
+    /// </remarks>
+    public class InteriorPointLine<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private ICoordinate centroid = null;
-        private double minDistance = Double.MaxValue;
-        private ICoordinate interiorPoint = null;
+        private readonly ICoordinateFactory<TCoordinate> _factory;
+        private readonly TCoordinate _centroid = default(TCoordinate);
+        private Double minDistance = Double.MaxValue;
+        private TCoordinate _interiorPoint = default(TCoordinate);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        public InteriorPointLine(IGeometry g)
+        public InteriorPointLine(IGeometry<TCoordinate> g)
         {
-            centroid = g.Centroid.Coordinate;
+            _factory = g.Factory.CoordinateFactory;
+            _centroid = g.Centroid.Coordinate;
             AddInterior(g);
 
-            if (interiorPoint == null)                
+            if (Coordinates<TCoordinate>.IsEmpty(_interiorPoint))
+            {
                 AddEndpoints(g);
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate InteriorPoint
+        public TCoordinate InteriorPoint
         {
-            get
-            {
-                return interiorPoint;
-            }
+            get { return _interiorPoint; }
         }
 
         /// <summary>
@@ -52,27 +51,29 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// If a Geometry is not of dimension 1 it is not tested.
         /// </summary>
         /// <param name="geom">The point to add.</param>
-        private void AddInterior(IGeometry geom)
+        private void AddInterior(IGeometry<TCoordinate> geom)
         {
-            if(geom is ILineString) 
-                AddInterior(geom.Coordinates);            
-            else if(geom is IGeometryCollection) 
+            if (geom is ILineString<TCoordinate>)
             {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
+                AddInterior(geom.Coordinates);
+            }
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+                Debug.Assert(gc != null);
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
                     AddInterior(geometry);
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        private void AddInterior(ICoordinate[] pts)
+        private void AddInterior(IEnumerable<TCoordinate> points)
         {
-            for (int i = 1; i < pts.Length - 1; i++)
-                Add(pts[i]);
-            
+            foreach (TCoordinate point in points)
+            {
+                add(point);
+            }
         }
 
         /// <summary> 
@@ -81,38 +82,36 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// If a Geometry is not of dimension 1 it is not tested.
         /// </summary>
         /// <param name="geom">The point to add.</param>
-        private void AddEndpoints(IGeometry geom)
+        private void AddEndpoints(IGeometry<TCoordinate> geom)
         {
-            if(geom is ILineString)
-                AddEndpoints(geom.Coordinates);   
-            else if(geom is IGeometryCollection) 
+            if (geom is ILineString<TCoordinate>)
             {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
+                AddEndpoints(geom.Coordinates);
+            }
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
                     AddEndpoints(geometry);
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        private void AddEndpoints(ICoordinate[] pts)
+        private void AddEndpoints(IEnumerable<TCoordinate> points)
         {
-            Add(pts[0]);
-            Add(pts[pts.Length - 1]);
+            add(Slice.GetFirst(points));
+            add(Slice.GetLast(points));
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="point"></param>
-        private void Add(ICoordinate point)
+        private void add(TCoordinate point)
         {
-            double dist = point.Distance(centroid);
+            Double dist = point.Distance(_centroid);
+
             if (dist < minDistance)
             {
-                interiorPoint = new Coordinate(point);
+                _interiorPoint = _factory.Create(point);
                 minDistance = dist;
             }
         }

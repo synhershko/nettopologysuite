@@ -1,4 +1,7 @@
+using System;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.IO
@@ -9,9 +12,9 @@ namespace GisSharpBlog.NetTopologySuite.IO
 	public abstract class ShapeHandler 
 	{
         /// <summary>
-        /// Initializes a new instance of the <see cref="ShapeHandler"/> class.
+        /// 
         /// </summary>
-        public ShapeHandler() { }
+		public ShapeHandler() { }
 
 		/// <summary>
 		/// Returns the ShapeType the handler handles.
@@ -48,7 +51,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// <returns></returns>
         public static IEnvelope GetEnvelopeExternal(IEnvelope envelope)
         {
-            // Get envelope in external coordinates
+            // get envelose in external coordinates
             ICoordinate min = new Coordinate(envelope.MinX, envelope.MinY);
             ICoordinate max = new Coordinate(envelope.MaxX, envelope.MaxY);
             IEnvelope bounds = new Envelope(min.X, max.X, min.Y, max.Y);

@@ -1,153 +1,98 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public abstract class EdgeRing
+    public abstract class EdgeRing<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
         /// The directed edge which starts the list of edges for this EdgeRing.
         /// </summary>
-        protected DirectedEdge startDe;         
+        private DirectedEdge<TCoordinate> _startingEdge;
+
+        private Int32 maxNodeDegree = -1;
+        private readonly List<DirectedEdge<TCoordinate>> _edges = new List<DirectedEdge<TCoordinate>>(); // the DirectedEdges making up this EdgeRing
+        private readonly List<TCoordinate> _coordinates = new List<TCoordinate>();
         
-        private int maxNodeDegree = -1;
-        private IList edges = new ArrayList();  // the DirectedEdges making up this EdgeRing
-        private IList pts = new ArrayList();
-        private Label label = new Label(Locations.Null); // label stores the locations of each point on the face surrounded by this ring
-        private ILinearRing ring;  // the ring created for this EdgeRing
-        private bool isHole;
-        private EdgeRing shell;   // if non-null, the ring is a hole and this EdgeRing is its containing shell
-        private ArrayList holes = new ArrayList(); // a list of EdgeRings which are holes in this EdgeRing
+        // label stores the locations of each point on the face surrounded by this ring
+        private Label _label = new Label(Locations.None);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        protected IGeometryFactory geometryFactory;
+        private ILinearRing<TCoordinate> _ring; // the ring created for this EdgeRing
+        private Boolean _isHole;
+        private EdgeRing<TCoordinate> _shell; // if non-null, the ring is a hole and this EdgeRing is its containing shell
+        private readonly List<EdgeRing<TCoordinate>> _holes = new List<EdgeRing<TCoordinate>>(); // a list of EdgeRings which are holes in this EdgeRing
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="start"></param>
-        /// <param name="geometryFactory"></param>
-        public EdgeRing(DirectedEdge start, IGeometryFactory geometryFactory)
+        protected IGeometryFactory<TCoordinate> _geometryFactory;
+
+        public EdgeRing(DirectedEdge<TCoordinate> start, IGeometryFactory<TCoordinate> geometryFactory)
         {
-            this.geometryFactory = geometryFactory;
+            _geometryFactory = geometryFactory;
             ComputePoints(start);
             ComputeRing();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsIsolated
+        public Boolean IsIsolated
         {
-            get
-            {
-                return label.GeometryCount == 1;
-            }
+            get { return _label.GeometryCount == 1; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsHole
+        public Boolean IsHole
         {
-            get
-            {             
-                return isHole;
-            }
+            get { return _isHole; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public ICoordinate GetCoordinate(int i) 
+        public TCoordinate GetCoordinate(Int32 i)
         {
-            return (ICoordinate) pts[i]; 
+            return _coordinates[i];
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ILinearRing LinearRing
+        public ILinearRing<TCoordinate> LinearRing
         {
-            get
-            {
-                return ring;
-            }
+            get { return _ring; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public Label Label
         {
-            get
-            {
-                return label;
-            }
+            get { return _label; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsShell
+        public Boolean IsShell
         {
-            get
-            {
-                return shell == null;
-            }
+            get { return _shell == null; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeRing Shell
+        public EdgeRing<TCoordinate> Shell
         {
-            get
-            {
-                return shell;
-            }
+            get { return _shell; }
             set
             {
-                this.shell = value;
-                if (value != null) 
-                    shell.AddHole(this);
+                _shell = value;
+
+                if (value != null)
+                {
+                    _shell.AddHole(this);
+                }
             }
         }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ring"></param>
-        public void AddHole(EdgeRing ring) 
+
+        public void AddHole(EdgeRing<TCoordinate> ring)
         {
-            holes.Add(ring); 
+            _holes.Add(ring);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geometryFactory"></param>
-        /// <returns></returns>
-        public IPolygon ToPolygon(IGeometryFactory geometryFactory)
+        public IPolygon<TCoordinate> ToPolygon(IGeometryFactory<TCoordinate> geometryFactory)
         {
-            ILinearRing[] holeLR = new ILinearRing[holes.Count];
-            for (int i = 0; i < holes.Count; i++)
-                holeLR[i] = ((EdgeRing) holes[i]).LinearRing;
-            IPolygon poly = geometryFactory.CreatePolygon(LinearRing, holeLR);
+            IPolygon<TCoordinate> poly = geometryFactory.CreatePolygon(LinearRing, getLinearRings(_holes));
             return poly;
         }
 
@@ -158,117 +103,128 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// </summary>
         public void ComputeRing()
         {
-            if (ring != null) 
-                return;   // don't compute more than once
-            ICoordinate[] coord = new ICoordinate[pts.Count];
-            for (int i = 0; i < pts.Count; i++)            
-                coord[i] = (ICoordinate) pts[i];
-            ring = geometryFactory.CreateLinearRing(coord);
-            isHole = CGAlgorithms.IsCCW(ring.Coordinates);
+            if (_ring != null)
+            {
+                return; // don't compute more than once
+            }
+
+            _ring = _geometryFactory.CreateLinearRing(_coordinates);
+            _isHole = CGAlgorithms<TCoordinate>.IsCCW(_ring.Coordinates);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        /// <returns></returns>
-        abstract public DirectedEdge GetNext(DirectedEdge de);
+        public abstract DirectedEdge<TCoordinate> GetNext(DirectedEdge<TCoordinate> de);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        /// <param name="er"></param>
-        abstract public void SetEdgeRing(DirectedEdge de, EdgeRing er);
+        public abstract void SetEdgeRing(DirectedEdge<TCoordinate> de, EdgeRing<TCoordinate> er);
 
         /// <summary> 
         /// Returns the list of DirectedEdges that make up this EdgeRing.
         /// </summary>
-        public IList Edges
+        public IEnumerable<DirectedEdge<TCoordinate>> Edges
         {
             get
             {
-                return edges;
+                foreach (DirectedEdge<TCoordinate> edge in _edges)
+                {
+                    yield return edge;
+                }
             }
+        }
+
+        protected DirectedEdge<TCoordinate> StartingEdge
+        {
+            get { return _startingEdge; }
+        }
+
+        protected IGeometryFactory<TCoordinate> GeometryFactory
+        {
+            get { return _geometryFactory; }
         }
 
         /// <summary> 
         /// Collect all the points from the DirectedEdges of this ring into a contiguous list.
         /// </summary>
-        /// <param name="start"></param>
-        protected void ComputePoints(DirectedEdge start)
+        protected void ComputePoints(DirectedEdge<TCoordinate> start)
         {
-            startDe = start;
-            DirectedEdge de = start;
-            bool isFirstEdge = true;
+            _startingEdge = start;
+            DirectedEdge<TCoordinate> de = start;
+            Boolean isFirstEdge = true;
+
             do
             {
-                Assert.IsTrue(de != null, "found null Directed Edge");
-                if (de.EdgeRing == this)
-                    throw new TopologyException("Directed Edge visited twice during ring-building at " + de.Coordinate);
+                Debug.Assert(de != null);
+                //Assert.IsTrue(de != null, "found null Directed Edge");
 
-                edges.Add(de);                
-                Label label = de.Label;
+                if (de.EdgeRing == this)
+                {
+                    throw new TopologyException("Directed Edge visited twice during ring-building at " + de.Coordinate);
+                }
+
+                _edges.Add(de);
+                Debug.Assert(de.Label.HasValue);
+                Label label = de.Label.Value;
                 Assert.IsTrue(label.IsArea());
                 MergeLabel(label);
                 AddPoints(de.Edge, de.IsForward, isFirstEdge);
                 isFirstEdge = false;
                 SetEdgeRing(de, this);
                 de = GetNext(de);
-            } 
-            while (de != startDe);
+            } while (de != _startingEdge);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int MaxNodeDegree
+        public Int32 MaxNodeDegree
         {
             get
             {
-                if (maxNodeDegree < 0) 
-                    ComputeMaxNodeDegree();
+                if (maxNodeDegree < 0)
+                {
+                    computeMaxNodeDegree();
+                }
+
                 return maxNodeDegree;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void ComputeMaxNodeDegree()
-        {
-            maxNodeDegree = 0;
-            DirectedEdge de = startDe;
-            do
-            {
-                Node node = de.Node;
-                int degree = ((DirectedEdgeStar) node.Edges).GetOutgoingDegree(this);
-                if (degree > maxNodeDegree) 
-                    maxNodeDegree = degree;
-                de = GetNext(de);
-            } 
-            while (de != startDe);
-            maxNodeDegree *= 2;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         public void SetInResult()
         {
-            DirectedEdge de = startDe;
+            DirectedEdge<TCoordinate> de = _startingEdge;
+
             do
             {
                 de.Edge.InResult = true;
                 de = de.Next;
-            } 
-            while (de != startDe);
+            } while (de != _startingEdge);
         }
 
-        /// <summary>
-        /// 
+        /// <summary> 
+        /// This method will cause the ring to be computed.
+        /// It will also check any holes, if they have been assigned.
         /// </summary>
-        /// <param name="deLabel"></param>
+        public Boolean ContainsPoint(TCoordinate p)
+        {
+            ILinearRing<TCoordinate> shell = LinearRing;
+            IExtents<TCoordinate> extents = shell.Extents;
+
+            if (!extents.Contains(p))
+            {
+                return false;
+            }
+
+            if (!CGAlgorithms<TCoordinate>.IsPointInRing(p, shell.Coordinates))
+            {
+                return false;
+            }
+
+            foreach (EdgeRing<TCoordinate> hole in _holes)
+            {
+                if (hole.ContainsPoint(p))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         protected void MergeLabel(Label deLabel)
         {
             MergeLabel(deLabel, 0);
@@ -280,72 +236,87 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// The DirectedEdge label may be null.  This is acceptable - it results
         /// from a node which is NOT an intersection node between the Geometries
         /// (e.g. the end node of a LinearRing).  In this case the DirectedEdge label
-        /// does not contribute any information to the overall labelling, and is simply skipped.
+        /// does not contribute any information to the overall labeling, and is simply skipped.
         /// </summary>
-        /// <param name="deLabel"></param>
-        /// <param name="geomIndex"></param>
-        protected void MergeLabel(Label deLabel, int geomIndex)
+        protected void MergeLabel(Label deLabel, Int32 geomIndex)
         {
-            Locations loc = deLabel.GetLocation(geomIndex, Positions.Right);
+            Locations loc = deLabel[geomIndex, Positions.Right];
+
             // no information to be had from this label
-            if (loc == Locations.Null) 
-                return;
-            // if there is no current RHS value, set it
-            if (label.GetLocation(geomIndex) == Locations.Null)
+            if (loc == Locations.None)
             {
-                label.SetLocation(geomIndex, loc);
+                return;
+            }
+
+            // if there is no current RHS value, set it
+            if (_label[geomIndex].On == Locations.None)
+            {
+                _label = new Label(_label, geomIndex, loc);
                 return;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="isForward"></param>
-        /// <param name="isFirstEdge"></param>
-        protected void AddPoints(Edge edge, bool isForward, bool isFirstEdge)
+        protected void AddPoints(Edge<TCoordinate> edge, Boolean isForward, Boolean isFirstEdge)
         {
-            ICoordinate[] edgePts = edge.Coordinates;
+            IEnumerable<TCoordinate> edgePts = edge.Coordinates;
+
             if (isForward)
             {
-                int startIndex = 1;
-                if (isFirstEdge) 
+                Int32 startIndex = 1;
+
+                if (isFirstEdge)
+                {
                     startIndex = 0;
-                for (int i = startIndex; i < edgePts.Length; i++)                
-                    pts.Add(edgePts[i]);                
+                }
+
+                foreach (TCoordinate coordinate in Slice.StartAt(edgePts, startIndex))
+                {
+                    _coordinates.Add(coordinate);
+                }
             }
             else
-            { 
+            {
                 // is backward
-                int startIndex = edgePts.Length - 2;
-                if (isFirstEdge) 
-                    startIndex = edgePts.Length - 1;
-                for (int i = startIndex; i >= 0; i--)                
-                    pts.Add(edgePts[i]);                
+                Int32 startIndex = 1;
+
+                if (isFirstEdge)
+                {
+                    startIndex = 0;
+                }
+
+                _coordinates.AddRange(Slice.ReverseStartAt(edgePts, startIndex));
             }
         }
 
-        /// <summary> 
-        /// This method will cause the ring to be computed.
-        /// It will also check any holes, if they have been assigned.
-        /// </summary>
-        /// <param name="p"></param>
-        public bool ContainsPoint(ICoordinate p)
+        private void computeMaxNodeDegree()
         {
-            ILinearRing shell = LinearRing;
-            IEnvelope env = shell.EnvelopeInternal;
-            if (!env.Contains(p)) 
-                return false;
-            if (!CGAlgorithms.IsPointInRing(p, shell.Coordinates)) 
-                return false;
-            for (IEnumerator i = holes.GetEnumerator(); i.MoveNext(); )
+            maxNodeDegree = 0;
+            DirectedEdge<TCoordinate> de = _startingEdge;
+
+            do
             {
-                EdgeRing hole = (EdgeRing) i.Current;
-                if (hole.ContainsPoint(p))
-                    return false;
+                Node<TCoordinate> node = de.Node;
+                DirectedEdgeStar<TCoordinate> star = node.Edges as DirectedEdgeStar<TCoordinate>;
+                Debug.Assert(star != null);
+                Int32 degree = star.GetOutgoingDegree(this);
+
+                if (degree > maxNodeDegree)
+                {
+                    maxNodeDegree = degree;
+                }
+
+                de = GetNext(de);
+            } while (de != _startingEdge);
+
+            maxNodeDegree *= 2;
+        }
+
+        private static IEnumerable<ILinearRing<TCoordinate>> getLinearRings(IEnumerable<EdgeRing<TCoordinate>> rings)
+        {
+            foreach (EdgeRing<TCoordinate> ring in rings)
+            {
+                yield return ring.LinearRing;
             }
-            return true;
         }
     }
 }

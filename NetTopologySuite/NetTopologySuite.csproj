@@ -1,8 +1,8 @@
-﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>8.0.50727</ProductVersion>
+    <ProductVersion>9.0.21022</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{5770DAA9-84E5-4770-AF43-F6B815894368}</ProjectGuid>
     <OutputType>Library</OutputType>
@@ -19,6 +19,11 @@
     <SccProvider>
     </SccProvider>
     <AssemblyOriginatorKeyFile>nts.snk</AssemblyOriginatorKeyFile>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+    <OldToolsVersion>2.0</OldToolsVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -41,35 +46,33 @@
     <DocumentationFile>bin\Release\NetTopologySuite.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GeoAPI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=a1a0da7def465678, processorArchitecture=MSIL">
+    <Reference Include="NPack, Version=0.7.13341.0, Culture=neutral, PublicKeyToken=56f174b1685ddc6a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ExternalReferences\GeoAPI.dll</HintPath>
-    </Reference>
-    <Reference Include="ProjNET, Version=1.0.2794.16965, Culture=neutral, PublicKeyToken=a1f5bdcd9c6f5740, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ExternalReferences\ProjNET.dll</HintPath>
+      <HintPath>..\ExternalReferences\NPack.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Algorithm\CentralEndpointIntersector.cs" />
     <Compile Include="Algorithm\CentroidArea.cs" />
     <Compile Include="Algorithm\CentroidLine.cs" />
     <Compile Include="Algorithm\CentroidPoint.cs" />
     <Compile Include="Algorithm\CGAlgorithms.cs" />
     <Compile Include="Algorithm\ConvexHull.cs" />
-    <Compile Include="Algorithm\HCoordinate.cs" />
     <Compile Include="Algorithm\InteriorPointArea.cs" />
     <Compile Include="Algorithm\InteriorPointLine.cs" />
     <Compile Include="Algorithm\InteriorPointPoint.cs" />
+    <Compile Include="Algorithm\Intersection.cs" />
+    <Compile Include="Algorithm\LineIntersectionType.cs" />
     <Compile Include="Algorithm\LineIntersector.cs" />
     <Compile Include="Algorithm\MCPointInRing.cs" />
     <Compile Include="Algorithm\MinimumDiameter.cs" />
-    <Compile Include="Algorithm\NonRobustCGAlgorithms.cs" />
     <Compile Include="Algorithm\NonRobustLineIntersector.cs" />
     <Compile Include="Algorithm\NotRepresentableException.cs" />
     <Compile Include="Algorithm\IPointInRing.cs" />
+    <Compile Include="Algorithm\Orientation.cs" />
     <Compile Include="Algorithm\PointLocator.cs" />
     <Compile Include="Algorithm\RobustDeterminant.cs" />
     <Compile Include="Algorithm\RobustLineIntersector.cs" />
@@ -79,53 +82,31 @@
     <Compile Include="CoordinateSystems\Transformations\GeometryTransform.cs">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Features\AttributesTable.cs">
-    </Compile>
-    <Compile Include="Features\Feature.cs" />
-    <Compile Include="Features\IAttributesTable.cs" />
-    <Compile Include="Geometries\Coordinate.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Geometries\CoordinateArrays.cs" />
-    <Compile Include="Geometries\CoordinateArraySequence.cs" />
-    <Compile Include="Geometries\CoordinateArraySequenceFactory.cs" />
-    <Compile Include="Geometries\CoordinateList.cs" />
-    <Compile Include="Geometries\CoordinateSequences.cs" />
-    <Compile Include="Geometries\CoordinateStruct.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Geometries\CoordinateStructSequence.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Geometries\CoordinateStructSequenceFactory.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Geometries\DefaultCoordinateSequence.cs" />
-    <Compile Include="Geometries\DefaultCoordinateSequenceFactory.cs" />
-    <Compile Include="Geometries\Envelope.cs" />
+    <Compile Include="GeometriesGraph\Index\SimpleMonotoneChainSweepLineIntersector.cs" />
+    <Compile Include="GeometriesGraph\Positions.cs" />
+    <Compile Include="GeometriesGraph\Quadrants.cs" />
+    <Compile Include="Geometries\Extents.cs" />
     <Compile Include="Geometries\Geometry.cs" />
     <Compile Include="Geometries\GeometryCollection.cs" />
     <Compile Include="Geometries\GeometryCollectionEnumerator.cs" />
     <Compile Include="Geometries\GeometryFactory.cs" />
+    <Compile Include="Geometries\GeometryReferenceEqualityComparer.cs" />
     <Compile Include="Geometries\LinearRing.cs" />
     <Compile Include="Geometries\LineSegment.cs" />
     <Compile Include="Geometries\LineString.cs" />
+    <Compile Include="Geometries\MultiCoordinateGeometry.cs" />
     <Compile Include="Geometries\MultiLineString.cs" />
     <Compile Include="Geometries\MultiPoint.cs" />
     <Compile Include="Geometries\MultiPolygon.cs" />
-    <Compile Include="Geometries\PackedCoordinateSequence.cs" />
-    <Compile Include="Geometries\PackedCoordinateSequenceFactory.cs" />
     <Compile Include="Geometries\Point.cs" />
     <Compile Include="Geometries\Polygon.cs" />
     <Compile Include="Geometries\PrecisionModel.cs" />
     <Compile Include="Geometries\TopologyException.cs" />
     <Compile Include="Geometries\Triangle.cs" />
+    <Compile Include="Geometries\Coordinates.cs" />
     <Compile Include="Geometries\Utilities\GeometryEditor.cs" />
+    <Compile Include="Geometries\Utilities\GeometryFilter.cs" />
     <Compile Include="Geometries\Utilities\GeometryTransformer.cs" />
-    <Compile Include="Geometries\Utilities\LinearComponentExtracter.cs" />
-    <Compile Include="Geometries\Utilities\PointExtracter.cs" />
-    <Compile Include="Geometries\Utilities\PolygonExtracter.cs" />
-    <Compile Include="Geometries\Utilities\ShortCircuitedGeometryVisitor.cs" />
     <Compile Include="GeometriesGraph\Depth.cs" />
     <Compile Include="GeometriesGraph\DirectedEdge.cs" />
     <Compile Include="GeometriesGraph\DirectedEdgeStar.cs" />
@@ -145,7 +126,6 @@
     <Compile Include="GeometriesGraph\Index\MonotoneChainIndexer.cs" />
     <Compile Include="GeometriesGraph\Index\SegmentIntersector.cs" />
     <Compile Include="GeometriesGraph\Index\SimpleEdgeSetIntersector.cs" />
-    <Compile Include="GeometriesGraph\Index\SimpleMCSweepLineIntersector.cs" />
     <Compile Include="GeometriesGraph\Index\SimpleSweepLineIntersector.cs" />
     <Compile Include="GeometriesGraph\Index\SweepLineEvent.cs" />
     <Compile Include="GeometriesGraph\Index\SweepLineSegment.cs" />
@@ -157,92 +137,39 @@
     <Compile Include="GeometriesGraph\Position.cs" />
     <Compile Include="GeometriesGraph\QuadrantOp.cs" />
     <Compile Include="GeometriesGraph\TopologyLocation.cs" />
-    <Compile Include="Index\ArrayListVisitor.cs" />
+    <Compile Include="Geometries\Utilities\ShortCircuitedGeometryVisitor.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Index\Bintree\Bintree.cs" />
-    <Compile Include="Index\Bintree\Interval.cs" />
-    <Compile Include="Index\Bintree\Key.cs" />
+    <Compile Include="Index\Bintree\BinTreeKey.cs" />
     <Compile Include="Index\Bintree\Node.cs" />
-    <Compile Include="Index\Bintree\NodeBase.cs" />
+    <Compile Include="Index\Bintree\BaseBinNode.cs" />
     <Compile Include="Index\Bintree\Root.cs" />
     <Compile Include="Index\Chain\MonotoneChain.cs" />
     <Compile Include="Index\Chain\MonotoneChainBuilder.cs" />
-    <Compile Include="Index\Chain\MonotoneChainOverlapAction.cs" />
-    <Compile Include="Index\Chain\MonotoneChainSelectAction.cs" />
-    <Compile Include="Index\IIndexVisitor.cs" />
-    <Compile Include="Index\IItemVisitor.cs" />
-    <Compile Include="Index\ISpatialIndex.cs" />
-    <Compile Include="Index\Quadtree\DoubleBits.cs" />
+    <Compile Include="Index\Quadtree\QuadTreeNodeKey.cs" />
+    <Compile Include="Index\Sweepline\ISweepLineOverlapAction.cs" />
+    <Compile Include="Utilities\DoubleBits.cs" />
     <Compile Include="Index\Quadtree\IntervalSize.cs" />
-    <Compile Include="Index\Quadtree\Key.cs" />
+    <Compile Include="Index\AbstractNodeKey.cs" />
     <Compile Include="Index\Quadtree\Node.cs" />
-    <Compile Include="Index\Quadtree\NodeBase.cs" />
+    <Compile Include="Index\Quadtree\BaseQuadNode.cs" />
     <Compile Include="Index\Quadtree\Quadtree.cs" />
     <Compile Include="Index\Quadtree\Root.cs" />
-    <Compile Include="Index\Strtree\AbstractNode.cs" />
+    <Compile Include="Index\AbstractNode.cs" />
     <Compile Include="Index\Strtree\AbstractSTRtree.cs" />
-    <Compile Include="Index\Strtree\IBoundable.cs" />
-    <Compile Include="Index\Strtree\Interval.cs" />
     <Compile Include="Index\Strtree\ItemBoundable.cs" />
     <Compile Include="Index\Strtree\SIRtree.cs" />
     <Compile Include="Index\Strtree\STRtree.cs" />
     <Compile Include="Index\Sweepline\SweepLineEvent.cs" />
     <Compile Include="Index\Sweepline\SweepLineIndex.cs" />
     <Compile Include="Index\Sweepline\SweepLineInterval.cs" />
-    <Compile Include="Index\Sweepline\ISweepLineOverlapAction.cs" />
-    <Compile Include="IO\BEBinaryReader.cs" />
-    <Compile Include="IO\BEBinaryWriter.cs" />
-    <Compile Include="IO\GeoTools\BigEndianBinaryReader.cs" />
-    <Compile Include="IO\GeoTools\BigEndianBinaryWriter.cs" />
-    <Compile Include="IO\GeoTools\Dbase\ColumnStructure.cs" />
-    <Compile Include="IO\GeoTools\Dbase\DbaseFieldDescriptor.cs" />
-    <Compile Include="IO\GeoTools\Dbase\DbaseFileHeader.cs" />
-    <Compile Include="IO\GeoTools\Dbase\DbaseFileReader.cs" />
-    <Compile Include="IO\GeoTools\Dbase\DbaseFileWriter.cs" />
-    <Compile Include="IO\GML2\GMLElements.cs" />
-    <Compile Include="IO\GML2\GMLReader.cs" />
-    <Compile Include="IO\GML2\GMLWriter.cs" />
-    <Compile Include="IO\GeoTools\Handlers\MultiLineHandler.cs" />
-    <Compile Include="IO\GeoTools\Handlers\MultiPointHandler.cs" />
-    <Compile Include="IO\GeoTools\Handlers\PointHandler.cs" />
-    <Compile Include="IO\GeoTools\Handlers\PolygonHandler.cs" />
-    <Compile Include="IO\GeoTools\Dbase\RowStructure.cs" />
-    <Compile Include="IO\GeoTools\Shapefile.cs" />
-    <Compile Include="IO\GeoTools\ShapefileDataReader.cs" />
-    <Compile Include="IO\GeoTools\ShapefileException.cs" />
-    <Compile Include="IO\GeoTools\ShapefileHeader.cs" />
-    <Compile Include="IO\GeoTools\ShapefileReader.cs" />
-    <Compile Include="IO\GeoTools\ShapefileWriter.cs" />
-    <Compile Include="IO\GeoTools\ShapefileDataWriter.cs" />
-    <Compile Include="IO\MsSqlSpatialReader.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="IO\MsSqlSpatialWriter.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="IO\PostGisGeometryType.cs" />
-    <Compile Include="IO\PostGisReader.cs" />
-    <Compile Include="IO\PostGisWriter.cs" />
-    <Compile Include="IO\ShapeGeometryTypes.cs" />
-    <Compile Include="IO\GDBReader.cs" />
-    <Compile Include="IO\GDBWriter.cs" />
-    <Compile Include="IO\ParseException.cs" />
-    <Compile Include="IO\MyShapeFileReader.cs" />
-    <Compile Include="IO\MyShapeFileWriter.cs" />
-    <Compile Include="IO\GeoTools\Handlers\ShapeHandler.cs" />
-    <Compile Include="IO\ShapeReader.cs" />
-    <Compile Include="IO\ShapeWriter.cs" />
-    <Compile Include="IO\GeoTools\TokenType.cs" />
-    <Compile Include="IO\WKBReader.cs" />
-    <Compile Include="IO\WKBGeometryTypes.cs" />
-    <Compile Include="IO\WKBWriter.cs" />
-    <Compile Include="IO\WKTReader.cs" />
-    <Compile Include="IO\GeoTools\WktStreamTokenizer.cs" />
-    <Compile Include="IO\WKTWriter.cs" />
     <Compile Include="LinearReferencing\ExtractLineByLocation.cs" />
     <Compile Include="LinearReferencing\LengthIndexedLine.cs" />
     <Compile Include="LinearReferencing\LengthIndexOfPoint.cs" />
     <Compile Include="LinearReferencing\LengthLocationMap.cs" />
     <Compile Include="LinearReferencing\LinearGeometryBuilder.cs" />
+    <Compile Include="LinearReferencing\LinearHelper.cs" />
     <Compile Include="LinearReferencing\LinearIterator.cs" />
     <Compile Include="LinearReferencing\LinearLocation.cs" />
     <Compile Include="LinearReferencing\LocationIndexedLine.cs" />
@@ -252,11 +179,10 @@
     <Compile Include="Noding\IntersectionFinderAdder.cs" />
     <Compile Include="Noding\ISegmentIntersector.cs" />
     <Compile Include="Noding\IteratedNoder.cs" />
-    <Compile Include="Noding\MCIndexNoder.cs" />
     <Compile Include="Noding\INoder.cs" />
+    <Compile Include="Noding\MonotoneChainIndexNoder.cs" />
     <Compile Include="Noding\NodingValidator.cs" />
     <Compile Include="Noding\Octant.cs" />
-    <Compile Include="Noding\OrientedCoordinateArray.cs" />
     <Compile Include="Noding\ScaledNoder.cs" />
     <Compile Include="Noding\SegmentNode.cs" />
     <Compile Include="Noding\SegmentNodeList.cs" />
@@ -266,9 +192,10 @@
     <Compile Include="Noding\SimpleNoder.cs" />
     <Compile Include="Noding\SinglePassNoder.cs" />
     <Compile Include="Noding\Snapround\HotPixel.cs" />
-    <Compile Include="Noding\Snapround\MCIndexPointSnapper.cs" />
-    <Compile Include="Noding\Snapround\MCIndexSnapRounder.cs" />
+    <Compile Include="Noding\Snapround\MonotoneChainIndexPointSnapper.cs" />
+    <Compile Include="Noding\Snapround\MonotoneChainIndexSnapRounder.cs" />
     <Compile Include="Noding\Snapround\SimpleSnapRounder.cs" />
+    <Compile Include="NtsException.cs" />
     <Compile Include="Operation\Buffer\BufferBuilder.cs" />
     <Compile Include="Operation\Buffer\BufferOp.cs" />
     <Compile Include="Operation\Buffer\BufferSubgraph.cs" />
@@ -276,8 +203,6 @@
     <Compile Include="Operation\Buffer\OffsetCurveSetBuilder.cs" />
     <Compile Include="Operation\Buffer\RightmostEdgeFinder.cs" />
     <Compile Include="Operation\Buffer\SubgraphDepthLocater.cs" />
-    <Compile Include="Operation\Distance\ConnectedElementLocationFilter.cs" />
-    <Compile Include="Operation\Distance\ConnectedElementPointFilter.cs" />
     <Compile Include="Operation\Distance\DistanceOp.cs" />
     <Compile Include="Operation\Distance\GeometryLocation.cs" />
     <Compile Include="Operation\GeometryGraphOperation.cs" />
@@ -329,53 +254,17 @@
     <Compile Include="Planargraph\NodeMap.cs" />
     <Compile Include="Planargraph\PlanarGraph.cs" />
     <Compile Include="Planargraph\Subgraph.cs" />
-    <Compile Include="Precision\CommonBits.cs" />
-    <Compile Include="Precision\CommonBitsOp.cs" />
-    <Compile Include="Precision\CommonBitsRemover.cs" />
-    <Compile Include="Precision\EnhancedPrecisionOp.cs" />
-    <Compile Include="Precision\SimpleGeometryPrecisionReducer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Simplify\DouglasPeuckerLineSimplifier.cs" />
     <Compile Include="Simplify\DouglasPeuckerSimplifier.cs" />
-    <Compile Include="Simplify\LineSegmentIndex.cs" />
-    <Compile Include="Simplify\TaggedLineSegment.cs" />
-    <Compile Include="Simplify\TaggedLinesSimplifier.cs" />
-    <Compile Include="Simplify\TaggedLineString.cs" />
-    <Compile Include="Simplify\TaggedLineStringSimplifier.cs" />
-    <Compile Include="Simplify\TopologyPreservingSimplifier.cs" />
     <Compile Include="Utilities\Assert.cs" />
     <Compile Include="Utilities\AssertionFailedException.cs" />
     <Compile Include="Utilities\BitConverter.cs" />
     <Compile Include="Utilities\CollectionUtil.cs" />
-    <Compile Include="Utilities\CoordinateArrayFilter.cs" />
-    <Compile Include="Utilities\CoordinateCompare.cs" />
-    <Compile Include="Utilities\CoordinateCountFilter.cs" />
     <Compile Include="Utilities\Degrees.cs" />
     <Compile Include="Utilities\GeometricShapeFactory.cs" />
     <Compile Include="Utilities\HexConverter.cs" />
     <Compile Include="Utilities\Global.cs" />
-    <Compile Include="Utilities\Iesi.Collections\DictionarySet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\CollectionWrapper.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\DictionarySet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\EnumerableWrapper.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\EnumeratorWrapper.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\HashedSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\HybridSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\ImmutableSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\ISet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\ListSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\ListWrapper.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\Set.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\SetWrapper.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Generic\SortedSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\HashedSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\HybridSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\ImmutableSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\ISet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\ListSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\Set.cs" />
-    <Compile Include="Utilities\Iesi.Collections\SortedSet.cs" />
-    <Compile Include="Utilities\Iesi.Collections\SynchronizedSet.cs" />
     <Compile Include="Utilities\Radians.cs" />
     <Compile Include="Utilities\ReverseOrder.cs" />
     <Compile Include="Utilities\RToolsUtil\BufferedTextReader.cs" />
@@ -389,13 +278,10 @@
     <Compile Include="Utilities\RToolsUtil\Token.cs" />
     <Compile Include="Utilities\RToolsUtil\VerbosityLevel.cs" />
     <Compile Include="Utilities\Stopwatch.cs" />
-    <Compile Include="Utilities\GeoToolsStreamTokenizer.cs" />
-    <Compile Include="Utilities\UniqueCoordinateArrayFilter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="License.txt" />
     <Content Include="ReadMe.txt" />
-    <Content Include="Utilities\Iesi.Collections\Iesi.Collections.License.txt" />
     <Content Include="Utilities\RToolsUtil\Rtools.Util.License.txt" />
   </ItemGroup>
   <ItemGroup>
@@ -404,6 +290,15 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{B4F97281-0DBD-4835-9ED8-7DFB966E87FF}" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\GeoAPI\src\GeoAPI\GeoAPINoTFS.csproj">
+      <Project>{FFB69466-79DE-466A-ADA7-5C47C5C5CA3A}</Project>
+      <Name>GeoAPINoTFS</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Precision\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

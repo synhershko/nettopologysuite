@@ -1,15 +1,16 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
     /// Computes a point in the interior of an area point.
+    /// </summary>
+    /// <remarks>
     /// Algorithm:
     /// Find the intersections between the point
     /// and the horizontal bisector of the area's envelope
@@ -18,43 +19,29 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
     /// Note: If a fixed precision model is used,
     /// in some cases this method may return a point
     /// which does not lie in the interior.
-    /// </summary>
-    public class InteriorPointArea
+    /// </remarks>
+    public class InteriorPointArea<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        private static double Avg(double a, double b)
+        private static Double Avg(Double a, Double b)
         {
             return (a + b) / 2.0;
         }
 
-        private IGeometryFactory factory;
-        private ICoordinate interiorPoint = null;
-        private double maxWidth = 0;
+        private readonly IGeometryFactory<TCoordinate> _factory;
+        private TCoordinate _interiorPoint = default(TCoordinate);
+        private Double _maxWidth = 0;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        public InteriorPointArea(IGeometry g)
+        public InteriorPointArea(IGeometry<TCoordinate> g)
         {
-            factory = g.Factory;
+            _factory = g.Factory;
             Add(g);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate InteriorPoint
+        public TCoordinate InteriorPoint
         {
-            get
-            {
-                return interiorPoint;
-            }
+            get { return _interiorPoint; }
         }
 
         /// <summary> 
@@ -63,15 +50,20 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// If a Geometry is not of dimension 1 it is not tested.
         /// </summary>
         /// <param name="geom">The point to add.</param>
-        private void Add(IGeometry geom)
+        private void Add(IGeometry<TCoordinate> geom)
         {
-            if (geom is Polygon) 
-                AddPolygon(geom);            
-            else if (geom is IGeometryCollection) 
+            if (geom is IPolygon<TCoordinate>)
             {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
+                AddPolygon(geom);
+            }
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
                     Add(geometry);
+                }
             }
         }
 
@@ -83,76 +75,79 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// The midpoint of the largest intersection between the point and
         /// a line halfway down its envelope.
         /// </returns>
-        public void AddPolygon(IGeometry geometry)
+        public void AddPolygon(IGeometry<TCoordinate> geometry)
         {
-            ILineString bisector = HorizontalBisector(geometry);
+            ILineString<TCoordinate> bisector = HorizontalBisector(geometry);
 
-            IGeometry intersections = bisector.Intersection(geometry);
-            IGeometry widestIntersection = WidestGeometry(intersections);
+            ISpatialOperator<TCoordinate> intersector = bisector as ISpatialOperator<TCoordinate>;
+            Debug.Assert(intersector != null);
+            IGeometry<TCoordinate> intersections = intersector.Intersection(geometry);
+            IGeometry<TCoordinate> widestIntersection = WidestGeometry(intersections);
 
-            double width = widestIntersection.EnvelopeInternal.Width;
-            if (interiorPoint == null || width > maxWidth)
+            Double width = widestIntersection.Extents.GetSize(Ordinates.X, Ordinates.Y);
+
+            if (Coordinates<TCoordinate>.IsEmpty(_interiorPoint) || width > _maxWidth)
             {
-                interiorPoint = Centre(widestIntersection.EnvelopeInternal);
-                maxWidth = width;
+                _interiorPoint = Center(widestIntersection.Extents);
+                _maxWidth = width;
             }
         }
-           
-        /// <summary>
-        /// 
+
+        /// <summary> 
+        /// Returns the center point of the <see cref="IExtents{TCoordinate}"/>.
         /// </summary>
-        /// <param name="geometry"></param>
+        /// <param name="envelope">The extents to analyze.</param>
+        /// <returns> The center of the extents.</returns>
+        public TCoordinate Center(IExtents<TCoordinate> envelope)
+        {
+            return _factory.CoordinateFactory.Create(
+                Avg(envelope.GetMin(Ordinates.X), envelope.GetMax(Ordinates.X)),
+                Avg(envelope.GetMin(Ordinates.Y), envelope.GetMax(Ordinates.Y)));
+        }
+
         /// <returns>
         /// If point is a collection, the widest sub-point; otherwise,
         /// the point itself.
         /// </returns>
-        protected IGeometry WidestGeometry(IGeometry geometry) 
+        protected static IGeometry<TCoordinate> WidestGeometry(IGeometry<TCoordinate> geometry)
         {
-            if (!(geometry is IGeometryCollection)) 
-                return geometry;        
-            return WidestGeometry((IGeometryCollection) geometry);
+            if (!(geometry is IGeometryCollection<TCoordinate>))
+            {
+                return geometry;
+            }
+
+            return widestGeometry(geometry as IGeometryCollection<TCoordinate>);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="gc"></param>
-        /// <returns></returns>
-        private IGeometry WidestGeometry(IGeometryCollection gc)
+        protected ILineString<TCoordinate> HorizontalBisector(IGeometry<TCoordinate> geometry)
         {
-            if (gc.IsEmpty) 
-                return gc;
-
-            IGeometry widestGeometry = gc.GetGeometryN(0);
-            for (int i = 1; i < gc.NumGeometries; i++) //Start at 1        
-                if (gc.GetGeometryN(i).EnvelopeInternal.Width > widestGeometry.EnvelopeInternal.Width)
-                    widestGeometry = gc.GetGeometryN(i);                            
-            return widestGeometry;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geometry"></param>
-        /// <returns></returns>
-        protected ILineString HorizontalBisector(IGeometry geometry)
-        {
-            IEnvelope envelope = geometry.EnvelopeInternal;
+            IExtents<TCoordinate> extents = geometry.Extents;
 
             // Assert: for areas, minx <> maxx
-            double avgY = Avg(envelope.MinY, envelope.MaxY);
-            return factory.CreateLineString(
-                new ICoordinate[] { new Coordinate(envelope.MinX, avgY), new Coordinate(envelope.MaxX, avgY) });
+            Double avgY = Avg(extents.GetMin(Ordinates.Y), extents.GetMax(Ordinates.Y));
+            return _factory.CreateLineString(
+                _factory.CoordinateFactory.Create(extents.GetMin(Ordinates.X), avgY),
+                _factory.CoordinateFactory.Create(extents.GetMax(Ordinates.X), avgY));
         }
 
-        /// <summary> 
-        /// Returns the centre point of the envelope.
-        /// </summary>
-        /// <param name="envelope">The envelope to analyze.</param>
-        /// <returns> The centre of the envelope.</returns>
-        public ICoordinate Centre(IEnvelope envelope)
+        private static IGeometry<TCoordinate> widestGeometry(IGeometryCollection<TCoordinate> gc)
         {
-            return new Coordinate(Avg(envelope.MinX, envelope.MaxX), Avg(envelope.MinY, envelope.MaxY));
+            if (gc.IsEmpty)
+            {
+                return gc;
+            }
+
+            IGeometry<TCoordinate> widestGeometry = gc[0];
+
+            for (Int32 i = 1; i < gc.Count; i++) // Start at 1        
+            {
+                if (gc[i].Extents.GetSize(Ordinates.X, Ordinates.Y) > widestGeometry.Extents.GetSize(Ordinates.X, Ordinates.Y))
+                {
+                    widestGeometry = gc[i];
+                }
+            }
+
+            return widestGeometry;
         }
     }
 }

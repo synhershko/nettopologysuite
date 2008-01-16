@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 
 namespace GisSharpBlog.NetTopologySuite.Utilities
 {
@@ -11,58 +9,44 @@ namespace GisSharpBlog.NetTopologySuite.Utilities
     /// </summary>
     public class CollectionUtil
     {
-        
         /// <summary>
-        /// 
+        /// Executes a function on each item in a <see cref="ICollection{T}" />
+        /// and returns the results in a new <see cref="IList{T}" />.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public delegate T FunctionDelegate<T>(T obj);
-
-        /// <summary>
-        /// Executes a function on each item in a <see cref="ICollection" />
-        /// and returns the results in a new <see cref="IList" />.
-        /// </summary>
-        /// <param name="coll"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
-        public static IList Transform(ICollection coll, FunctionDelegate<object> func)
+        public static IEnumerable<TItem> Transform<TItem>(IEnumerable<TItem> items, Func<TItem, TItem> func)
         {
-            IList result = new ArrayList();
-            IEnumerator i = coll.GetEnumerator(); 
-            foreach(object obj in coll)           
-                result.Add(func(obj));
-            return result;
+            foreach (TItem item in items)
+            {
+                yield return func(item);
+            }
         }
 
         /// <summary>
-        /// Executes a function on each item in a <see cref="ICollection" /> 
+        /// Executes a function on each item in a <see cref="ICollection{T}" /> 
         /// but does not accumulate the result.
         /// </summary>
-        /// <param name="coll"></param>
-        /// <param name="func"></param>
-        public static void Apply(ICollection coll, FunctionDelegate<object> func)
+        public static void Apply<TItem>(IEnumerable<TItem> items, Func<TItem, TItem> func)
         {
-            foreach(object obj in coll)
-                func(obj);
+            foreach (TItem item in items)
+            {
+                func(item);
+            }
         }
 
         /// <summary>
-        /// Executes a function on each item in a <see cref="ICollection" />
+        /// Executes a function on each item in a <see cref="ICollection{T}" />
         /// and collects all the entries for which the result
-        /// of the function is equal to <c>true</c>.
+        /// of the function is equal to <see langword="true"/>.
         /// </summary>
-        /// <param name="coll"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
-        public static IList Select(ICollection coll, FunctionDelegate<object> func)
+        public static IEnumerable<TItem> Select<TItem>(IEnumerable<TItem> items, Func<TItem, TItem> func)
         {
-            IList result = new ArrayList();            
-            foreach (object obj in coll)
-                if (true.Equals(func(obj)))
-                    result.Add(obj);                            
-            return result;
+            foreach (TItem item in items)
+            {
+                if (true.Equals(func(item)))
+                {
+                    yield return item;
+                }
+            }
         }
     }
 }

@@ -1,9 +1,10 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.Collections.Generic;
 using System.Diagnostics;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
@@ -11,329 +12,276 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// Basic implementation of <c>Point</c>.
     /// </summary>
     [Serializable]
-    public class Point : Geometry, IPoint
+    public class Point<TCoordinate> : Geometry<TCoordinate>, IPoint<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private static readonly ICoordinate emptyCoordinate = null;
+        private static readonly TCoordinate emptyCoordinate = default(TCoordinate);
 
         /// <summary>
-        /// Represents an empty <c>Point</c>.
+        /// Represents an empty <see cref="Point{TCoordinate}"/>.
         /// </summary>
-        public static readonly IPoint Empty = new GeometryFactory().CreatePoint(emptyCoordinate);
+        public static readonly IPoint<TCoordinate> Empty = new GeometryFactory<TCoordinate>().CreatePoint(emptyCoordinate);
 
-        /// <summary>  
-        /// The <c>Coordinate</c> wrapped by this <c>Point</c>.
-        /// </summary>
-        private ICoordinateSequence coordinates;        
+        private readonly TCoordinate _coordinate;
 
         /// <summary>
-        /// 
+        /// Initializes a new instance of the <see cref="Point{TCoordinate}"/> class.
         /// </summary>
-        public ICoordinateSequence CoordinateSequence
-        {
-            get
-            {
-                return coordinates;
-            }
-        }             
-
-         /// <summary>
-        /// Initializes a new instance of the <see cref="T:Point"/> class.
-        /// </summary>
-        /// <param name="coordinate">The coordinate used for create this <see cref="Point" />.</param>
+        /// <param name="coordinate">The coordinate used for create this <see cref="Point{TCoordinate}" />.</param>
         /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="PrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public Point(ICoordinate coordinate) :   
-            this(GeometryFactory.Default.CoordinateSequenceFactory.Create(new ICoordinate[] { coordinate } ),
-            GeometryFactory.Default) { }
+        public Point(TCoordinate coordinate) :
+            this(coordinate, GeometryFactory<TCoordinate>.Default) { }
 
         /// <summary>
-        /// Constructs a <c>Point</c> with the given coordinate.
+        /// Constructs a <see cref="Point{TCoordinate}"/> with the given coordinate.
         /// </summary>
-        /// <param name="coordinates">
-        /// Contains the single coordinate on which to base this <c>Point</c>,
-        /// or <c>null</c> to create the empty point.
+        /// <param name="coordinate">
+        /// Contains the single coordinate on which to base this <see cref="Point{TCoordinate}"/>,
+        /// or <see langword="null" /> to create the empty point.
         /// </param>
-        /// <param name="factory"></param>
-        public Point(ICoordinateSequence coordinates, IGeometryFactory factory) : base(factory)
-        {               
-            if (coordinates == null) 
-                coordinates = factory.CoordinateSequenceFactory.Create(new ICoordinate[] { });
-            Debug.Assert(coordinates.Count <= 1);
-            this.coordinates = (ICoordinateSequence) coordinates;
-        }        
+        public Point(TCoordinate coordinate, IGeometryFactory<TCoordinate> factory)
+            : base(factory)
+        {
+            _coordinate = coordinate;
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override ICoordinate[] Coordinates 
+        public override ICoordinateSequence<TCoordinate> Coordinates
         {
             get
             {
-                return IsEmpty ? new ICoordinate[] { } : new ICoordinate[] { this.Coordinate };
+                return Factory.CoordinateSequenceFactory.Create(Coordinate);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override int NumPoints
+        public override Int32 PointCount
         {
-            get
-            {
-                return IsEmpty ? 0 : 1;
-            }
+            get { return IsEmpty ? 0 : 1; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsEmpty 
+        public override Boolean IsEmpty
         {
-            get
-            {
-                return this.Coordinate == null;
-            }
+            get { return Coordinates<TCoordinate>.IsEmpty(Coordinate); }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsSimple
+        public override Boolean IsSimple
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsValid
+        public override Boolean IsValid
         {
-            get
-            {
-                return true;
-            }
+            get { return true; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public override Dimensions Dimension
         {
-            get
-            {
-                return Dimensions.Point;
-            }
+            get { return Dimensions.Point; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override Dimensions BoundaryDimension 
+        public override Dimensions BoundaryDimension
+        {
+            get { return Dimensions.False; }
+        }
+
+        public Double X
         {
             get
             {
-                return Dimensions.False;
+                if (Coordinates<TCoordinate>.IsEmpty(Coordinate))
+                {
+                    throw new InvalidOperationException("X called on empty Point");
+                }
+
+                return Coordinate[Ordinates.X];
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>        
-        public double X
+        public Double Y
         {
             get
             {
-                if (Coordinate == null)
-                    throw new ArgumentOutOfRangeException("X called on empty Point");                
-                return Coordinate.X;
-            }
-            set
-            {
-                Coordinate.X = value;
+                if (Coordinates<TCoordinate>.IsEmpty(Coordinate))
+                {
+                    throw new InvalidOperationException("Y called on empty Point");
+                }
+
+                return Coordinate[Ordinates.Y];
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>        
-        public double Y 
+        public TCoordinate Coordinate
         {
-            get
-            {
-                if (Coordinate == null)
-                    throw new ArgumentOutOfRangeException("Y called on empty Point");                
-                return Coordinate.Y;
-            }
-            set
-            {
-                Coordinate.Y = value;
-            }
+            get { return _coordinate; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override ICoordinate Coordinate
+        public override OgcGeometryType GeometryType
         {
-            get
+            get { return OgcGeometryType.Point; }
+        }
+
+        public override IGeometry<TCoordinate> Boundary
+        {
+            get { return Factory.CreateGeometryCollection(null); }
+        }
+
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
+        {
+            if (!IsEquivalentClass(other))
             {
-                return coordinates.Count != 0 ? coordinates.GetCoordinate(0) : null;
+                return false;
             }
-        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override string GeometryType 
-        {
-            get
+            IPoint<TCoordinate> otherPoint = other as IPoint<TCoordinate>;
+
+            if (otherPoint == null)
             {
-                return "Point";
+                return false;
             }
-        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override IGeometry Boundary
-        {
-            get
+            if (IsEmpty && other.IsEmpty)
             {
-                return Factory.CreateGeometryCollection(null);
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override IEnvelope ComputeEnvelopeInternal() 
-        {
-            if (IsEmpty) 
-                return new Envelope();            
-            return new Envelope(Coordinate.X, Coordinate.X, Coordinate.Y, Coordinate.Y);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
-        {
-            if (!IsEquivalentClass(other)) 
-                return false;            
-            if (IsEmpty && other.IsEmpty) 
                 return true;
-            return Equal(((IPoint) other).Coordinate, this.Coordinate, tolerance);
+            }
+
+            return Equal(otherPoint.Coordinate, Coordinate, tolerance);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(ICoordinateFilter filter) 
+        //public override void Apply(ICoordinateFilter<TCoordinate> filter)
+        //{
+        //    if (IsEmpty)
+        //    {
+        //        return;
+        //    }
+
+        //    filter.Filter(Coordinate);
+        //}
+
+        //public override void Apply(IGeometryFilter<TCoordinate> filter)
+        //{
+        //    filter.Filter(this);
+        //}
+
+        //public override void Apply(IGeometryComponentFilter<TCoordinate> filter)
+        //{
+        //    filter.Filter(this);
+        //}
+
+        public override IGeometry<TCoordinate> Clone()
         {
-            if (IsEmpty) 
-                return;             
-            filter.Filter((Coordinate) Coordinate);
+            return Factory.CreatePoint(Coordinate);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryFilter filter)
-        {
-            filter.Filter(this);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryComponentFilter filter) 
-        {
-            filter.Filter(this);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override object Clone() 
-        {
-            Point p = (Point) base.Clone();
-            p.coordinates = (ICoordinateSequence) coordinates.Clone();
-            return p; 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         public override void Normalize() { }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <returns></returns>
-        protected internal override int CompareToSameClass(object other) 
+        protected override Extents<TCoordinate> ComputeExtentsInternal()
         {
-            Point point = (Point)  other;
+            if (IsEmpty)
+            {
+                return new Extents<TCoordinate>();
+            }
+
+            return new Extents<TCoordinate>(Coordinate, Coordinate);
+        }
+
+        protected internal override Int32 CompareToSameClass(IGeometry<TCoordinate> other)
+        {
+            if (other == null)
+            {
+                return 1;
+            }
+
+            IPoint<TCoordinate> point = other as IPoint<TCoordinate>;
+
+            if (point == null)
+            {
+                throw new ArgumentException(
+                    "Parameter must be of type IPoint<TCoordinate>.");
+            }
+
             return Coordinate.CompareTo(point.Coordinate);
         }
 
         /* BEGIN ADDED BY MPAUL42: monoGIS team */
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:Point"/> class.
+        /// Initializes a new instance of the <see cref="Point{TCoordinate}"/> class.
         /// </summary>
         /// <param name="x">The x coordinate.</param>
         /// <param name="y">The y coordinate.</param>
         /// <param name="z">The z coordinate.</param>
         /// /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> set to </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="IPrecisionModel{TCoordinate}" /> <c> set to </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public Point(double x, double y, double z) : 
-            this(DefaultFactory.CoordinateSequenceFactory.Create(new ICoordinate[] { new Coordinate(x, y, z) }), DefaultFactory) { }
+        public Point(Double x, Double y, Double z) :
+            this(DefaultFactory.CoordinateFactory.Create3D(x, y, z), DefaultFactory) { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:Point"/> class.
+        /// Initializes a new instance of the <see cref="Point{TCoordinate}"/> class.
         /// </summary>
         /// <param name="x">The x coordinate.</param>
         /// <param name="y">The y coordinate.</param>
         /// /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> set to </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="IPrecisionModel{TCoordinate}" /> <c> set to </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public Point(double x, double y)
-            : this(DefaultFactory.CoordinateSequenceFactory.Create(new ICoordinate[] { new Coordinate(x, y) }), DefaultFactory) { }
+        public Point(Double x, Double y)
+            : this(DefaultFactory.CoordinateFactory.Create(x, y), DefaultFactory) { }
 
-        /// <summary>
-        /// 
-        /// </summary>        
-        public double Z
+        //public Double Z
+        //{
+        //    get
+        //    {
+        //        if (CoordinateHelper.IsEmpty(Coordinate))
+        //        {
+        //            throw new InvalidOperationException("Z called on empty Point");
+        //        }
+
+        //        if (!Coordinate.ContainsOrdinate(Ordinates.Z))
+        //        {
+        //            return 0;
+        //        }
+        //        else
+        //        {
+        //            return Coordinate[Ordinates.Z];
+        //        }
+        //    }
+        //}
+
+        /* END ADDED BY MPAUL42: monoGIS team */
+
+        #region IPoint Members
+
+        public Double this[Ordinates ordinate]
         {
             get
             {
-                if (Coordinate == null)
-                    throw new ArgumentOutOfRangeException("Z called on empty Point");
-                return Coordinate.Z;
-            }
-            set 
-            { 
-                Coordinate.Z = value; 
+                if (Coordinates<TCoordinate>.IsEmpty(Coordinate))
+                {
+                    throw new InvalidOperationException("Point is empty.");
+                }
+
+                if (Coordinate.ContainsOrdinate(ordinate))
+                {
+                    return Coordinate[ordinate];
+                }
+                else
+                {
+                    throw new ArgumentOutOfRangeException("ordinate", ordinate,
+                                                          "Ordinate value doesn't exist in this point");
+                }
             }
         }
 
-        /* END ADDED BY MPAUL42: monoGIS team */
+        ICoordinate IPoint.Coordinate
+        {
+            get { return Coordinate; }
+        }
+
+        #endregion
     }
 }

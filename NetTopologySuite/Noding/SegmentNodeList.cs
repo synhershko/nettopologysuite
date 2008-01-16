@@ -1,361 +1,358 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using System.Collections.Generic;
+using System.IO;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
     /// <summary>
-    /// A list of the <see cref="SegmentNode" />s present along a noded <see cref="SegmentString"/>.
+    /// An ordered enumeration of the <see cref="SegmentNode{TCoordinate}" />s 
+    /// present along a noded <see cref="NodedSegmentString{TCoordinate}"/>.
     /// </summary>
-    public class SegmentNodeList : IEnumerable
+    public class SegmentNodeList<TCoordinate> : IEnumerable<SegmentNode<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        private IDictionary nodeMap = new SortedList();
-        private SegmentString edge = null;  // the parent edge
+        private readonly SortedList<SegmentNode<TCoordinate>, Object> _nodeList
+            = new SortedList<SegmentNode<TCoordinate>, Object>();
+        private readonly NodedSegmentString<TCoordinate> _segments; // the parent edge
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SegmentNodeList"/> class.
+        /// Initializes a new instance of the <see cref="SegmentNodeList{TCoordinate}"/> class.
         /// </summary>
-        /// <param name="edge">The edge.</param>
-        public SegmentNodeList(SegmentString edge)
+        /// <param name="segments">The edge.</param>
+        public SegmentNodeList(NodedSegmentString<TCoordinate> segments)
         {
-            this.edge = edge;
+            _segments = segments; 
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public SegmentString Edge 
+        public NodedSegmentString<TCoordinate> ParentSegments
         {
-            get
-            {
-                return edge;
-            }
+            get { return _segments; }
         }
 
         /// <summary>
         /// Adds an intersection into the list, if it isn't already there.
-        /// The input segmentIndex and dist are expected to be normalized.
+        /// The input <paramref name="segmentIndex"/> is expected to be normalized.
         /// </summary>
-        /// <param name="intPt"></param>
-        /// <param name="segmentIndex"></param>
-        /// <returns>The SegmentIntersection found or added.</returns>
-        public SegmentNode Add(ICoordinate intPt, int segmentIndex)
+        /// <returns>The <see cref="SegmentNode{TCoordinate}"/> found or added.</returns>
+        public SegmentNode<TCoordinate> Add(TCoordinate intersectionPoint, Int32 segmentIndex)
         {
-            SegmentNode eiNew = new SegmentNode(edge, intPt, segmentIndex, edge.GetSegmentOctant(segmentIndex));
-            SegmentNode ei = (SegmentNode) nodeMap[eiNew];
-            if(ei != null)
+            SegmentNode<TCoordinate> node = new SegmentNode<TCoordinate>(
+                _segments, intersectionPoint, segmentIndex, _segments.GetSegmentOctant(segmentIndex));
+
+            if (!_nodeList.ContainsKey(node))
             {
-                // debugging sanity check
-                Assert.IsTrue(ei.Coordinate.Equals2D(intPt), "Found equal nodes with different coordinates");               
-                return ei;
+                // node does not exist, so create it
+                _nodeList.Add(node, null);
             }
-            // node does not exist, so create it
-            nodeMap.Add(eiNew, eiNew);
-            return eiNew;
+
+            return node;
         }
 
         /// <summary>
         /// Returns an iterator of SegmentNodes.
         /// </summary>
         /// <returns>An iterator of SegmentNodes.</returns>
-        public IEnumerator GetEnumerator() 
-        { 
-            return nodeMap.Values.GetEnumerator(); 
-        }
-
-        /// <summary>
-        /// Adds nodes for the first and last points of the edge.
-        /// </summary>
-        private void AddEndPoints()
+        public IEnumerator<SegmentNode<TCoordinate>> GetEnumerator()
         {
-            int maxSegIndex = edge.Count - 1;
-            Add(edge.GetCoordinate(0), 0);
-            Add(edge.GetCoordinate(maxSegIndex), maxSegIndex);
-        }
-
-        /// <summary>
-        /// Adds nodes for any collapsed edge pairs.
-        /// Collapsed edge pairs can be caused by inserted nodes, or they can be
-        /// pre-existing in the edge vertex list.
-        /// In order to provide the correct fully noded semantics,
-        /// the vertex at the base of a collapsed pair must also be added as a node.
-        /// </summary>
-        private void AddCollapsedNodes()
-        {
-            IList collapsedVertexIndexes = new ArrayList();
-
-            FindCollapsesFromInsertedNodes(collapsedVertexIndexes);
-            FindCollapsesFromExistingVertices(collapsedVertexIndexes);
-
-            // node the collapses
-            foreach(object obj in collapsedVertexIndexes)
-            {
-                int vertexIndex = (int)obj;
-                Add(edge.GetCoordinate(vertexIndex), vertexIndex);
-            }
-        }
-
-        /// <summary>
-        /// Adds nodes for any collapsed edge pairs
-        /// which are pre-existing in the vertex list.
-        /// </summary>
-        /// <param name="collapsedVertexIndexes"></param>
-        private void FindCollapsesFromExistingVertices(IList collapsedVertexIndexes)
-        {
-            for (int i = 0; i < edge.Count - 2; i++)
-            {
-                ICoordinate p0 = edge.GetCoordinate(i);
-                ICoordinate p1 = edge.GetCoordinate(i + 1);
-                ICoordinate p2 = edge.GetCoordinate(i + 2);
-                if (p0.Equals2D(p2))    // add base of collapse as node
-                    collapsedVertexIndexes.Add(i + 1);                
-            }
-        }
-
-        /// <summary>
-        /// Adds nodes for any collapsed edge pairs caused by inserted nodes
-        /// Collapsed edge pairs occur when the same coordinate is inserted as a node
-        /// both before and after an existing edge vertex.
-        /// To provide the correct fully noded semantics,
-        /// the vertex must be added as a node as well.
-        /// </summary>
-        /// <param name="collapsedVertexIndexes"></param>
-        private void FindCollapsesFromInsertedNodes(IList collapsedVertexIndexes)
-        {
-            int[] collapsedVertexIndex = new int[1];
-            
-	        IEnumerator ie = GetEnumerator();
-	        ie.MoveNext();
-
-            // there should always be at least two entries in the list, since the endpoints are nodes
-            SegmentNode eiPrev = (SegmentNode) ie.Current;
-            while (ie.MoveNext())
-            {
-                SegmentNode ei = (SegmentNode) ie.Current;
-                bool isCollapsed = FindCollapseIndex(eiPrev, ei, collapsedVertexIndex);
-                if (isCollapsed)
-                    collapsedVertexIndexes.Add(collapsedVertexIndex[0]);
-                eiPrev = ei;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ei0"></param>
-        /// <param name="ei1"></param>
-        /// <param name="collapsedVertexIndex"></param>
-        /// <returns></returns>
-        private bool FindCollapseIndex(SegmentNode ei0, SegmentNode ei1, int[] collapsedVertexIndex)
-        {
-            // only looking for equal nodes
-            if (!ei0.Coordinate.Equals2D(ei1.Coordinate)) 
-                return false;
-            int numVerticesBetween = ei1.SegmentIndex - ei0.SegmentIndex;
-            if (!ei1.IsInterior)
-                numVerticesBetween--;
-            // if there is a single vertex between the two equal nodes, this is a collapse
-            if (numVerticesBetween == 1)
-            {
-                collapsedVertexIndex[0] = ei0.SegmentIndex + 1;
-                return true;
-            }
-            return false;
+            return _nodeList.Keys.GetEnumerator();
         }
 
         /// <summary>
         /// Creates new edges for all the edges that the intersections in this
         /// list split the parent edge into.
-        /// Adds the edges to the provided argument list
-        /// (this is so a single list can be used to accumulate all split edges
-        /// for a set of <see cref="SegmentString" />s).
         /// </summary>
-        /// <param name="edgeList"></param>
-        public void AddSplitEdges(IList edgeList)
+        public IEnumerable<NodedSegmentString<TCoordinate>> CreateSplitEdges()
         {
             // ensure that the list has entries for the first and last point of the edge
-            AddEndPoints();
-            AddCollapsedNodes();
+            addEndPoints();
+            addCollapsedNodes();
 
-            IEnumerator ie = GetEnumerator();
-	        ie.MoveNext();
+            // there should always be at least two entries in the list, 
+            // since the endpoints are nodes
+            SegmentNode<TCoordinate> previousNode = Slice.GetFirst(this);
 
-            // there should always be at least two entries in the list, since the endpoints are nodes
-            SegmentNode eiPrev = (SegmentNode) ie.Current;
-            while(ie.MoveNext())
+            foreach (SegmentNode<TCoordinate> node in Slice.StartAt(this, 1))
             {
-                SegmentNode ei = (SegmentNode) ie.Current;
-                SegmentString newEdge = CreateSplitEdge(eiPrev, ei);
-                edgeList.Add(newEdge);
-                eiPrev = ei;
+                yield return createSplitEdge(previousNode, node);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="splitEdges"></param>
-        private void CheckSplitEdgesCorrectness(IList splitEdges)
-        {
-            ICoordinate[] edgePts = edge.Coordinates;
-
-            // check that first and last points of split edges are same as endpoints of edge
-            SegmentString split0 = (SegmentString) splitEdges[0];
-            ICoordinate pt0 = split0.GetCoordinate(0);
-            if (!pt0.Equals2D(edgePts[0]))
-                throw new Exception("bad split edge start point at " + pt0);
-
-            SegmentString splitn = (SegmentString)splitEdges[splitEdges.Count - 1];
-            ICoordinate[] splitnPts = splitn.Coordinates;
-            ICoordinate ptn = splitnPts[splitnPts.Length - 1];
-            if (!ptn.Equals2D(edgePts[edgePts.Length - 1]))
-                throw new Exception("bad split edge end point at " + ptn);
-        }
-
-        /// <summary>
-        ///  Create a new "split edge" with the section of points between
-        /// (and including) the two intersections.
-        /// The label for the new edge is the same as the label for the parent edge.
-        /// </summary>
-        /// <param name="ei0"></param>
-        /// <param name="ei1"></param>
-        /// <returns></returns>
-        SegmentString CreateSplitEdge(SegmentNode ei0, SegmentNode ei1)
-        {
-            int npts = ei1.SegmentIndex - ei0.SegmentIndex + 2;
-
-            ICoordinate lastSegStartPt = edge.GetCoordinate(ei1.SegmentIndex);
-            // if the last intersection point is not equal to the its segment start pt, add it to the points list as well.
-            // (This check is needed because the distance metric is not totally reliable!)
-            // The check for point equality is 2D only - Z values are ignored
-            bool useIntPt1 = ei1.IsInterior || !ei1.Coordinate.Equals2D(lastSegStartPt);
-            if(!useIntPt1)
-                npts--;
-
-            ICoordinate[] pts = new ICoordinate[npts];
-            int ipt = 0;
-            pts[ipt++] = new Coordinate(ei0.Coordinate);
-            for (int i = ei0.SegmentIndex + 1; i <= ei1.SegmentIndex; i++)
-                pts[ipt++] = edge.GetCoordinate(i);            
-            if (useIntPt1) 
-                pts[ipt] = ei1.Coordinate;
-
-            return new SegmentString(pts, edge.Data);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
-        public void Write(System.IO.StreamWriter outstream)
+        public void Write(StreamWriter outstream)
         {
             outstream.Write("Intersections:");
-            foreach(object obj in this)
+
+            foreach (SegmentNode<TCoordinate> edgeIntersection in this)
             {
-                SegmentNode ei = (SegmentNode) obj;
-                ei.Write(outstream);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    class NodeVertexIterator : IEnumerator
-    {
-        private SegmentNodeList nodeList;
-        private SegmentString edge;
-        private IEnumerator nodeIt;
-        private SegmentNode currNode = null;
-        private SegmentNode nextNode = null;
-        private int currSegIndex = 0;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="nodeList"></param>
-        NodeVertexIterator(SegmentNodeList nodeList)
-        {
-            this.nodeList = nodeList;
-            edge = nodeList.Edge;
-            nodeIt = nodeList.GetEnumerator();            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private void ReadNextNode()
-        {
-            if (nodeIt.MoveNext())
-                 nextNode = (SegmentNode) nodeIt.Current;
-            else nextNode = null;
-        }
-
-        /// <summary>
-        /// Not implemented.
-        /// </summary>
-        /// <exception cref="NotSupportedException">This method is not implemented.</exception>
-        [Obsolete("Not implemented!")]
-        public void Remove()
-        {
-            throw new NotSupportedException(GetType().Name);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public object Current
-        {
-            get 
-            {
-                return currNode;
+                edgeIntersection.Write(outstream);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool MoveNext()
+        // Adds nodes for the first and last points of the edge.
+        private void addEndPoints()
         {
-            if (currNode == null)
+            Int32 maxSegIndex = _segments.Count - 1;
+            Add(_segments.Coordinates[0], 0);
+            Add(_segments.Coordinates[maxSegIndex], maxSegIndex);
+        }
+
+        // Adds nodes for any collapsed edge pairs.
+        // Collapsed edge pairs can be caused by inserted nodes, or they can be
+        // pre-existing in the edge vertex list.
+        // In order to provide the correct fully noded semantics,
+        // the vertex at the base of a collapsed pair must also be added as a node.
+        private void addCollapsedNodes()
+        {
+            IEnumerable<Int32> collapseIndexes = findCollapsesFromInsertedNodes();
+            collapseIndexes = Slice.Append(collapseIndexes, findCollapsesFromExistingVertices());
+
+            // node the collapses
+            foreach (Int32 vertexIndex in collapseIndexes)
             {
-                currNode = nextNode;
-                currSegIndex = currNode.SegmentIndex;
-                ReadNextNode();
-                return true;
+                Add(_segments.Coordinates[vertexIndex], vertexIndex);
             }
-            // check for trying to read too far
-            if (nextNode == null) 
+        }
+
+        // Adds nodes for any collapsed edge pairs
+        // which are pre-existing in the vertex list.
+        private IEnumerable<Int32> findCollapsesFromExistingVertices()
+        {
+            Int32 i = 0;
+
+            foreach (Triple<TCoordinate> triple in Slice.GetOverlappingTriples(_segments.Coordinates))
+            {
+                if (triple.First.Equals(triple.Third)) // add base of collapse as node
+                {
+                    yield return i + 1;
+                }
+
+                i += 1;
+            }
+        }
+
+        // Adds nodes for any collapsed edge pairs caused by inserted nodes
+        // Collapsed edge pairs occur when the same coordinate is inserted as a node
+        // both before and after an existing edge vertex.
+        // To provide the correct fully noded semantics,
+        // the vertex must be added as a node as well.
+        private IEnumerable<Int32> findCollapsesFromInsertedNodes()
+        {
+            SegmentNode<TCoordinate> previousEdgeIntersection = Slice.GetFirst(this);
+             
+            // there should always be at least two entries in the list, since the endpoints are nodes
+            foreach (SegmentNode<TCoordinate> edgeIntersection in Slice.StartAt(this, 1))
+            {
+                Int32 collapsedVertexIndex;
+
+                Boolean isCollapsed = findCollapseIndex(
+                    previousEdgeIntersection, edgeIntersection, out collapsedVertexIndex);
+
+                if (isCollapsed)
+                {
+                    yield return collapsedVertexIndex;
+                }
+
+                previousEdgeIntersection = edgeIntersection;
+            }
+        }
+
+        private static Boolean findCollapseIndex(
+            SegmentNode<TCoordinate> edgeIntersection0, SegmentNode<TCoordinate> edgeIntersection1, 
+            out Int32 collapsedVertexIndex)
+        {
+            collapsedVertexIndex = -1;
+
+            // only looking for equal nodes
+            if (!edgeIntersection0.Coordinate.Equals(edgeIntersection1.Coordinate))
+            {
                 return false;
+            }
 
-            if (nextNode.SegmentIndex == currNode.SegmentIndex)
+            Int32 interiorVertexesCount = edgeIntersection1.SegmentIndex - edgeIntersection0.SegmentIndex;
+
+            if (!edgeIntersection1.IsInterior)
             {
-                currNode = nextNode;
-                currSegIndex = currNode.SegmentIndex;
-                ReadNextNode();
+                interiorVertexesCount--;
+            }
+
+            // if there is a single vertex between the two equal nodes, 
+            // it is a collapsed node
+            if (interiorVertexesCount == 1)
+            {
+                collapsedVertexIndex = edgeIntersection0.SegmentIndex + 1;
                 return true;
             }
 
-            if (nextNode.SegmentIndex > currNode.SegmentIndex)
-            {
-
-            }
             return false;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        // Create a new "split edge" with the section of points between
+        // (and including) the two intersections.
+        // The label for the new edge is the same as the label for the parent edge.
+        private NodedSegmentString<TCoordinate> createSplitEdge(
+            SegmentNode<TCoordinate> edgeIntersection0, SegmentNode<TCoordinate> edgeIntersection1)
+        {
+            TCoordinate lastSegStartPt = ParentSegments.Coordinates[edgeIntersection1.SegmentIndex];
+
+            // if the last intersection point is not equal to the its segment start pt, 
+            // add it to the points list as well.
+            // (This check is needed because the distance metric is not totally reliable!)
+            // The check for point equality is 2D only - Z values are ignored
+            Boolean useIntersectionPoint1 = edgeIntersection1.IsInterior || 
+                                            !edgeIntersection1.Coordinate.Equals(lastSegStartPt);
+
+            ICoordinateSequence<TCoordinate> pts;
+            Int32 start = edgeIntersection0.SegmentIndex + 1;
+            Int32 end = edgeIntersection1.SegmentIndex;
+
+            pts = ParentSegments.Coordinates.Slice(start, end);
+
+            Slice.Prepend(pts, edgeIntersection0.Coordinate);
+
+            if (useIntersectionPoint1)
+            {
+                Slice.Append(pts, edgeIntersection1.Coordinate);
+            }
+
+            return new NodedSegmentString<TCoordinate>(pts, ParentSegments.Context);
+        }
+
+        #region IEnumerable Members
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        #endregion
+    }
+
+    //private void checkSplitEdgesCorrectness(IEnumerable<SegmentString<TCoordinate>> splitEdges)
+    //{
+    //    IEnumerable<TCoordinate> edgePts = Edge.Coordinates;
+
+    //    // check that first and last points of split edges are same as endpoints of edge
+    //    SegmentString<TCoordinate> split0 = (SegmentString<TCoordinate>)splitEdges[0];
+    //    TCoordinate pt0 = split0.GetCoordinate(0);
+
+    //    if (!pt0.Equals(edgePts[0]))
+    //    {
+    //        throw new Exception("bad split edge start point at " + pt0);
+    //    }
+
+    //    SegmentString<TCoordinate> splitn = (SegmentString<TCoordinate>)splitEdges[splitEdges.Count - 1];
+    //    IEnumerable<TCoordinate> splitnPts = splitn.Coordinates;
+    //    ICoordinate ptn = splitnPts[splitnPts.Length - 1];
+
+    //    if (!ptn.Equals(edgePts[edgePts.Length - 1]))
+    //    {
+    //        throw new Exception("bad split edge end point at " + ptn);
+    //    }
+    //}
+
+    /*
+    internal class NodeVertexIterator<TCoordinate> : IEnumerator<SegmentNode<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
+    {
+        private SegmentNodeList<TCoordinate> _nodeList;
+        private SegmentString<TCoordinate> _edge;
+        private IEnumerator<SegmentNode<TCoordinate>> _nodeIt;
+        private SegmentNode<TCoordinate> _currNode = null;
+        private SegmentNode<TCoordinate> _nextNode = null;
+        private Int32 _currSegIndex = 0;
+        private Boolean _isDisposed = false;
+
+        private NodeVertexIterator(SegmentNodeList<TCoordinate> nodeList)
+        {
+            _nodeList = nodeList;
+            _edge = nodeList.Edge;
+            _nodeIt = nodeList.GetEnumerator();
+        }
+
+        public SegmentNode<TCoordinate> Current
+        {
+            get { checkDisposed(); return _currNode; }
+        }
+
+        public Boolean MoveNext()
+        {
+            checkDisposed();
+
+            if (_currNode == null)
+            {
+                _currNode = _nextNode;
+                _currSegIndex = _currNode.SegmentIndex;
+                readNextNode();
+                return true;
+            }
+
+            // check for trying to read too far
+            if (_nextNode == null)
+            {
+                return false;
+            }
+
+            if (_nextNode.SegmentIndex == _currNode.SegmentIndex)
+            {
+                _currNode = _nextNode;
+                _currSegIndex = _currNode.SegmentIndex;
+                readNextNode();
+                return true;
+            }
+
+            if (_nextNode.SegmentIndex > _currNode.SegmentIndex) {}
+            return false;
+        }
+
         public void Reset()
         {
-            nodeIt.Reset();            
+            checkDisposed();
+            _nodeIt.Reset();
         }
+
+        #region IDisposable Members
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            _isDisposed = true;
+        }
+
+        #endregion
+
+        private void checkDisposed()
+        {
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+        }
+
+        private void readNextNode()
+        {
+            if (_nodeIt.MoveNext())
+            {
+                _nextNode = _nodeIt.Current;
+            }
+            else
+            {
+                _nextNode = null;
+            }
+        }
+
+        #region IEnumerator Members
+
+        object IEnumerator.Current
+        {
+            get { return Current; }
+        }
+
+        #endregion
     }
+     */
 }

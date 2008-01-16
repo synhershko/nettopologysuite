@@ -1,64 +1,65 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Chain
 {
     /// <summary> 
-    /// A MonotoneChainBuilder implements static functions
+    /// A <see cref="MonotoneChainBuilder"/> implements static functions
     /// to determine the monotone chains in a sequence of points.
     /// </summary>
-    public class MonotoneChainBuilder
+    public static class MonotoneChainBuilder
     {
-        /// <summary>
-        /// Only static methods!
-        /// </summary>
-        private MonotoneChainBuilder() { }
+        //public static Int32[] ToIntArray(IList list)
+        //{
+        //    Int32[] array = new Int32[list.Count];
 
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="list"></param>
-        /// <returns></returns>
-        public static int[] ToIntArray(IList list)
+        //    for (Int32 i = 0; i < array.Length; i++)
+        //    {
+        //        array[i] = (Int32) list[i];
+        //    }
+
+        //    return array;
+        //}
+
+        public static IEnumerable<MonotoneChain<TCoordinate>> GetChains<TCoordinate>(ICoordinateSequence<TCoordinate> coordinates)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                IComputable<Double, TCoordinate>, IConvertible
         {
-            int[] array = new int[list.Count];
-            for (int i = 0; i < array.Length; i++)            
-                array[i] = (int)list[i];            
-            return array;
+            return GetChains(coordinates, null);
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <returns></returns>
-        public static IList GetChains(ICoordinate[] pts)
-        {
-            return GetChains(pts, null);
-        }
-
-        /// <summary>
-        /// Return a list of the <c>MonotoneChain</c>s
+        /// Return a list of the <see cref="MonotoneChain{TCoordinate}"/>s
         /// for the given list of coordinates.
         /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="context"></param>
-        public static IList GetChains(ICoordinate[] pts, object context)
+        public static IEnumerable<MonotoneChain<TCoordinate>> GetChains<TCoordinate>(ICoordinateSequence<TCoordinate> coordinates, Object context)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                IComputable<Double, TCoordinate>, IConvertible
         {
-            IList mcList = new ArrayList();
-            int[] startIndex = GetChainStartIndices(pts);
-            for (int i = 0; i < startIndex.Length - 1; i++)
+            IEnumerable<Int32> startIndicies = GetChainStartIndices(coordinates);
+
+            foreach (Pair<Int32> indexPair in Slice.GetOverlappingPairs(startIndicies))
             {
-                MonotoneChain mc = new MonotoneChain(pts, startIndex[i], startIndex[i + 1], context);                
-                mcList.Add(mc);
+                MonotoneChain<TCoordinate> mc = new MonotoneChain<TCoordinate>(
+                    coordinates, indexPair.First, indexPair.Second, context);
+
+                yield return mc;
             }
-            return mcList;
+
+            //for (Int32 i = 0; i < startIndicies.Length - 1; i++)
+            //{
+            //    MonotoneChain<TCoordinate> mc =
+            //        new MonotoneChain<TCoordinate>(coordinates, startIndicies[i], startIndicies[i + 1], context);
+
+            //    mcList.Add(mc);
+            //}
+
+            //return mcList;
         }
 
         /// <summary>
@@ -67,48 +68,63 @@ namespace GisSharpBlog.NetTopologySuite.Index.Chain
         /// The last entry in the array points to the end point of the point array,
         /// for use as a sentinel.
         /// </summary>
-        /// <param name="pts"></param>
-        public static int[] GetChainStartIndices(ICoordinate[] pts)
+        public static IEnumerable<Int32> GetChainStartIndices<TCoordinate>(ICoordinateSequence<TCoordinate> coordinates)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                IComputable<Double, TCoordinate>, IConvertible
         {
             // find the startpoint (and endpoints) of all monotone chains in this edge
-            int start = 0;
-            IList startIndexList = new ArrayList();
-            startIndexList.Add(start);
+            Int32 start = 0;
+
+            yield return start;
+
             do
             {
-                int last = FindChainEnd(pts, start);
-                startIndexList.Add(last);
+                Int32 last = findChainEnd(coordinates, start);
+                yield return last;
                 start = last;
-            } 
-            while (start < pts.Length - 1);
-
-            // copy list to an array of ints, for efficiency
-            int[] startIndex = ToIntArray(startIndexList);
-            return startIndex;
+            } while (start < coordinates.Count - 1);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="start"></param>
-        /// <returns> 
-        /// The index of the last point in the monotone chain starting at <c>start</c>.
-        /// </returns>
-        private static int FindChainEnd(ICoordinate[] pts, int start)
+        // Returns the index of the last point in the monotone chain starting at 'start'.
+        private static Int32 findChainEnd<TCoordinate>(IEnumerable<TCoordinate> coordinates, Int32 start)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                IComputable<Double, TCoordinate>, IConvertible
         {
             // determine quadrant for chain
-            int chainQuad = QuadrantOp.Quadrant(pts[start], pts[start + 1]);
-            int last = start + 1;
-            while (last < pts.Length)
-            {
+            Pair<TCoordinate> startPair = Slice.GetPair(coordinates).Value;
+
+            Quadrants chainQuad = QuadrantOp<TCoordinate>.Quadrant(startPair.First, startPair.Second);
+            Int32 end = start;
+
+            foreach (Pair<TCoordinate> pair in Slice.GetOverlappingPairs(coordinates))
+            { 
                 // compute quadrant for next possible segment in chain
-                int quad = QuadrantOp.Quadrant(pts[last - 1], pts[last]);
-                if (quad != chainQuad) 
+                Quadrants quad = QuadrantOp<TCoordinate>.Quadrant(pair.First, pair.Second);
+
+                if (quad != chainQuad)
+                {
                     break;
-                last++;
+                }
+
+                end++;
             }
-            return last - 1;
-        }           
+
+            return end;
+
+            //while (end < coordinates.Length)
+            //{
+            //    // compute quadrant for next possible segment in chain
+            //    Int32 quad = QuadrantOp<TCoordinate>.Quadrant(coordinates[end - 1], coordinates[end]);
+
+            //    if (quad != chainQuad)
+            //    {
+            //        break;
+            //    }
+
+            //    end++;
+            //}
+
+            //return end - 1;
+        }
     }
 }

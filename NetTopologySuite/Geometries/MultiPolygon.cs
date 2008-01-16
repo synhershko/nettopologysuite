@@ -1,130 +1,161 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
-
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GeoAPI.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>
-    /// Basic implementation of <c>MultiPolygon</c>.
+    /// Basic implementation of <see cref="IMultiPolygon{TCoordinate}"/>
     /// </summary>
     [Serializable]
-    public class MultiPolygon : GeometryCollection, IMultiPolygon 
+    public class MultiPolygon<TCoordinate> : GeometryCollection<TCoordinate>, IMultiPolygon<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                    IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
         /// Represents an empty <c>MultiPolygon</c>.
         /// </summary>
-        public static new readonly IMultiPolygon Empty = new GeometryFactory().CreateMultiPolygon(null);
+        public new static readonly IMultiPolygon<TCoordinate> Empty = new GeometryFactory<TCoordinate>().CreateMultiPolygon();
 
         /// <summary>
         /// Constructs a <c>MultiPolygon</c>.
         /// </summary>
         /// <param name="polygons">
-        /// The <c>Polygon</c>s for this <c>MultiPolygon</c>
-        /// , or <c>null</c> or an empty array to create the empty point.
-        /// Elements may be empty <c>Polygon</c>s, but not <c>null</c>
+        /// The <see cref="Polygon{TCoordinate}" />s for this <c>MultiPolygon</c>
+        /// , or <see langword="null" /> or an empty array to create the empty point.
+        /// Elements may be empty <see cref="Polygon{TCoordinate}" />s, but not <see langword="null" />
         /// s. The polygons must conform to the assertions specified in the 
         /// <see href="http://www.opengis.org/techno/specs.htm"/> OpenGIS Simple Features
         /// Specification for SQL.        
         /// </param>
         /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="PrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public MultiPolygon(IPolygon[] polygons) : this(polygons, DefaultFactory) { }  
+        public MultiPolygon(params IPolygon<TCoordinate>[] polygons) : this(polygons, DefaultFactory) { }
 
         /// <summary>
         /// Constructs a <c>MultiPolygon</c>.
         /// </summary>
         /// <param name="polygons">
-        /// The <c>Polygon</c>s for this <c>MultiPolygon</c>
-        /// , or <c>null</c> or an empty array to create the empty point.
-        /// Elements may be empty <c>Polygon</c>s, but not <c>null</c>
+        /// The <see cref="Polygon{TCoordinate}" />s for this <c>MultiPolygon</c>
+        /// , or <see langword="null" /> or an empty array to create the empty point.
+        /// Elements may be empty <see cref="Polygon{TCoordinate}" />s, but not <see langword="null" />
         /// s. The polygons must conform to the assertions specified in the 
         /// <see href="http://www.opengis.org/techno/specs.htm"/> OpenGIS Simple Features
         /// Specification for SQL.        
         /// </param>
-        /// <param name="factory"></param>
-        public MultiPolygon(IPolygon[] polygons, IGeometryFactory factory) : base(polygons, factory) { }  
+        /// <remarks>
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="PrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
+        /// </remarks>
+        public MultiPolygon(IEnumerable<IPolygon<TCoordinate>> polygons) : this(polygons, DefaultFactory) { }
 
         /// <summary>
-        /// 
+        /// Constructs a <c>MultiPolygon</c>.
         /// </summary>
-        public override Dimensions Dimension
+        /// <param name="polygons">
+        /// The <see cref="Polygon{TCoordinate}" />s for this <c>MultiPolygon</c>
+        /// , or <see langword="null" /> or an empty array to create the empty point.
+        /// Elements may be empty <see cref="Polygon{TCoordinate}" />s, but not <see langword="null" />
+        /// s. The polygons must conform to the assertions specified in the 
+        /// <see href="http://www.opengis.org/techno/specs.htm"/> OpenGIS Simple Features
+        /// Specification for SQL.        
+        /// </param>
+        public MultiPolygon(IEnumerable<IPolygon<TCoordinate>> polygons, IGeometryFactory<TCoordinate> factory)
+            : base(Enumerable.Upcast<IGeometry<TCoordinate>, IPolygon<TCoordinate>>(polygons), factory) { }
+
+        public MultiPolygon(IGeometryFactory<TCoordinate> factory)
+            : base(factory) { }
+
+        public override IGeometry<TCoordinate> Boundary
         {
             get
             {
-                return Dimensions.Surface;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override Dimensions BoundaryDimension
-        {
-            get
-            {
-                return Dimensions.Curve;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override string GeometryType
-        {
-            get
-            {
-                return "MultiPolygon";
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsSimple
-        {
-            get
-            {
-                return true;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override IGeometry Boundary
-        {
-            get
-            {
-                if (IsEmpty)    
-                    return Factory.CreateGeometryCollection(null);
-
-                List<ILineString> allRings = new List<ILineString>();
-                for (int i = 0; i < geometries.Length; i++)
+                if (IsEmpty)
                 {
-                    IPolygon polygon = (IPolygon) geometries[i];
-                    IGeometry rings = polygon.Boundary;
-                    for (int j = 0; j < rings.NumGeometries; j++)
-                        allRings.Add((ILineString) rings.GetGeometryN(j));
-                }                
+                    return Factory.CreateGeometryCollection();
+                }
+
+                List<ILineString<TCoordinate>> allRings = new List<ILineString<TCoordinate>>();
+
+                foreach (IPolygon<TCoordinate> polygon in GeometriesInternal)
+                {
+                    IGeometry<TCoordinate> boundary = polygon.Boundary;
+                    
+                    Debug.Assert(boundary != null);
+
+                    if(boundary is IGeometryCollection)
+                    {
+                        IMultiLineString<TCoordinate> boundaryLines = boundary as IMultiLineString<TCoordinate>;
+                        allRings.AddRange(boundaryLines);
+                    }
+                }
+
                 return Factory.CreateMultiLineString(allRings.ToArray());
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
+        public override Dimensions BoundaryDimension
         {
-            if (!IsEquivalentClass(other)) 
+            get { return Dimensions.Curve; }
+        }
+
+        public override Dimensions Dimension
+        {
+            get { return Dimensions.Surface; }
+        }
+
+        public override OgcGeometryType GeometryType
+        {
+            get { return OgcGeometryType.MultiPolygon; }
+        }
+
+        public override Boolean IsSimple
+        {
+            get { return true; }
+        }
+
+        public new IPolygon<TCoordinate> this[Int32 index]
+        {
+            get { return base[index] as IPolygon<TCoordinate>; }
+            set { base[index] = value; }
+        }
+
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
+        {
+            if (!IsEquivalentClass(other))
+            {
                 return false;
-            return base.EqualsExact(other, tolerance);
+            }
+
+            return base.Equals(other, tolerance);
+        }
+
+        public new IEnumerator<IPolygon<TCoordinate>> GetEnumerator()
+        {
+            foreach (IPolygon<TCoordinate> polygon in GeometriesInternal)
+            {
+                yield return polygon;
+            }
+        }
+
+        IPolygon IMultiPolygon.this[Int32 index]
+        {
+            get { return base[index] as IPolygon; }
+            set { base[index] = value as IPolygon<TCoordinate>; }
+        }
+
+        IEnumerator<IPolygon> IEnumerable<IPolygon>.GetEnumerator()
+        {
+            foreach (IPolygon polygon in GeometriesInternal)
+            {
+                yield return polygon;
+            }
         }
     }
 }

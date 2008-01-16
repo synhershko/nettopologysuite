@@ -1,45 +1,42 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
-
-using GeoAPI.Geometries;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>
-    /// Utility functions for manipulating <see cref="ICoordinateSequence" />s.
+    /// Utility functions for manipulating 
+    /// <see cref="ICoordinateSequence" />s.
     /// </summary>
     public static class CoordinateSequences
     {
-        /// <summary>
-        /// Reverses the coordinates in a sequence in-place.
-        /// </summary>
-        /// <param name="seq"></param>
-        public static void Reverse(ICoordinateSequence seq)
+        public static ICoordinateSequence<TCoordinate> CreateEmpty<TCoordinate>()
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                                IComputable<TCoordinate>, IConvertible
         {
-            int last = seq.Count - 1;
-            int mid = last / 2;
-            for (int i = 0; i <= mid; i++)
-                Swap(seq, i, last - i);
+            throw new NotImplementedException();
         }
 
-        /// <summary>
-        /// Swaps two coordinates in a sequence.
-        /// </summary>
-        /// <param name="seq"></param>
-        /// <param name="i"></param>
-        /// <param name="j"></param>
-        public static void Swap(ICoordinateSequence seq, int i, int j)
+        public static ICoordinateSequence<TCoordinate> Create<TCoordinate>(Int32 initialCapacity)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                                IComputable<TCoordinate>, IConvertible
         {
-            if (i == j) 
-                return;
+            throw new NotImplementedException();
+        }
 
-            for (int dim = 0; dim < seq.Dimension; dim++)
-            {
-                double tmp = seq.GetOrdinate(i, (Ordinates)dim);
-                seq.SetOrdinate(i, (Ordinates)dim, seq.GetOrdinate(j, (Ordinates)dim));
-                seq.SetOrdinate(j, (Ordinates)dim, tmp);
-            }
+        public static ICoordinateSequence<TCoordinate> Create<TCoordinate>(params TCoordinate[] coordinates)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                                IComputable<TCoordinate>, IConvertible
+        {
+            throw new NotImplementedException();
+        }
+
+        public static ICoordinateSequence<TCoordinate> Create<TCoordinate>(IEnumerable<TCoordinate> coordinates, Boolean allowRepeatedPoints)
+            where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                                IComputable<TCoordinate>, IConvertible
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -1,36 +1,26 @@
 using System;
-using System.Collections;
-using System.Text;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public class MonotoneChain
+    public class MonotoneChain<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private MonotoneChainEdge mce;
-        private int chainIndex;
+        private readonly MonotoneChainEdge<TCoordinate> _monotoneChainEdge;
+        private readonly Int32 _chainIndex;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="mce"></param>
-        /// <param name="chainIndex"></param>
-        public MonotoneChain(MonotoneChainEdge mce, int chainIndex)
+        public MonotoneChain(MonotoneChainEdge<TCoordinate> monotoneChainEdge, Int32 chainIndex)
         {
-            this.mce = mce;
-            this.chainIndex = chainIndex;
+            _monotoneChainEdge = monotoneChainEdge;
+            _chainIndex = chainIndex;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="mc"></param>
-        /// <param name="si"></param>
-        public void ComputeIntersections(MonotoneChain mc, SegmentIntersector si)
+        public void ComputeIntersections(MonotoneChain<TCoordinate> monotoneChain, SegmentIntersector<TCoordinate> si)
         {
-            this.mce.ComputeIntersectsForChain(chainIndex, mc.mce, mc.chainIndex, si);
+            _monotoneChainEdge.ComputeIntersectsForChain(_chainIndex, 
+                monotoneChain._monotoneChainEdge, monotoneChain._chainIndex, si);
         }
     }
 }

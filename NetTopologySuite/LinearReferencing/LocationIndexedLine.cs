@@ -1,61 +1,58 @@
 using System;
-
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
+using GeoAPI.Coordinates;
 
 namespace GisSharpBlog.NetTopologySuite.LinearReferencing
 {
     /// <summary>
-    /// Supports linear referencing along a linear <see cref="Geometry" />
-    /// using <see cref="LinearLocation" />s as the index.
+    /// Supports linear referencing along a linear <see cref="Geometry{TCoordinate}" />
+    /// using <see cref="LinearLocation{TCoordinate}" />s as the index.
     /// </summary>
-    public class LocationIndexedLine
+    public class LocationIndexedLine<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private IGeometry linearGeom = null;
+        private readonly IGeometry<TCoordinate> _linearGeom = null;
 
         /// <summary>
         /// Constructs an object which allows linear referencing along
-        /// a given linear <see cref="Geometry" />.
+        /// a given linear <see cref="Geometry{TCoordinate}" />.
         /// </summary>
-        /// <param name="linearGeom"></param>
-        public LocationIndexedLine(IGeometry linearGeom)
+        public LocationIndexedLine(IGeometry<TCoordinate> linearGeom)
         {
-            this.linearGeom = linearGeom;
-            CheckGeometryType();
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private void CheckGeometryType()
-        {
-            if (!(linearGeom is ILineString || linearGeom is IMultiLineString))
+            if (!(_linearGeom is ILineString || _linearGeom is IMultiLineString))
+            {
                 throw new ArgumentException("Input geometry must be linear", "linearGeom");
+            }
+
+            _linearGeom = linearGeom;
         }
 
         /// <summary>
-        /// Computes the <see cref="Coordinate" />for the point on the line at the given index.
+        /// Computes the <typeparamref name="TCoordinate"/> for the point on the line at the given index.
         /// If the <paramref name="index" /> is out of range,
         /// the first or last point on the line will be returned.
         /// </summary>
         /// <param name="index">The index of the desired point.</param>
-        /// <returns>The <see cref="Coordinate" /> at the given index.</returns>
-        public ICoordinate ExtractPoint(LinearLocation index)
+        /// <returns>The <typeparamref name="TCoordinate"/> at the given index.</returns>
+        public TCoordinate ExtractPoint(LinearLocation<TCoordinate> index)
         {
-            return index.GetCoordinate(linearGeom);
+            return index.GetCoordinate(_linearGeom);
         }
 
         /// <summary>
-        /// Computes the <see cref="LineString" /> for the interval
+        /// Computes the <see cref="ILineString{TCoordinate}" /> for the interval
         /// on the line between the given indices.
         /// </summary>
         /// <param name="startIndex">The index of the start of the interval.</param>
         /// <param name="endIndex">The index of the end of the interval.</param>
         /// <returns>The linear interval between the indices.</returns>
-        public IGeometry ExtractLine(LinearLocation startIndex, LinearLocation endIndex)
+        public IGeometry<TCoordinate> ExtractLine(LinearLocation<TCoordinate> startIndex, LinearLocation<TCoordinate> endIndex)
         {
-            return ExtractLineByLocation.Extract(linearGeom, startIndex, endIndex);
+            return ExtractLineByLocation<TCoordinate>.Extract(_linearGeom, startIndex, endIndex);
         }
 
         /// <summary>
@@ -68,9 +65,9 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="pt">A point on the line.</param>
         /// <returns>The index of the point.</returns>
-        public LinearLocation IndexOf(ICoordinate pt)
+        public LinearLocation<TCoordinate> IndexOf(TCoordinate pt)
         {
-            return LocationIndexOfPoint.IndexOf(linearGeom, pt);
+            return LocationIndexOfPoint<TCoordinate>.IndexOf(_linearGeom, pt);
         }
 
         /// <summary>
@@ -81,9 +78,9 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="subLine">A subLine of the line.</param>
         /// <returns>A pair of indices for the start and end of the subline.</returns>
-        public LinearLocation[] IndicesOf(IGeometry subLine)
+        public Pair<LinearLocation<TCoordinate>> IndicesOf(IGeometry<TCoordinate> subLine)
         {
-            return LocationIndexOfLine.IndicesOf(linearGeom, subLine);
+            return LocationIndexOfLine<TCoordinate>.IndicesOf(_linearGeom, subLine);
         }
 
         /// <summary>
@@ -93,54 +90,46 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="pt">A point on the line.</param>
         /// <returns>The index of the point.</returns>
-        public LinearLocation Project(ICoordinate pt)
+        public LinearLocation<TCoordinate> Project(TCoordinate pt)
         {
-            return LocationIndexOfPoint.IndexOf(linearGeom, pt);
+            return LocationIndexOfPoint<TCoordinate>.IndexOf(_linearGeom, pt);
         }
 
         /// <summary>
         /// Returns the index of the start of the line.
         /// </summary>
-        public LinearLocation StartIndex
+        public LinearLocation<TCoordinate> StartIndex
         {
-            get
-            {
-                return new LinearLocation();
-            }
+            get { return new LinearLocation<TCoordinate>(); }
         }
 
         /// <summary>
         /// Returns the index of the end of the line.
         /// </summary>
-        public LinearLocation EndIndex
+        public LinearLocation<TCoordinate> EndIndex
         {
-            get
-            {
-                return LinearLocation.GetEndLocation(linearGeom);
-            }
+            get { return LinearLocation<TCoordinate>.GetEndLocation(_linearGeom); }
         }
 
         /// <summary>
         /// Tests whether an index is in the valid index range for the line.
         /// </summary>
         /// <param name="index">The index to test.</param>
-        /// <returns><c>true</c> if the index is in the valid range.</returns>
-        public bool isValidIndex(LinearLocation index)
+        /// <returns><see langword="true"/> if the index is in the valid range.</returns>
+        public Boolean IsValidIndex(LinearLocation<TCoordinate> index)
         {
-            return index.IsValid(linearGeom);
+            return index.IsValid(_linearGeom);
         }
 
         /// <summary>
         /// Computes a valid index for this line by clamping 
         /// the given index to the valid range of index values.
         /// </summary>
-        /// <param name="index"></param>
+        /// <param name="index">The index value to clamp to a valid value.</param>
         /// <returns>A valid index value.</returns>
-        public LinearLocation ClampIndex(LinearLocation index)
+        public LinearLocation<TCoordinate> ClampIndex(LinearLocation<TCoordinate> index)
         {
-            LinearLocation loc = (LinearLocation) index.Clone();
-            loc.Clamp(linearGeom);
-            return loc;
+            return index.Clamp(_linearGeom);
         }
     }
 }

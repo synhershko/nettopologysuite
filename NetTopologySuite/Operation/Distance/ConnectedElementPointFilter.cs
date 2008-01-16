@@ -1,10 +1,9 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GeoAPI.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Distance
 {
@@ -14,39 +13,34 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Distance
     /// (e.g. a polygon, linestring or point)
     /// and returns them in a list
     /// </summary>
-    public class ConnectedElementPointFilter : IGeometryFilter
+    public class ConnectedElementPointFilter<TCoordinate> : IGeometryFilter<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>, IComputable<TCoordinate>, IConvertible
     {
         /// <summary>
         /// Returns a list containing a Coordinate from each Polygon, LineString, and Point
         /// found inside the specified point. Thus, if the specified point is
         /// not a GeometryCollection, an empty list will be returned.
         /// </summary>
-        public static IList GetCoordinates(Geometry geom)
+        public static IList<TCoordinate> GetCoordinates(IGeometry<TCoordinate> geom)
         {
-            IList pts = new ArrayList();
-            geom.Apply(new ConnectedElementPointFilter(pts));
+            List<TCoordinate> pts = new List<TCoordinate>();
+            geom.Apply(new ConnectedElementPointFilter<TCoordinate>(pts));
             return pts;
         }
 
-        private IList pts = null;
+        private readonly IList<TCoordinate> _coordinates = null;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        ConnectedElementPointFilter(IList pts)
+        private ConnectedElementPointFilter(IList<TCoordinate> pts)
         {
-            this.pts = pts;
+            _coordinates = pts;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        public void Filter(IGeometry geom)
+        public void Filter(IGeometry<TCoordinate> geom)
         {
-            if (geom is Point || geom is LineString || geom is Polygon)
-                pts.Add(geom.Coordinate);
+            if (geom is IPoint || geom is ILineString || geom is IPolygon)
+            {
+                _coordinates.Add(Slice.GetFirst(geom.Coordinates));
+            }
         }
     }
 }

@@ -1,79 +1,63 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.DataStructures;
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Bintree
 {
     /// <summary>
-    /// A node of a <c>Bintree</c>.
+    /// A node of a <see cref="BinTree{TCoordinates}"/>.
     /// </summary>
-    public class Node : NodeBase
+    public class Node<TBoundable> : BaseBinNode<TBoundable>
+        where TBoundable : IBoundable<Interval>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemInterval"></param>
-        /// <returns></returns>
-        public static Node CreateNode(Interval itemInterval)
+        public static Node<TBoundable> CreateNode(Interval itemInterval)
         {
-            Key key = new Key(itemInterval);
-        
-            Node node = new Node(key.Interval, key.Level);
+            BinTreeKey key = new BinTreeKey(itemInterval);
+
+            Node<TBoundable> node = new Node<TBoundable>(key.Bounds, key.Level);
             return node;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="addInterval"></param>
-        /// <returns></returns>
-        public static Node CreateExpanded(Node node, Interval addInterval)
+        public static Node<TBoundable> CreateExpanded(Node<TBoundable> node, Interval addInterval)
         {
-            Interval expandInt = new Interval(addInterval);
-            if (node != null) expandInt.ExpandToInclude(node.interval);
-            Node largerNode = CreateNode(expandInt);
-            if (node != null) largerNode.Insert(node);
+            Interval expanded = new Interval(addInterval);
+
+            if (node != null)
+            {
+                expanded.ExpandToInclude(node._interval);
+            }
+
+            Node<TBoundable> largerNode = CreateNode(expanded);
+
+            if (node != null)
+            {
+                largerNode.Insert(node);
+            }
+
             return largerNode;
         }
 
-        private Interval interval;
-        private double centre;
-        private int level;
+        private readonly Interval _interval;
+        private readonly Double _center;
+        private readonly Int32 _level;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="interval"></param>
-        /// <param name="level"></param>
-        public Node(Interval interval, int level)
+        public Node(Interval interval, Int32 level)
+            : base(interval, level)
         {
-            this.interval = interval;
-            this.level = level;
-            centre = (interval.Min + interval.Max) / 2;
+            _interval = interval;
+            _level = level;
+            _center = (interval.Min + interval.Max) / 2;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  Interval Interval
+        public Interval Interval
         {
-            get
-            {
-                return interval;
-            }
+            get { return _interval; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemInterval"></param>
-        /// <returns></returns>
-        protected override bool IsSearchMatch(Interval itemInterval)
+        protected override Boolean IsSearchMatch(Interval itemInterval)
         {
-            return itemInterval.Overlaps(interval);
+            return itemInterval.Overlaps(_interval);
         }
 
         /// <summary>
@@ -81,99 +65,70 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// Creates the node if
         /// it does not already exist.
         /// </summary>
-        /// <param name="searchInterval"></param>
-        public  Node GetNode(Interval searchInterval)
+        public Node<TBoundable> GetNode(Interval searchInterval)
         {
-            int subnodeIndex = GetSubnodeIndex(searchInterval, centre);
+            Int32 subnodeIndex = GetSubNodeIndex(searchInterval, _center);
+
             // if index is -1 searchEnv is not contained in a subnode
-            if (subnodeIndex != -1) 
+            if (subnodeIndex != -1)
             {
                 // create the node if it does not exist
-                Node node = GetSubnode(subnodeIndex);
+                Node<TBoundable> node = GetSubNode(subnodeIndex);
+
                 // recursively search the found/created node
                 return node.GetNode(searchInterval);
             }
-            else return this;            
+            else
+            {
+                return this;
+            }
         }
 
         /// <summary>
         /// Returns the smallest existing
         /// node containing the envelope.
         /// </summary>
-        /// <param name="searchInterval"></param>
-        public  NodeBase Find(Interval searchInterval)
+        public BaseBinNode<TBoundable> Find(Interval searchInterval)
         {
-            int subnodeIndex = GetSubnodeIndex(searchInterval, centre);
-            if (subnodeIndex == -1)
-                return this;
-            if (subnode[subnodeIndex] != null) 
+            Node<TBoundable> subNode = GetSubNode(searchInterval, _center);
+
+            if (subNode != null)
             {
                 // query lies in subnode, so search it
-                Node node = subnode[subnodeIndex];
-                return node.Find(searchInterval);
+                return subNode.Find(searchInterval);
             }
-            // no existing subnode, so return this one anyway
+
+            // no existing subnode, so return this one
             return this;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        public  void Insert(Node node)
+        public void Insert(Node<TBoundable> node)
         {
-            Assert.IsTrue(interval == null || interval.Contains(node.Interval));
-            int index = GetSubnodeIndex(node.interval, centre);
-            if (node.level == level - 1) 
-                subnode[index] = node;            
-            else 
+            Assert.IsTrue(_interval.Contains(node.Interval));
+            Int32 subnodeIndex = GetSubNodeIndex(node.Interval, _center);
+
+            if (node.Level == _level - 1)
+            {
+                SetSubNode(subnodeIndex, node);
+            }
+            else
             {
                 // the node is not a direct child, so make a new child node to contain it
                 // and recursively insert the node
-                Node childNode = CreateSubnode(index);
+                Node<TBoundable> childNode = CreateSubNode(subnodeIndex);
                 childNode.Insert(node);
-                subnode[index] = childNode;
+                SetSubNode(subnodeIndex, childNode);
             }
         }
 
-        /// <summary>
-        /// Get the subnode for the index.
-        /// If it doesn't exist, create it.
-        /// </summary>
-        private Node GetSubnode(int index)
+        public override bool Intersects(Interval bounds)
         {
-            if (subnode[index] == null)             
-                subnode[index] = CreateSubnode(index);            
-            return subnode[index];
+            return Bounds.Intersects(bounds);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        private Node CreateSubnode(int index)
-        {   
-            // create a new subnode in the appropriate interval
-            double min = 0.0;
-            double max = 0.0;
-
-            switch (index) 
-            {
-                case 0:
-                    min = interval.Min;
-                    max = centre;
-                    break;
-                case 1:
-                    min = centre;
-                    max = interval.Max;
-                    break;
-                default:
-			        break;
-            }
-            Interval subInt = new Interval(min, max);
-            Node node = new Node(subInt, level - 1);
-            return node;
+        protected override Interval ComputeBounds()
+        {
+            throw new NotImplementedException();
         }
     }
 }

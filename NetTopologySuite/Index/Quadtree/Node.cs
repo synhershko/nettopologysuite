@@ -1,11 +1,10 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
 {
@@ -14,197 +13,190 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
     /// items which have a spatial extent corresponding to the node's position
     /// in the quadtree.
     /// </summary>
-    public class Node : NodeBase
+    public class Node<TCoordinate, TItem> : BaseQuadNode<TCoordinate, TItem>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IDivisible<Double, TCoordinate>, IConvertible
+        where TItem : IBoundable<IExtents<TCoordinate>>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="env"></param>
-        /// <returns></returns>
-        public static Node CreateNode(IEnvelope env)
+        public static Node<TCoordinate, TItem> CreateNode(IExtents<TCoordinate> extents)
         {
-            Key key = new Key(env);
-            Node node = new Node(key.Envelope, key.Level);
+            if (extents == null)
+            {
+                throw new ArgumentNullException("extents");
+            }
+
+            QuadTreeNodeKey<TCoordinate> key = new QuadTreeNodeKey<TCoordinate>(extents);
+            Node<TCoordinate, TItem> node = new Node<TCoordinate, TItem>(key.Bounds, key.Level);
             return node;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="addEnv"></param>
-        /// <returns></returns>
-        public static Node CreateExpanded(Node node, IEnvelope addEnv)
+        public static Node<TCoordinate, TItem> CreateExpanded(Node<TCoordinate, TItem> node, 
+            IExtents<TCoordinate> addEnv)
         {
-            IEnvelope expandEnv = new Envelope(addEnv);
-            if (node != null) 
-                expandEnv.ExpandToInclude(node.env);
+            IExtents<TCoordinate> expandExtents = new Extents<TCoordinate>(addEnv);
 
-            Node largerNode = CreateNode(expandEnv);
-            if (node != null) 
+            if (node != null)
+            {
+                expandExtents.ExpandToInclude(node.Bounds);
+            }
+
+            Node<TCoordinate, TItem> largerNode = CreateNode(expandExtents);
+
+            if (node != null)
+            {
                 largerNode.InsertNode(node);
+            }
+
             return largerNode;
         }
 
-        private IEnvelope env;
-        private ICoordinate centre;
-        private int level;
+        private readonly TCoordinate _center;
+        private readonly Int32 _level;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="env"></param>
-        /// <param name="level"></param>
-        public Node(IEnvelope env, int level)
+        public Node(IExtents<TCoordinate> extents, Int32 level)
+            : base(extents)
         {
-            this.env = env;
-            this.level = level;
-            centre = new Coordinate();
-            centre.X = (env.MinX + env.MaxX) / 2;
-            centre.Y = (env.MinY + env.MaxY) / 2;
+            _level = level;
+            _center = Bounds.Center;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IEnvelope Envelope
+        protected override Boolean IsSearchMatch(IExtents<TCoordinate> query)
         {
-            get
-            {
-                return env;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <returns></returns>
-        protected override bool IsSearchMatch(IEnvelope searchEnv)
-        {
-            return env.Intersects(searchEnv);
+            return Intersects(query);
         }
 
         /// <summary> 
         /// Returns the subquad containing the envelope.
-        /// Creates the subquad if
-        /// it does not already exist.
+        /// Creates the subquad if it does not already exist.
         /// </summary>
-        /// <param name="searchEnv"></param>
-        public Node GetNode(IEnvelope searchEnv)
+        public Node<TCoordinate, TItem> GetNode(IExtents<TCoordinate> query)
         {
-            int subnodeIndex = GetSubnodeIndex(searchEnv, centre);            
+            Int32 subnodeIndex = GetSubnodeIndex(query, _center);
+
             // if subquadIndex is -1 searchEnv is not contained in a subquad
-            if (subnodeIndex != -1) 
+            if (subnodeIndex != -1)
             {
                 // create the quad if it does not exist
-                Node node = GetSubnode(subnodeIndex);
+                Node<TCoordinate, TItem> node = getSubnode(subnodeIndex);
                 // recursively search the found/created quad
-                return node.GetNode(searchEnv);
+                return node.GetNode(query);
             }
-            else return this;            
+            else
+            {
+                return this;
+            }
         }
 
         /// <summary>
-        /// Returns the smallest <i>existing</i>
-        /// node containing the envelope.
+        /// Returns the smallest <i>existing</i> node containing the envelope.
         /// </summary>
-        /// <param name="searchEnv"></param>
-        public NodeBase Find(IEnvelope searchEnv)
+        public BaseQuadNode<TCoordinate, TItem> Find(IExtents<TCoordinate> query)
         {
-            int subnodeIndex = GetSubnodeIndex(searchEnv, centre);
+            Int32 subnodeIndex = GetSubnodeIndex(query, _center);
+
             if (subnodeIndex == -1)
+            {
                 return this;
-            if (subnode[subnodeIndex] != null) 
+            }
+
+            if (ChildrenInternal[subnodeIndex] != null)
             {
                 // query lies in subquad, so search it
-                Node node = subnode[subnodeIndex];
-                return node.Find(searchEnv);
+                Node<TCoordinate, TItem> node = ChildrenInternal[subnodeIndex] as Node<TCoordinate, TItem>;
+                return node.Find(query);
             }
+
             // no existing subquad, so return this one anyway
             return this;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        public void InsertNode(Node node)
+        public void InsertNode(Node<TCoordinate, TItem> node)
         {
-            Assert.IsTrue(env == null || env.Contains(node.Envelope));        
-            int index = GetSubnodeIndex(node.env, centre);        
-            if (node.level == level - 1)             
-                subnode[index] = node;                    
-            else 
+            Assert.IsTrue(Bounds == null || Bounds.Contains(node.Bounds));
+            Int32 index = GetSubnodeIndex(node.Bounds, _center);
+
+            if (node._level == _level - 1)
+            {
+                ChildrenInternal[index] = node;
+            }
+            else
             {
                 // the quad is not a direct child, so make a new child quad to contain it
                 // and recursively insert the quad
-                Node childNode = CreateSubnode(index);
+                Node<TCoordinate, TItem> childNode = createSubnode(index);
                 childNode.InsertNode(node);
-                subnode[index] = childNode;
+                ChildrenInternal[index] = childNode;
             }
+        }
+
+        public override Boolean Intersects(IExtents<TCoordinate> bounds)
+        {
+            return Bounds.Intersects(bounds);
+        }
+
+        protected override IExtents<TCoordinate> ComputeBounds()
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
         /// Get the subquad for the index.
         /// If it doesn't exist, create it.
         /// </summary>
-        /// <param name="index"></param>
-        private Node GetSubnode(int index)
+        private Node<TCoordinate, TItem> getSubnode(Int32 index)
         {
-            if (subnode[index] == null) 
-                subnode[index] = CreateSubnode(index);            
-            return subnode[index];
+            if (ChildrenInternal[index] == null)
+            {
+                ChildrenInternal[index] = createSubnode(index);
+            }
+
+            return ChildrenInternal[index] as Node<TCoordinate, TItem>;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        private Node CreateSubnode(int index)
+        private Node<TCoordinate, TItem> createSubnode(Int32 index)
         {
             // create a new subquad in the appropriate quadrant
-            double minx = 0.0;
-            double maxx = 0.0;
-            double miny = 0.0;
-            double maxy = 0.0;
+            Double minx = 0.0;
+            Double maxx = 0.0;
+            Double miny = 0.0;
+            Double maxy = 0.0;
 
-            switch (index) 
+            switch (index)
             {
                 case 0:
-                    minx = env.MinX;
-                    maxx = centre.X;
-                    miny = env.MinY;
-                    maxy = centre.Y;
+                    minx = Bounds.GetMin(Ordinates.X);
+                    maxx = _center[Ordinates.X];
+                    miny = Bounds.GetMin(Ordinates.Y);
+                    maxy = _center[Ordinates.Y];
                     break;
 
                 case 1:
-                    minx = centre.X;
-                    maxx = env.MaxX;
-                    miny = env.MinY;
-                    maxy = centre.Y;
+                    minx = _center[Ordinates.X];
+                    maxx = Bounds.GetMax(Ordinates.X);
+                    miny = Bounds.GetMin(Ordinates.Y);
+                    maxy = _center[Ordinates.Y];
                     break;
 
                 case 2:
-                    minx = env.MinX;
-                    maxx = centre.X;
-                    miny = centre.Y;
-                    maxy = env.MaxY;
+                    minx = Bounds.GetMin(Ordinates.X);
+                    maxx = _center[Ordinates.X];
+                    miny = _center[Ordinates.Y];
+                    maxy = Bounds.GetMax(Ordinates.Y);
                     break;
 
                 case 3:
-                    minx = centre.X;
-                    maxx = env.MaxX;
-                    miny = centre.Y;
-                    maxy = env.MaxY;
+                    minx = _center[Ordinates.X];
+                    maxx = Bounds.GetMax(Ordinates.X);
+                    miny = _center[Ordinates.Y];
+                    maxy = Bounds.GetMax(Ordinates.Y);
                     break;
 
-	            default:
-		            break;
+                default:
+                    break;
             }
-            IEnvelope sqEnv = new Envelope(minx, maxx, miny, maxy);
-            Node node = new Node(sqEnv, level - 1);
+
+            IExtents<TCoordinate> sqEnv = new Extents<TCoordinate>(minx, maxx, miny, maxy);
+            Node<TCoordinate, TItem> node = new Node<TCoordinate, TItem>(sqEnv, _level - 1);
             return node;
         }
     }

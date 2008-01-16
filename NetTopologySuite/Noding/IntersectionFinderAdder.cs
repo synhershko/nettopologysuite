@@ -1,78 +1,79 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Index.Chain;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
     /// <summary>
-    /// Finds proper and interior intersections in a set of <see cref="SegmentString" />s,
+    /// Finds proper and interior intersections in a set of 
+    /// <see cref="NodedSegmentString{TCoordinate}" />s,
     /// and adds them as nodes.
     /// </summary>
-    public class IntersectionFinderAdder : ISegmentIntersector
+    public class IntersectionFinderAdder<TCoordinate> : ISegmentIntersector<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        private LineIntersector li = null;
-        private readonly IList interiorIntersections = null;
+        private readonly LineIntersector<TCoordinate> _li = null;
+        private readonly List<TCoordinate> _interiorIntersections = new List<TCoordinate>();
 
         /// <summary>
         /// Creates an intersection finder which finds all proper intersections.
         /// </summary>
-        /// <param name="li">The <see cref="LineIntersector" /> to use.</param>
-        public IntersectionFinderAdder(LineIntersector li)
+        /// <param name="li">The <see cref="LineIntersector{TCoordinate}" /> to use.</param>
+        public IntersectionFinderAdder(LineIntersector<TCoordinate> li)
         {
-            this.li = li;
-            interiorIntersections = new ArrayList();
+            _li = li;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IList InteriorIntersections
+        public IList<TCoordinate> InteriorIntersections
         {
-            get
-            {
-                return interiorIntersections;
-            }
+            get { return _interiorIntersections; }
         }
-   
+
         /// <summary>
         /// This method is called by clients
-        /// of the <see cref="ISegmentIntersector" /> class to process
-        /// intersections for two segments of the <see cref="SegmentString" />s being intersected.
-        /// Note that some clients (such as <see cref="MonotoneChain" />s) may optimize away
-        /// this call for segment pairs which they have determined do not intersect
-        /// (e.g. by an disjoint envelope test).
+        /// of the <see cref="ISegmentIntersector{TCoordinate}" /> class to process
+        /// intersections for two segments of the <see cref="NodedSegmentString{TCoordinate}" />s 
+        /// being intersected.
         /// </summary>
-        /// <param name="e0"></param>
-        /// <param name="segIndex0"></param>
-        /// <param name="e1"></param>
-        /// <param name="segIndex1"></param>
-        public void ProcessIntersections(SegmentString e0, int segIndex0, SegmentString e1, int segIndex1 )
+        /// <remarks>
+        /// Note that some clients (such as <see cref="MonotoneChain{TCoordinate}" />s) 
+        /// may optimize away this call for segment pairs which they have determined 
+        /// do not intersect (e.g. by an disjoint envelope test).
+        /// </remarks>
+        public void ProcessIntersections(NodedSegmentString<TCoordinate> e0, Int32 segIndex0, NodedSegmentString<TCoordinate> e1, Int32 segIndex1)
         {
             // don't bother intersecting a segment with itself
-            if (e0 == e1 && segIndex0 == segIndex1) 
-                return;
-
-            ICoordinate p00 = e0.Coordinates[segIndex0];
-            ICoordinate p01 = e0.Coordinates[segIndex0 + 1];
-            ICoordinate p10 = e1.Coordinates[segIndex1];
-            ICoordinate p11 = e1.Coordinates[segIndex1 + 1];
-            li.ComputeIntersection(p00, p01, p10, p11);            
-
-            if (li.HasIntersection)
+            if (e0 == e1 && segIndex0 == segIndex1)
             {
-                if (li.IsInteriorIntersection())
+                return;
+            }
+
+            LineSegment<TCoordinate> p0 = e0[segIndex0];
+            LineSegment<TCoordinate> p1 = e1[segIndex1];
+
+            Intersection<TCoordinate> intersection = _li.ComputeIntersection(p0, p1);
+
+            if (intersection.HasIntersection)
+            {
+                if (intersection.IsInteriorIntersection())
                 {
-                    for(int intIndex = 0; intIndex < li.IntersectionNum; intIndex++)
-                        interiorIntersections.Add(li.GetIntersection(intIndex));
-                    
-                    e0.AddIntersections(li, segIndex0, 0);
-                    e1.AddIntersections(li, segIndex1, 1);
+                    Int32 intersectionCount = (Int32) intersection.IntersectionType;
+
+                    for (Int32 intersectionIndex = 0; intersectionIndex < intersectionCount; intersectionIndex++)
+                    {
+                        TCoordinate intersectionPoint = intersection.GetIntersectionPoint(intersectionIndex);
+                        _interiorIntersections.Add(intersectionPoint);
+                    }
+
+                    e0.AddIntersections(intersection, segIndex0, 0);
+                    e1.AddIntersections(intersection, segIndex1, 1);
                 }
             }
         }

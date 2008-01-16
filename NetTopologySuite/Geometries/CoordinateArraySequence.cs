@@ -1,41 +1,50 @@
 using System;
 using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>
-    /// The <c>ICoordinateSequence</c> implementation that <c>Geometry</c>s use by default.
+    /// The <c>ICoordinateSequence</c> implementation that <see cref="Geometry{TCoordinate}"/>s use by default.
     /// In this implementation, Coordinates returned by ToArray and Coordinate are live --
     /// modifications to them are actually changing the
     /// CoordinateSequence's underlying data.
     /// </summary>
     [Serializable]
-    public class CoordinateArraySequence : ICoordinateSequence
-    {    
-        protected ICoordinate[] coordinates;
-       
+    public class CoordinateArraySequence<TCoordinate> : ICoordinateSequence<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<TCoordinate>, IConvertible
+    {
+        private TCoordinate[] _coordinates;
+
         /// <summary>
         /// Constructs a sequence based on the given array (the array is not copied).
         /// </summary>
         /// <param name="coordinates">The coordinate array that will be referenced.</param>
-        public CoordinateArraySequence(ICoordinate[] coordinates) 
+        public CoordinateArraySequence(TCoordinate[] coordinates)
         {
-            this.coordinates = coordinates;
+            _coordinates = coordinates;
+
             if (coordinates == null)
-                this.coordinates = new ICoordinate[0];
+            {
+                _coordinates = new TCoordinate[0];
+            }
         }
-        
+
         /// <summary>
         /// Constructs a sequence of a given size, populated with new Coordinates.
         /// </summary>
         /// <param name="size">The size of the sequence to create.</param>
-        public CoordinateArraySequence(int size) 
+        public CoordinateArraySequence(Int32 size)
         {
-            coordinates = new ICoordinate[size];
-            for (int i = 0; i < size; i++) 
-                coordinates[i] = new Coordinate();
+            _coordinates = new TCoordinate[size];
+
+            for (Int32 i = 0; i < size; i++)
+            {
+                _coordinates[i] = default(TCoordinate);
+            }
         }
 
         /// <summary>
@@ -45,32 +54,37 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         public CoordinateArraySequence(ICoordinateSequence coordSeq)
         {
             if (coordSeq != null)
-                 coordinates = new ICoordinate[coordSeq.Count];
-            else coordinates = new ICoordinate[0];
-            for (int i = 0; i < coordinates.Length; i++) 
-                coordinates[i] = coordSeq.GetCoordinateCopy(i);
+            {
+                _coordinates = new TCoordinate[coordSeq.Count];
+            }
+            else
+            {
+                _coordinates = new TCoordinate[0];
+            }
+
+            for (Int32 i = 0; i < _coordinates.Length; i++)
+            {
+                _coordinates[i] = coordSeq.GetCoordinateCopy(i);
+            }
         }
 
         /// <summary>
         /// Returns the dimension (number of ordinates in each coordinate) for this sequence.
         /// </summary>
         /// <value></value>
-        public int Dimension
+        public Int32 Dimension
         {
-            get
-            {
-                return 3;
-            }
+            get { return 3; }
         }
-        
+
         /// <summary>
         /// Get the Coordinate with index i.
         /// </summary>
         /// <param name="i">The index of the coordinate.</param>
         /// <returns>The requested Coordinate instance.</returns>
-        public ICoordinate GetCoordinate(int i) 
+        public ICoordinate GetCoordinate(Int32 i)
         {
-            return coordinates[i];
+            return _coordinates[i];
         }
 
         /// <summary>
@@ -78,9 +92,9 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         /// <param name="i">The index of the coordinate.</param>
         /// <returns>A copy of the requested Coordinate.</returns>
-        public virtual ICoordinate GetCoordinateCopy(int i) 
+        public virtual ICoordinate GetCoordinateCopy(Int32 i)
         {
-            return new Coordinate(coordinates[i]);
+            return new Coordinate(_coordinates[i]);
         }
 
         /// <summary>
@@ -89,34 +103,32 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         /// <param name="index">The index of the coordinate to copy.</param>
         /// <param name="coord">A Coordinate to receive the value.</param>
-        public void GetCoordinate(int index, ICoordinate coord) 
+        public void GetCoordinate(Int32 index, ICoordinate coord)
         {
-            coord.X = coordinates[index].X;
-            coord.Y = coordinates[index].Y;
+            coord.X = _coordinates[index].X;
+            coord.Y = _coordinates[index].Y;
         }
 
         /// <summary>
         /// Returns ordinate X (0) of the specified coordinate.
         /// </summary>
-        /// <param name="index"></param>
         /// <returns>
         /// The value of the X ordinate in the index'th coordinate.
         /// </returns>
-        public double GetX(int index) 
+        public Double GetX(Int32 index)
         {
-            return coordinates[index].X;
+            return _coordinates[index].X;
         }
 
         /// <summary>
         /// Returns ordinate Y (1) of the specified coordinate.
         /// </summary>
-        /// <param name="index"></param>
         /// <returns>
         /// The value of the Y ordinate in the index'th coordinate.
         /// </returns>
-        public double GetY(int index) 
+        public Double GetY(Int32 index)
         {
-            return coordinates[index].Y;
+            return _coordinates[index].Y;
         }
 
         /// <summary>
@@ -127,20 +139,19 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         /// <param name="index">The coordinate index in the sequence.</param>
         /// <param name="ordinate">The ordinate index in the coordinate (in range [0, dimension-1]).</param>
-        /// <returns></returns>
-        public double GetOrdinate(int index, Ordinates ordinate)
+        public Double GetOrdinate(Int32 index, Ordinates ordinate)
         {
-            switch (ordinate) 
+            switch (ordinate)
             {
-                case Ordinates.X:  
-                    return coordinates[index].X;
-                case Ordinates.Y:  
-                    return coordinates[index].Y;
-                case Ordinates.Z:  
-                    return coordinates[index].Z;
+                case Ordinates.X:
+                    return _coordinates[index].X;
+                case Ordinates.Y:
+                    return _coordinates[index].Y;
+                case Ordinates.Z:
+                    return _coordinates[index].Z;
                 default:
                     return Double.NaN;
-            }            
+            }
         }
 
         /// <summary>
@@ -150,30 +161,27 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         public virtual object Clone()
         {
             ICoordinate[] cloneCoordinates = GetClonedCoordinates();
-            return new CoordinateArraySequence(cloneCoordinates);
+            return new CoordinateArraySequence<TCoordinate>(cloneCoordinates);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected ICoordinate[] GetClonedCoordinates() 
+        protected ICoordinate[] GetClonedCoordinates()
         {
             ICoordinate[] cloneCoordinates = new ICoordinate[Count];
-            for (int i = 0; i < coordinates.Length; i++) 
-                cloneCoordinates[i] = (ICoordinate) coordinates[i].Clone();
+
+            for (Int32 i = 0; i < _coordinates.Length; i++)
+            {
+                cloneCoordinates[i] = (ICoordinate) _coordinates[i].Clone();
+            }
+
             return cloneCoordinates;
         }
 
         /// <summary>
         /// Returns the length of the coordinate sequence.
         /// </summary>
-        public int Count 
+        public Int32 Count
         {
-            get
-            {
-                return coordinates.Length;
-            }
+            get { return _coordinates.Length; }
         }
 
         /// <summary>
@@ -182,18 +190,18 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <param name="index">The coordinate index in the sequence.</param>
         /// <param name="ordinate">The ordinate index in the coordinate (in range [0, dimension-1]).</param>
         /// <param name="value">The new ordinate value.</param>
-        public void SetOrdinate(int index, Ordinates ordinate, double value)
+        public void SetOrdinate(Int32 index, Ordinates ordinate, Double value)
         {
-            switch (ordinate) 
+            switch (ordinate)
             {
-                case Ordinates.X:  
-                    coordinates[index].X = value;
+                case Ordinates.X:
+                    _coordinates[index].X = value;
                     break;
-                case Ordinates.Y: 
-                    coordinates[index].Y = value;
+                case Ordinates.Y:
+                    _coordinates[index].Y = value;
                     break;
-                case Ordinates.Z: 
-                    coordinates[index].Z = value;
+                case Ordinates.Z:
+                    _coordinates[index].Z = value;
                     break;
                 default:
                     throw new ArgumentException("invalid ordinate index: " + ordinate);
@@ -203,45 +211,217 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <summary>
         ///This method exposes the internal Array of Coordinate Objects.       
         /// </summary>
-        /// <returns></returns>
-        public ICoordinate[] ToCoordinateArray() 
+        public TCoordinate[] ToCoordinateArray()
         {
-            return coordinates;
+            return _coordinates;
         }
 
         /// <summary>
         /// Expands the given Envelope to include the coordinates in the sequence.
         /// Allows implementing classes to optimize access to coordinate values.
         /// </summary>
-        /// <param name="env">The envelope to expand.</param>
+        /// <param name="extents">The envelope to expand.</param>
         /// <returns>A reference to the expanded envelope.</returns>
-        public IEnvelope ExpandEnvelope(IEnvelope env)
+        public IExtents ExpandEnvelope(IExtents extents)
         {
-            for (int i = 0; i < coordinates.Length; i++ ) 
-                env.ExpandToInclude(coordinates[i]);            
-            return env;
+            foreach (TCoordinate coordinate in _coordinates)
+            {
+                extents.ExpandToInclude(coordinate);
+            }
+
+            return extents;
         }
 
         /// <summary>
         /// Returns the string representation of the coordinate array.
         /// </summary>
-        /// <returns></returns>
-        public override string ToString() 
+        public override string ToString()
         {
-            if (coordinates.Length > 0) 
+            if (_coordinates.Length > 0)
             {
-                StringBuilder strBuf = new StringBuilder(17 * coordinates.Length);
+                StringBuilder strBuf = new StringBuilder(17*_coordinates.Length);
                 strBuf.Append('(');
-                strBuf.Append(coordinates[0]);
-                for (int i = 1; i < coordinates.Length; i++) 
+                strBuf.Append(_coordinates[0]);
+
+                foreach (TCoordinate coordinate in _coordinates)
                 {
                     strBuf.Append(", ");
-                    strBuf.Append(coordinates[i]);
+                    strBuf.Append(coordinate);
                 }
+
                 strBuf.Append(')');
                 return strBuf.ToString();
-            } 
-            else return "()";
+            }
+            else
+            {
+                return "()";
+            }
         }
+
+        #region ICoordinateSequence<TCoordinate> Members
+
+        public TCoordinate[] ToArray()
+        {
+            throw new NotImplementedException();
+        }
+
+        public IExtents<TCoordinate> ExpandEnvelope(IExtents<TCoordinate> extents)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region IList<TCoordinate> Members
+
+        public int IndexOf(TCoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Insert(int index, TCoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveAt(int index)
+        {
+            throw new NotImplementedException();
+        }
+
+        public TCoordinate this[int index]
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        #endregion
+
+        #region ICollection<TCoordinate> Members
+
+        public void Add(TCoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Clear()
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Contains(TCoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void CopyTo(TCoordinate[] array, int arrayIndex)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool IsReadOnly
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public bool Remove(TCoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region IEnumerable<TCoordinate> Members
+
+        public System.Collections.Generic.IEnumerator<TCoordinate> GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region IEnumerable Members
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region ICoordinateSequence Members
+
+
+        ICoordinate[] ICoordinateSequence.ToArray()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region IList<ICoordinate> Members
+
+        public int IndexOf(ICoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Insert(int index, ICoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        ICoordinate System.Collections.Generic.IList<ICoordinate>.this[int index]
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        #endregion
+
+        #region ICollection<ICoordinate> Members
+
+        public void Add(ICoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Contains(ICoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void CopyTo(ICoordinate[] array, int arrayIndex)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Remove(ICoordinate item)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region IEnumerable<ICoordinate> Members
+
+        System.Collections.Generic.IEnumerator<ICoordinate> System.Collections.Generic.IEnumerable<ICoordinate>.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
     }
 }

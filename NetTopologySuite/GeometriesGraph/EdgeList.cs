@@ -1,13 +1,11 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.Collections.Generic;
 using System.IO;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Index;
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
@@ -15,9 +13,11 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
     /// A EdgeList is a list of Edges.  It supports locating edges
     /// that are pointwise equals to a target edge.
     /// </summary>
-    public class EdgeList
+    public class EdgeList<TCoordinate> : IList<Edge<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        private IList edges = new ArrayList();
+        private readonly List<Edge<TCoordinate>> _edges = new List<Edge<TCoordinate>>();
 
         /// <summary>
         /// An index of the edges, for fast lookup.
@@ -26,52 +26,48 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// An alternative would be to use an ordered set based on the values
         /// of the edge coordinates.
         /// </summary>
-        private ISpatialIndex index = new Quadtree();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeList() { }
+        private readonly ISpatialIndex<IExtents<TCoordinate>, Edge<TCoordinate>> _index 
+            = new Quadtree<TCoordinate, Edge<TCoordinate>>();
 
 
-        /// <summary>
-        /// Remove the selected Edge element from the list if present.
-        /// </summary>
-        /// <param name="e">Edge element to remove from list</param>
-        public void Remove(Edge e)
-        {
-            edges.Remove(e);
-        }
+        #region IList<Edge<TCoordinate>> Members
 
         /// <summary> 
         /// Insert an edge unless it is already in the list.
         /// </summary>
-        /// <param name="e"></param>
-        public void Add(Edge e)
+        public void Add(Edge<TCoordinate> e)
         {
-            edges.Add(e);
-            index.Insert(e.Envelope, e);
+            _edges.Add(e);
+            _index.Insert(e.Extents, e);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edgeColl"></param>
-        public void AddAll(ICollection edgeColl)
+        public void AddRange(IEnumerable<Edge<TCoordinate>> edges)
         {
-            for (IEnumerator i = edgeColl.GetEnumerator(); i.MoveNext(); ) 
-                Add((Edge) i.Current);
-            
+            _edges.AddRange(edges);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IList Edges
+        public int IndexOf(Edge<TCoordinate> item)
         {
-            get
+            return _edges.IndexOf(item);
+        }
+
+        public void Insert(int index, Edge<TCoordinate> item)
+        {
+            throw new NotSupportedException();
+        }
+
+        public void RemoveAt(int index)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        public void RemoveRange(IEnumerable<Edge<TCoordinate>> items)
+        {
+            foreach (Edge<TCoordinate> item in items)
             {
-                return edges;
+                Remove(item);
             }
         }
 
@@ -80,95 +76,140 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// If there is an edge equal to e already in the list, return it.
         /// Otherwise return null.
         /// </summary>
-        /// <param name="e"></param>
         /// <returns>  
         /// equal edge, if there is one already in the list,
         /// null otherwise.
         /// </returns>
-        public Edge FindEqualEdge(Edge e)
+        public Edge<TCoordinate> FindEqualEdge(Edge<TCoordinate> e)
         {
-            ICollection testEdges = index.Query(e.Envelope);
-            for (IEnumerator i = testEdges.GetEnumerator(); i.MoveNext(); ) 
+            IEnumerable<Edge<TCoordinate>> result = _index.Query(e.Extents);
+
+            foreach (Edge<TCoordinate> edge in result)
             {
-                Edge testEdge = (Edge) i.Current;
-                if (testEdge.Equals(e)) 
-                    return testEdge;
+                if (edge.Equals(e))
+                {
+                    return edge;
+                }
             }
+
             return null;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public IEnumerator GetEnumerator() 
-        { 
-            return edges.GetEnumerator(); 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        public Edge this[int index]
+        public Edge<TCoordinate> this[Int32 index]
         {
-            get
-            {
-                return Get(index);
-            }            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public Edge Get(int i) 
-        {
-            return (Edge) edges[i]; 
+            get { return _edges[index]; }
+            set { throw new NotSupportedException(); }
         }
 
         /// <summary>
         /// If the edge e is already in the list, return its index.
         /// </summary>
-        /// <param name="e"></param>
         /// <returns>  
         /// Index, if e is already in the list,
         /// -1 otherwise.
         /// </returns>
-        public int FindEdgeIndex(Edge e)
+        public Int32 FindEdgeIndex(Edge<TCoordinate> e)
         {
-            for (int i = 0; i < edges.Count; i++)
-                if (((Edge) edges[i]).Equals(e))
-                    return i;            
-            return -1;
+            return _edges.FindIndex(delegate(Edge<TCoordinate> match)
+                                    {
+                                        return e == match;
+                                    });
         }
 
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
         public void Write(StreamWriter outstream)
         {
             outstream.Write("MULTILINESTRING ( ");
-            for (int j = 0; j < edges.Count; j++) 
+
+            Boolean pastFirstEdge = false;
+
+            foreach (Edge<TCoordinate> e in _edges)
             {
-                Edge e = (Edge) edges[j];
-                if (j > 0) 
-                    outstream.Write(",");
-                outstream.Write("(");
-                ICoordinate[] pts = e.Coordinates;
-                for (int i = 0; i < pts.Length; i++)
+                if (pastFirstEdge)
                 {
-                    if (i > 0) 
-                        outstream.Write(",");
-                    outstream.Write(pts[i].X + " " + pts[i].Y);
+                    outstream.Write(",");
                 }
+                else
+                {
+                    pastFirstEdge = true;
+                }
+
+                outstream.Write("(");
+
+                Boolean pastFirstCoordinate = false;
+
+                foreach (TCoordinate coordinate in e.Coordinates)
+                {
+                    if (pastFirstCoordinate)
+                    {
+                        outstream.Write(",");
+                    }
+                    else
+                    {
+                        pastFirstCoordinate = true;
+                    }
+
+                    outstream.Write(coordinate[Ordinates.X] + " " + coordinate[Ordinates.Y]);
+                }
+
                 outstream.WriteLine(")");
             }
+
             outstream.Write(")  ");
         }
+
+        #region ICollection<Edge<TCoordinate>> Members
+
+        public void Clear()
+        {
+            _edges.Clear();
+        }
+
+        public Boolean Contains(Edge<TCoordinate> item)
+        {
+            return _edges.Contains(item);
+        }
+
+        public void CopyTo(Edge<TCoordinate>[] array, Int32 arrayIndex)
+        {
+            _edges.CopyTo(array, arrayIndex);
+        }
+
+        public Int32 Count
+        {
+            get { return _edges.Count; }
+        }
+
+        public Boolean IsReadOnly
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// Remove the selected Edge element from the list if present.
+        /// </summary>
+        /// <param name="e">Edge element to remove from list.</param>
+        public Boolean Remove(Edge<TCoordinate> e)
+        {
+            return _edges.Remove(e);
+        }
+
+        #endregion
+
+        #region IEnumerable<Edge<TCoordinate>> Members
+
+        public IEnumerator<Edge<TCoordinate>> GetEnumerator()
+        {
+            return _edges.GetEnumerator();
+        }
+        #endregion
+
+        #region IEnumerable Members
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return _edges.GetEnumerator();
+        }
+
+        #endregion
     }
 }

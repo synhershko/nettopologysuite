@@ -1,28 +1,26 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
     /// <summary>
-    /// Computes the intersections between two line segments in <see cref="SegmentString" />s
+    /// Computes the intersections between two line segments in <see cref="NodedSegmentString{TCoordinate}" />s
     /// and adds them to each string.
-    /// The <see cref="ISegmentIntersector" /> is passed to a <see cref="INoder" />.
-    /// The <see cref="SegmentString.AddIntersections" />  method is called whenever the <see cref="INoder" />
-    /// detects that two <see cref="SegmentString" /> s might intersect.
+    /// The <see cref="ISegmentIntersector{TCoordinate}" /> is passed to a <see cref="INoder{TCoordinate}" />.
+    /// The <see cref="NodedSegmentString{TCoordinate}.AddIntersections" />  method is called whenever the <see cref="INoder{TCoordinate}" />
+    /// detects that two <see cref="NodedSegmentString{TCoordinate}" /> s might intersect.
     /// This class is an example of the Strategy pattern.
     /// </summary>
-    public interface ISegmentIntersector
+    public interface ISegmentIntersector<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
         /// This method is called by clients
-        /// of the <see cref="ISegmentIntersector" /> interface to process
-        /// intersections for two segments of the <see cref="SegmentString" />s being intersected.
+        /// of the <see cref="ISegmentIntersector{TCoordinate}" /> interface to process
+        /// intersections for two segments of the <see cref="NodedSegmentString{TCoordinate}" />s being intersected.
         /// </summary>
-        /// <param name="e0"></param>
-        /// <param name="segIndex0"></param>
-        /// <param name="e1"></param>
-        /// <param name="segIndex1"></param>
-        void ProcessIntersections(SegmentString e0, int segIndex0, SegmentString e1, int segIndex1);
+        void ProcessIntersections(NodedSegmentString<TCoordinate> e0, Int32 segIndex0, NodedSegmentString<TCoordinate> e1, Int32 segIndex1);
     }
 }

@@ -1,10 +1,9 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Utilities
 {
@@ -13,289 +12,245 @@ namespace GisSharpBlog.NetTopologySuite.Utilities
     /// Allows various ways of specifying the location and extent of the shapes,
     /// as well as number of line segments used to form them.
     /// </summary>
-    public class GeometricShapeFactory
+    public class GeometricShapeFactory<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private GeometryFactory geomFact;
-        private Dimensions dim = new Dimensions();
-        private int nPts = 100;
+        private readonly GeometryFactory<TCoordinate> _geometryFactory;
+        private readonly Dimensions _dim = new Dimensions();
+        private Int32 _pointCount = 100;
 
         /// <summary>
         /// Create a shape factory which will create shapes using the default GeometryFactory.
         /// </summary>
-        public GeometricShapeFactory() : this(new GeometryFactory()) { }
+        public GeometricShapeFactory() : this(new GeometryFactory<TCoordinate>()) { }
 
         /// <summary>
         /// Create a shape factory which will create shapes using the given GeometryFactory.
         /// </summary>
         /// <param name="geomFact">The factory to use.</param>
-        public GeometricShapeFactory(GeometryFactory geomFact)
+        public GeometricShapeFactory(GeometryFactory<TCoordinate> geomFact)
         {
-            this.geomFact = geomFact;
+            _geometryFactory = geomFact;
         }
 
         /// <summary>
-        /// Gets/Sets the location of the shape by specifying the base coordinate
-        /// (which in most cases is the
-        /// lower left point of the envelope containing the shape).
+        /// Gets or sets the location of the shape by specifying the base coordinate
+        /// (which in most cases is the lower left point of the envelope containing the shape).
         /// </summary>
-        public ICoordinate Base  
+        public TCoordinate Base
         {
-            get
-            {
-                return dim.Base;
-            }
-            set
-            {
-                dim.Base = value;
-            }
+            get { return _dim.Base; }
+            set { _dim.Base = value; }
         }
 
         /// <summary>
-        /// Gets/Sets the location of the shape by specifying the centre of
+        /// Gets or sets the location of the shape by specifying the center of
         /// the shape's bounding box.
         /// </summary>
-        public ICoordinate Centre
+        public TCoordinate Center
         {
-            get
-            {
-                return dim.Centre;
-            }
-            set
-            {
-                dim.Centre = value;
-            }
+            get { return _dim.Center; }
+            set { _dim.Center = value; }
         }
 
         /// <summary>
-        /// Gets/Sets the total number of points in the created Geometry.
+        /// Gets or sets the total number of points in the created Geometry.
         /// </summary>
-        public int NumPoints
+        public Int32 PointCount
         {
-            get
-            {
-                return nPts;
-            }
-            set
-            {
-                nPts = value;
-            }
+            get { return _pointCount; }
+            set { _pointCount = value; }
         }
 
         /// <summary>
         /// Gets/Sets the size of the extent of the shape in both x and y directions.        
         /// </summary>                
-        public double Size
+        public Double Size
         {
-            get
-            {
-                return dim.Size;
-            }
-            set
-            {
-                dim.Size = value;
-            }
+            get { return _dim.Size; }
+            set { _dim.Size = value; }
         }
 
         /// <summary>
         /// Gets/Sets the width of the shape.
         /// </summary>
-        public double Width
+        public Double Width
         {
-            get
-            {
-                return dim.Width;
-            }
-            set
-            {
-                dim.Width = value;
-            }
+            get { return _dim.Width; }
+            set { _dim.Width = value; }
         }
 
         /// <summary>
         /// Gets/Sets the height of the shape.
         /// </summary>
-        public double Height
+        public Double Height
         {
-            get
-            {
-                return dim.Height;
-            }
-            set
-            {
-                dim.Height = value;
-            }
+            get { return _dim.Height; }
+            set { _dim.Height = value; }
         }
 
         /// <summary>
-        /// Creates a rectangular <c>Polygon</c>.
+        /// Creates a rectangular <see cref="Polygon{TCoordinate}" />.
         /// </summary>
         /// <returns>A rectangular polygon.</returns>
-        public IPolygon CreateRectangle()
+        public IPolygon<TCoordinate> CreateRectangle()
         {
-            int i;
-            int ipt = 0;
-            int nSide = nPts / 4;
-            if (nSide < 1) nSide = 1;
-            double XsegLen = dim.Envelope.Width / nSide;
-            double YsegLen = dim.Envelope.Height / nSide;
+            Int32 i;
+            Int32 ipt = 0;
+            Int32 nSide = _pointCount / 4;
 
-            ICoordinate[] pts = new ICoordinate[4 * nSide + 1];
-            IEnvelope env = dim.Envelope;            
+            if (nSide < 1)
+            {
+                nSide = 1;
+            }
 
-            for (i = 0; i < nSide; i++) 
-            {
-                double x = env.MinX + i * XsegLen;
-                double y = env.MinY;
-                pts[ipt++] = new Coordinate(x, y);
-            }
-            for (i = 0; i < nSide; i++) 
-            {
-                double x = env.MaxX;
-                double y = env.MinY + i * YsegLen;
-                pts[ipt++] = new Coordinate(x, y);
-            }
-            for (i = 0; i < nSide; i++) 
-            {
-                double x = env.MaxX - i * XsegLen;
-                double y = env.MaxY;
-                pts[ipt++] = new Coordinate(x, y);
-            }
-            for (i = 0; i < nSide; i++) 
-            {
-                double x = env.MinX;
-                double y = env.MaxY - i * YsegLen;
-                pts[ipt++] = new Coordinate(x, y);
-            }
-            pts[ipt++] = new Coordinate(pts[0]);
+            Double xSegLen = _dim.Extents.Width / nSide;
+            Double ySegLen = _dim.Extents.Height / nSide;
 
-            ILinearRing ring = geomFact.CreateLinearRing(pts);
-            IPolygon poly = geomFact.CreatePolygon(ring, null);
+            TCoordinate[] pts = new TCoordinate[4 * nSide + 1];
+            Extents<TCoordinate> extents = _dim.Extents;
+
+            for (i = 0; i < nSide; i++)
+            {
+                Double x = extents.Min[Ordinates.X] + i * xSegLen;
+                Double y = extents.Min[Ordinates.Y];
+                pts[ipt++] = _geometryFactory.CoordinateFactory.Create(x, y);
+            }
+
+            for (i = 0; i < nSide; i++)
+            {
+                Double x = extents.Max[Ordinates.X];
+                Double y = extents.Min[Ordinates.Y] + i * ySegLen;
+                pts[ipt++] = _geometryFactory.CoordinateFactory.Create(x, y);
+            }
+
+            for (i = 0; i < nSide; i++)
+            {
+                Double x = extents.Max[Ordinates.X] - i * xSegLen;
+                Double y = extents.Max[Ordinates.Y];
+                pts[ipt++] = _geometryFactory.CoordinateFactory.Create(x, y);
+            }
+
+            for (i = 0; i < nSide; i++)
+            {
+                Double x = extents.Min[Ordinates.X];
+                Double y = extents.Max[Ordinates.Y] - i * ySegLen;
+                pts[ipt++] = _geometryFactory.CoordinateFactory.Create(x, y);
+            }
+
+            pts[ipt++] = _geometryFactory.CoordinateFactory.Create(pts[0]);
+
+            ILinearRing<TCoordinate> ring = _geometryFactory.CreateLinearRing(pts);
+            IPolygon<TCoordinate> poly = _geometryFactory.CreatePolygon(ring, null);
             return poly;
         }
 
         /// <summary>
-        /// Creates a circular <c>Polygon</c>.
+        /// Creates a circular <see cref="Polygon{TCoordinate}" />.
         /// </summary>
         /// <returns>A circular polygon.</returns>
-        public IPolygon CreateCircle()
+        public IPolygon<TCoordinate> CreateCircle()
         {
-            IEnvelope env = dim.Envelope;
-            double xRadius = env.Width / 2.0;
-            double yRadius = env.Height / 2.0;
+            Extents<TCoordinate> extents = _dim.Extents;
+            Double xRadius = extents.Width / 2.0;
+            Double yRadius = extents.Height / 2.0;
 
-            double centreX = env.MinX + xRadius;
-            double centreY = env.MinY + yRadius;
+            Double centerX = extents.Min[Ordinates.X] + xRadius;
+            Double centerY = extents.Min[Ordinates.Y] + yRadius;
 
-            ICoordinate[] pts = new ICoordinate[nPts + 1];
-            int iPt = 0;
-            for (int i = 0; i < nPts; i++) 
+            TCoordinate[] pts = new TCoordinate[_pointCount + 1];
+            Int32 iPt = 0;
+
+            for (Int32 i = 0; i < _pointCount; i++)
             {
-                double ang = i * (2 * Math.PI / nPts);
-                double x = xRadius * Math.Cos(ang) + centreX;
-                double y = yRadius * Math.Sin(ang) + centreY;
-                ICoordinate pt = new Coordinate(x, y);
+                Double ang = i * (2 * Math.PI / _pointCount);
+                Double x = xRadius * Math.Cos(ang) + centerX;
+                Double y = yRadius * Math.Sin(ang) + centerY;
+                TCoordinate pt = _geometryFactory.CoordinateFactory.Create(x, y);
                 pts[iPt++] = pt;
             }
+
             pts[iPt] = pts[0];
 
-            ILinearRing ring = geomFact.CreateLinearRing(pts);
-            IPolygon poly = geomFact.CreatePolygon(ring, null);
+            ILinearRing<TCoordinate> ring = _geometryFactory.CreateLinearRing(pts);
+            IPolygon<TCoordinate> poly = _geometryFactory.CreatePolygon(ring, null);
             return poly;
         }
 
         /// <summary>
-        /// Creates a elliptical arc, as a LineString.
+        /// Creates a elliptical arc, as a <see cref="ILineString{TCoordinate}"/>.
         /// </summary>
-        /// <param name="startAng"></param>
-        /// <param name="endAng"></param>
-        /// <returns></returns>
-        public ILineString CreateArc(double startAng, double endAng)
+        public ILineString<TCoordinate> CreateArc(Double startAng, Double endAng)
         {
-            IEnvelope env = dim.Envelope;
-            double xRadius = env.Width / 2.0;
-            double yRadius = env.Height / 2.0;
+            Extents<TCoordinate> extents = _dim.Extents;
 
-            double centreX = env.MinX + xRadius;
-            double centreY = env.MinY + yRadius;
+            Double xRadius = extents.Width / 2.0;
+            Double yRadius = extents.Height / 2.0;
 
-            double angSize = (endAng - startAng);
+            Double centerX = extents.Min[Ordinates.X] + xRadius;
+            Double centerY = extents.Min[Ordinates.Y] + yRadius;
+
+            Double angSize = (endAng - startAng);
+
             if (angSize <= 0.0 || angSize > 2 * Math.PI)
-                angSize = 2 * Math.PI;
-            double angInc = angSize / nPts;
-
-            ICoordinate[] pts = new ICoordinate[nPts];
-            int iPt = 0;
-            for (int i = 0; i < nPts; i++) 
             {
-                double ang = startAng + i * angInc;
-                double x = xRadius * Math.Cos(ang) + centreX;
-                double y = yRadius * Math.Sin(ang) + centreY;
-                ICoordinate pt = new Coordinate(x, y);
-                geomFact.PrecisionModel.MakePrecise( pt);
+                angSize = 2 * Math.PI;
+            }
+
+            Double angInc = angSize / _pointCount;
+
+            TCoordinate[] pts = new TCoordinate[_pointCount];
+            Int32 iPt = 0;
+
+            for (Int32 i = 0; i < _pointCount; i++)
+            {
+                Double ang = startAng + i * angInc;
+                Double x = xRadius * Math.Cos(ang) + centerX;
+                Double y = yRadius * Math.Sin(ang) + centerY;
+                TCoordinate pt = _geometryFactory.CoordinateFactory.Create(x, y);
+                pt = _geometryFactory.PrecisionModel.MakePrecise(pt);
                 pts[iPt++] = pt;
             }
-            ILineString line = geomFact.CreateLineString(pts);
+
+            ILineString<TCoordinate> line = _geometryFactory.CreateLineString(pts);
             return line;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         private class Dimensions
         {
-            private ICoordinate basecoord;
+            private TCoordinate _base;
+            private TCoordinate _center;
+            private Double _width;
+            private Double _height;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            public ICoordinate Base
+            public TCoordinate Base
             {
-                get { return basecoord; }
-                set { basecoord = value; }
+                get { return _base; }
+                set { _base = value; }
             }
 
-            private ICoordinate centre;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public ICoordinate Centre
+            public TCoordinate Center
             {
-                get { return centre; }
-                set { centre = value; }
+                get { return _center; }
+                set { _center = value; }
             }
 
-            private double width;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public double Width
+            public Double Width
             {
-                get { return width; }
-                set { width = value; }
+                get { return _width; }
+                set { _width = value; }
             }
 
-            private double height;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public double Height
+            public Double Height
             {
-                get { return height; }
-                set { height = value; }
-            }                                  
+                get { return _height; }
+                set { _height = value; }
+            }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            public double Size
+            public Double Size
             {
-                get
-                {
-                    return Math.Max(Width, Height);
-                }
+                get { return Math.Max(Width, Height); }
                 set
                 {
                     Height = value;
@@ -303,19 +258,24 @@ namespace GisSharpBlog.NetTopologySuite.Utilities
                 }
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            public IEnvelope Envelope
+            public Extents<TCoordinate> Extents
             {
                 get
                 {
-                    if (Base != null)
-                        return new Envelope(Base.X, Base.X + Width, Base.Y, Base.Y + Height);                    
-                    if (Centre != null)
-                        return new Envelope(Centre.X - Width / 2, Centre.X + Width / 2,
-                                            Centre.Y - Height / 2, Centre.Y + Height / 2);                    
-                    return new Envelope(0, Width, 0, Height);
+                    if (!Coordinates<TCoordinate>.IsEmpty(Base))
+                    {
+                        Double x = Base[Ordinates.X], y = Base[Ordinates.Y];
+                        return new Extents<TCoordinate>(x, x + Width, y, y + Height);
+                    }
+
+                    if (!Coordinates<TCoordinate>.IsEmpty(Center))
+                    {
+                        Double x = Center[Ordinates.X], y = Center[Ordinates.Y];
+                        return new Extents<TCoordinate>(x - Width / 2, x + Width / 2,
+                                                        y - Height / 2, y + Height / 2);
+                    }
+
+                    return new Extents<TCoordinate>(0, Width, 0, Height);
                 }
             }
         }

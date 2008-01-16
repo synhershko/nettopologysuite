@@ -1,65 +1,48 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
     /// <summary>
-    /// A LineSegment which is tagged with its location in a <c>Geometry</c>.
+    /// A LineSegment which is tagged with its location in a <see cref="Geometry{TCoordinate}"/>.
     /// Used to index the segments in a point and recover the segment locations
     /// from the index.
     /// </summary>
-    public class TaggedLineSegment : LineSegment
+    public class TaggedLineSegment<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<TCoordinate>, IConvertible
     {
-        private IGeometry parent;
-        private int index;
+        private readonly LineSegment<TCoordinate> _segment;
+        private readonly IGeometry<TCoordinate> _parent;
+        private readonly Int32 _index;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <param name="parent"></param>
-        /// <param name="index"></param>
-        public TaggedLineSegment(ICoordinate p0, ICoordinate p1, IGeometry parent, int index)
-            : base(p0, p1)
-        {            
-            this.parent = parent;
-            this.index = index;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        public TaggedLineSegment(ICoordinate p0, ICoordinate p1) 
-            : this(p0, p1, null, -1) { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public IGeometry Parent
+        public TaggedLineSegment(TCoordinate p0, TCoordinate p1, IGeometry<TCoordinate> parent, Int32 index)
         {
-            get
-            {
-                return parent;
-            }
+            _segment = new LineSegment<TCoordinate>(p0, p1);
+            _parent = parent;
+            _index = index;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int Index
+        public TaggedLineSegment(TCoordinate p0, TCoordinate p1)
+            : this(p0, p1, null, -1) {}
+
+        public IGeometry<TCoordinate> Parent
         {
-            get
-            {
-                return index;
-            }
+            get { return _parent; }
         }
+
+        public Int32 Index
+        {
+            get { return _index; }
+        }
+
+        public LineSegment<TCoordinate> LineSegment
+        {
+            get { return _segment; }
+        }
+        
     }
 }

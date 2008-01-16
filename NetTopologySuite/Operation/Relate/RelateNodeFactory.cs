@@ -1,27 +1,22 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GeoAPI.Coordinates;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
     /// <summary>
-    /// Used by the <c>NodeMap</c> in a <c>RelateNodeGraph</c> to create <c>RelateNode</c>s.
+    /// Used by the <see cref="NodeMap{TCoordinate}"/> in a 
+    /// <see cref="RelateNodeGraph{TCoordinate}"/> to create 
+    /// <see cref="RelateNode{TCoordinate}"/>s.
     /// </summary>
-    public class RelateNodeFactory : NodeFactory
+    public class RelateNodeFactory<TCoordinate> : NodeFactory<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="coord"></param>
-        /// <returns></returns>
-        public override Node CreateNode(ICoordinate coord)
+        public override Node<TCoordinate> CreateNode(TCoordinate coord)
         {
-            return new RelateNode(coord, new EdgeEndBundleStar());
+            return new RelateNode<TCoordinate>(coord, new EdgeEndBundleStar<TCoordinate>());
         }
     }
 }

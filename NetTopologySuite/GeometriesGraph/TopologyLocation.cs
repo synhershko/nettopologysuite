@@ -5,306 +5,268 @@ using GeoAPI.Geometries;
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary> 
-    /// A TopologyLocation is the labelling of a
-    /// GraphComponent's topological relationship to a single Geometry.
-    /// If the parent component is an area edge, each side and the edge itself
+    /// A <see cref="TopologyLocation"/> is the labeling of a
+    /// <see cref="GraphComponent{TCoordinate}"/>'s topological relationship 
+    /// to a single <see cref="IGeometry"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// If the labeled component is an area edge, each side and the edge itself
     /// have a topological location.  These locations are named:
     ///  On: on the edge
     ///  Left: left-hand side of the edge
     ///  Right: right-hand side
-    /// If the parent component is a line edge or node, there is a single
+    /// </para>
+    /// <para>
+    /// If the labeled component is a line edge or node, there is a single
     /// topological relationship attribute, On.
     /// The possible values of a topological location are
     /// { Location.Null, Location.Exterior, Location.Boundary, Location.Interior } 
-    /// The labelling is stored in an array location[j] where
+    /// The labeling is stored in an array location[j] where
     /// where j has the values On, Left, Right.
-    /// </summary>
-    public class TopologyLocation 
+    /// </para>
+    /// </remarks>
+    public struct TopologyLocation : IEquatable<TopologyLocation>
     {
-        private Locations[] location;
+        private static readonly Int32 AllLocationsNull =
+            ((SByte) Locations.None) << 16 |
+            ((SByte)Locations.None) << 8 |
+            (SByte)Locations.None;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="location"></param>
-        public TopologyLocation(Locations[] location)
-        {
-            Init(location.Length);
-        }
+        private static readonly Int32 OnOffset = 16;
+        private static readonly Int32 LeftOffset = 8;
+        private static readonly Int32 RightOffset = 0;
+
+        private static readonly UInt32 OnMask = 0xFF00FFFF;
+        private static readonly UInt32 LeftMask = 0xFFFF00FF;
+        private static readonly UInt32 RightMask = 0xFFFFFF00;
+
+        public static readonly TopologyLocation None = new TopologyLocation(AllLocationsNull);
+
+        private Int32 _locations;
 
         /// <summary> 
         /// Constructs a TopologyLocation specifying how points on, to the left of, and to the
-        /// right of some GraphComponent relate to some Geometry. Possible values for the
-        /// parameters are Location.Null, Location.Exterior, Location.Boundary, 
-        /// and Location.Interior.
-        /// </summary>        
-        /// <param name="on"></param>
-        /// <param name="left"></param>
-        /// <param name="right"></param>
-        public TopologyLocation(Locations on, Locations left, Locations right) 
+        /// right of some GraphComponent relate to some Geometry.
+        /// </summary>
+        public TopologyLocation(Locations on, Locations left, Locations right)
         {
-            Init(3);
-            location[(int) Positions.On] = on;
-            location[(int) Positions.Left] = left;
-            location[(int) Positions.Right] = right;
+            _locations = AllLocationsNull;
+            setLocation(Positions.On, on);
+            setLocation(Positions.Left, left);
+            setLocation(Positions.Right, right);
+        }
+
+        public TopologyLocation(Locations on)
+        {
+            _locations = AllLocationsNull;
+            setLocation(Positions.On, on);
+        }
+
+        public TopologyLocation(TopologyLocation other)
+        {
+            _locations = other._locations;
+        }
+
+        public TopologyLocation(TopologyLocation other, Positions position, Locations location)
+        {
+            _locations = other._locations;
+            setLocation(position, location);
+        }
+
+        private TopologyLocation(Int32 locations)
+        {
+            _locations = locations;
         }
 
         /// <summary>
-        /// 
+        /// Gets the <see cref="Locations"/> value at the 
+        /// given <see cref="Positions"/> value.
         /// </summary>
-        /// <param name="on"></param>
-        public TopologyLocation(Locations on) 
+        public Locations this[Positions positionIndex]
         {
-            Init(1);
-            location[(int) Positions.On] = on;
+            get 
+            {
+                switch (positionIndex)
+                {
+                    case Positions.On:
+                        return On;
+                    case Positions.Left:
+                        return Left;
+                    case Positions.Right:
+                        return Right;
+                    case Positions.Parallel:
+                    default:
+                        return Locations.None;
+                }
+            }
         }
 
         /// <summary>
-        /// 
+        /// Gets <see langword="true"/> if all locations are 
+        /// <see cref="Locations.None"/>.
         /// </summary>
-        /// <param name="gl"></param>
-        public TopologyLocation(TopologyLocation gl) 
-        {
-            if (gl == null)
-                throw new ArgumentNullException("gl", "null topology location specified");
-
-            Init(gl.location.Length);
-            for (int i = 0; i < location.Length; i++) 
-                location[i] = gl.location[i];                            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="size"></param>
-        private void Init(int size)
-        {
-            location = new Locations[size];
-            SetAllLocations(Locations.Null);
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public  Locations Get(Positions posIndex)
-        {
-            int index = (int)posIndex;
-            if (index < location.Length)
-                return location[index];
-            return Locations.Null;
-        }
-
-        /// <summary>
-        /// Get calls Get(Positions posIndex),
-        /// Set calls SetLocation(Positions locIndex, Locations locValue)
-        /// </summary>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public  Locations this[Positions posIndex]
+        public Boolean IsNull
         {
             get
             {
-                return Get(posIndex);
-            }
-            set
-            {
-                SetLocation(posIndex, value);
+                return _locations == AllLocationsNull;
             }
         }
 
-        /// <returns>
-        /// <c>true</c> if all locations are Null.
-        /// </returns>
-        public  bool IsNull
+        /// <summary>
+        /// Gets <see langword="true"/> if any locations are 
+        /// <see cref="Locations.None"/>.
+        /// </summary>
+        public Boolean AreAnyNull
         {
             get
             {
-                for (int i = 0; i < location.Length; i++)
-                    if (location[i] != Locations.Null) 
-                        return false;
-                return true;
+                return On == Locations.None ||
+                       Left == Locations.None ||
+                       Right == Locations.None;
             }
         }
 
-        /// <returns> 
-        /// <c>true</c> if any locations are Null.
-        /// </returns>
-        public  bool IsAnyNull
+        public Boolean IsEqualOnSide(TopologyLocation location, Positions position)
+        {
+            return this[position] == location[position];
+        }
+
+        public Boolean IsArea
         {
             get
             {
-                for (int i = 0; i < location.Length; i++)
-                    if (location[i] == Locations.Null) 
-                        return true;
-                return false;
+                return Left != Locations.None || 
+                       Right != Locations.None;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="le"></param>
-        /// <param name="locIndex"></param>
-        /// <returns></returns>
-        public  bool IsEqualOnSide(TopologyLocation le, int locIndex)
-        {
-            return location[locIndex] == le.location[locIndex];
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public  bool IsArea
+        public Boolean IsLine
         {
             get
             {
-                return location.Length > 1;
+                return Left == Locations.None &&
+                       Right == Locations.None;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  bool IsLine
+        public TopologyLocation Flip()
+        {
+            if (IsLine)
+            {
+                return this;
+            }
+
+            Locations left = Left;
+            Locations right = Right;
+            return new TopologyLocation(On, right, left);
+        }
+
+        public Locations On
         {
             get
             {
-                return location.Length == 1;
+                return (Locations)(SByte)(_locations >> OnOffset);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  void Flip()
+        public Locations Left
         {
-            if (location.Length <= 1) 
-                return;
-            Locations temp = location[(int)Positions.Left];
-            location[(int)Positions.Left] = location[(int)Positions.Right];
-            location[(int)Positions.Right] = temp;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="locValue"></param>
-        public  void SetAllLocations(Locations locValue)
-        {
-            for (int i = 0; i < location.Length; i++) 
-                location[i] = locValue;            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="locValue"></param>
-        public  void SetAllLocationsIfNull(Locations locValue)
-        {
-            for (int i = 0; i < location.Length; i++) 
-                if (location[i] == Locations.Null) 
-                    location[i] = locValue;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="locIndex"></param>
-        /// <param name="locValue"></param>
-        public  void SetLocation(Positions locIndex, Locations locValue)
-        {
-            location[(int)locIndex] = locValue;            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="locValue"></param>
-        public  void SetLocation(Locations locValue)
-        {
-            SetLocation(Positions.On, locValue);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public  Locations[] GetLocations() 
-        {
-            return location; 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="on"></param>
-        /// <param name="left"></param>
-        /// <param name="right"></param>
-        public  void SetLocations(Locations on, Locations left, Locations right) 
-        {
-            location[(int)Positions.On] = on;
-            location[(int)Positions.Left] = left;
-            location[(int)Positions.Right] = right;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="gl"></param>
-        public  void SetLocations(TopologyLocation gl) 
-        {
-            for (int i = 0; i < gl.location.Length; i++) 
-                location[i] = gl.location[i];            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="loc"></param>
-        /// <returns></returns>
-        public  bool AllPositionsEqual(Locations loc)
-        {
-            for (int i = 0; i < location.Length; i++) 
-                if (location[i] != loc) 
-                    return false;
-            return true;
-        }
-
-        /// <summary>
-        /// Merge updates only the Null attributes of this object
-        /// with the attributes of another.
-        /// </summary>
-        public  void Merge(TopologyLocation gl)
-        {
-            // if the src is an Area label & and the dest is not, increase the dest to be an Area
-            if (gl.location.Length > location.Length) 
+            get
             {
-                Locations[] newLoc = new Locations[3];
-                newLoc[(int)Positions.On] = location[(int)Positions.On];
-                newLoc[(int)Positions.Left] = Locations.Null;
-                newLoc[(int)Positions.Right] = Locations.Null;
-                location = newLoc;
+                return (Locations)(SByte)(_locations >> LeftOffset);
             }
-            for (int i = 0; i < location.Length; i++) 
-                if (location[i] == Locations.Null && i < gl.location.Length)
-                    location[i] = gl.location[i];
+        }
+
+        public Locations Right
+        {
+            get
+            {
+                return (Locations)(SByte)(_locations >> RightOffset);
+            }
+        }
+
+        public Boolean AllPositionsEqual(Locations loc)
+        {
+            return On == loc &&
+                Left == loc &&
+                Right == loc;
         }
 
         /// <summary>
-        /// 
+        /// Merge updates only the Null attributes of this <see cref="TopologyLocation"/>
+        /// with the attributes of another, and returns the result.
         /// </summary>
-        /// <returns></returns>
+        /// <remarks>
+        /// If one of the the <see cref="TopologyLocation"/> is a line, and  
+        /// other is an area, the destination will be an area.
+        /// </remarks>
+        public TopologyLocation Merge(TopologyLocation other)
+        {
+            // if the src is an Area location & and the dest is not, 
+            // increase the dest to be an Area
+            Locations on = On == Locations.None ? other.On : On;
+            Locations left = Left == Locations.None ? other.Left : Left;
+            Locations right = Right == Locations.None ? other.Right : Right;
+
+            return new TopologyLocation(on, left, right);
+        }
+
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
-            if (location.Length > 1)
-                sb.Append(Location.ToLocationSymbol(location[(int)Positions.Left]));
-            sb.Append(Location.ToLocationSymbol(location[(int)Positions.On]));
-            if (location.Length > 1)
-                sb.Append(Location.ToLocationSymbol(location[(int)Positions.Right]));
+
+            Boolean isArea = IsArea;
+
+            if (isArea)
+            {
+                sb.Append(LocationTypeConverter.ToLocationSymbol(Left));
+            }
+
+            sb.Append(LocationTypeConverter.ToLocationSymbol(On));
+
+            if (isArea)
+            {
+                sb.Append(LocationTypeConverter.ToLocationSymbol(Right));
+            }
+
             return sb.ToString();
+        }
+
+        #region IEquatable<TopologyLocation> Members
+
+        public Boolean Equals(TopologyLocation other)
+        {
+            return other._locations == _locations;
+        }
+
+        #endregion
+
+        private void setLocation(Positions locIndex, Locations locValue)
+        {
+            Int32 locations = _locations;
+
+            switch (locIndex)
+            {
+                case Positions.On:
+                    locations &= (Int32)OnMask;
+                    locations |= ((SByte) locValue) << OnOffset;
+                    break;
+                case Positions.Left:
+                    locations &= (Int32)LeftMask;
+                    locations |= ((SByte)locValue) << LeftOffset;
+                    break;
+                case Positions.Right:
+                    locations &= (Int32)RightMask;
+                    locations |= ((SByte)locValue) << OnOffset;
+                    break;
+                case Positions.Parallel:
+                default:
+                    break;
+            }
+
+            _locations = locations;
         }
     }
 }

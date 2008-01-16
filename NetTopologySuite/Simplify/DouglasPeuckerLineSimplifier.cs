@@ -1,10 +1,9 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using GeoAPI.Geometries;
-
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using GeoAPI.Coordinates;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
@@ -12,99 +11,99 @@ namespace GisSharpBlog.NetTopologySuite.Simplify
     /// Simplifies a line (sequence of points) using
     /// the standard Douglas-Peucker algorithm.
     /// </summary>
-    public class DouglasPeuckerLineSimplifier
+    public class DouglasPeuckerLineSimplifier<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="distanceTolerance"></param>
-        /// <returns></returns>
-        public static ICoordinate[] Simplify(ICoordinate[] pts, double distanceTolerance)
+        public static ICoordinateSequence<TCoordinate> Simplify(ICoordinateSequence<TCoordinate> coordinates, Double distanceTolerance)
         {
-            DouglasPeuckerLineSimplifier simp = new DouglasPeuckerLineSimplifier(pts);
+            DouglasPeuckerLineSimplifier<TCoordinate> simp = new DouglasPeuckerLineSimplifier<TCoordinate>(coordinates);
             simp.DistanceTolerance = distanceTolerance;
-            return simp.Simplify();
+            return coordinates.CoordinateSequenceFactory.Create(simp.Simplify());
         }
 
-        private ICoordinate[] pts;
-        private bool[] usePt;
-        private double distanceTolerance;       
+        private readonly ICoordinateSequence<TCoordinate> _coordinates;
+        private Double _distanceTolerance;
+        private Int32 _outputCoordinateCount;
+        private LineSegment<TCoordinate> _segment = new LineSegment<TCoordinate>();
+        private readonly List<BitVector32> _useCoordinate = new List<BitVector32>();
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        public DouglasPeuckerLineSimplifier(ICoordinate[] pts)
+        public DouglasPeuckerLineSimplifier(ICoordinateSequence<TCoordinate> coordinates)
         {
-            this.pts = pts;
+            _coordinates = coordinates;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double DistanceTolerance
+        public Double DistanceTolerance
         {
-            get
+            get { return _distanceTolerance; }
+            set { _distanceTolerance = value; }
+        }
+
+        public IEnumerable<TCoordinate> Simplify()
+        {
+            simplifySection(0, _coordinates.Count - 1);
+
+            Int32 index = 0;
+
+            foreach (TCoordinate coordinate in _coordinates)
             {
-                return distanceTolerance;
-            }
-            set
-            {
-                distanceTolerance = value;
+                if (getUseCoordinate(index))
+                {
+                    yield return coordinate;
+                }
+
+                index += 1;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public ICoordinate[] Simplify()
-        {
-            usePt = new bool[pts.Length];
-            for (int i = 0; i < pts.Length; i++)
-                usePt[i] = true;
-            
-            SimplifySection(0, pts.Length - 1);
-            CoordinateList coordList = new CoordinateList();
-            for (int i = 0; i < pts.Length; i++)            
-                if (usePt[i])
-                    coordList.Add(new Coordinate(pts[i]));            
-            return coordList.ToCoordinateArray();
-        }
-
-        private LineSegment seg = new LineSegment();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="i"></param>
-        /// <param name="j"></param>
-        private void SimplifySection(int i, int j)
+        private void simplifySection(Int32 i, Int32 j)
         {
             if ((i + 1) == j)
-                return;            
-            seg.P0 = pts[i];
-            seg.P1 = pts[j];
-            double maxDistance = -1.0;
-            int maxIndex = i;
-            for (int k = i + 1; k < j; k++)
             {
-                double distance = seg.Distance(pts[k]);
+                return;
+            }
+
+            _segment = new LineSegment<TCoordinate>(_coordinates[i], _coordinates[j]);
+
+            Double maxDistance = -1.0;
+            Int32 maxIndex = i;
+
+            for (Int32 k = i + 1; k < j; k++)
+            {
+                Double distance = _segment.Distance(_coordinates[k]);
+
                 if (distance > maxDistance)
                 {
                     maxDistance = distance;
                     maxIndex = k;
                 }
             }
+
             if (maxDistance <= DistanceTolerance)
-                for (int k = i + 1; k < j; k++)                
-                    usePt[k] = false;                            
+            {
+                for (Int32 k = i + 1; k < j; k++)
+                {
+                    setUseCoordinate(k, false);
+                }
+            }
             else
             {
-                SimplifySection(i, maxIndex);
-                SimplifySection(maxIndex, j);
+                simplifySection(i, maxIndex);
+                simplifySection(maxIndex, j);
             }
+        }
+
+        private void setUseCoordinate(Int32 coordinateIndex, Boolean use)
+        {
+            Int32 index = coordinateIndex >> 5; // divide by 32
+            BitVector32 bits = _useCoordinate[index];
+            bits[coordinateIndex % 32] = use;
+            _useCoordinate[index] = bits;
+        }
+
+        private Boolean getUseCoordinate(Int32 coordinateIndex)
+        {
+            return _useCoordinate[coordinateIndex >> 5][coordinateIndex % 32];
         }
     }
 }

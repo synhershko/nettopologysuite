@@ -1,91 +1,86 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>  
-    /// Basic implementation of <c>LinearRing</c>.
+    /// Basic implementation of <see cref="LinearRing{TCoordinate}" />.
+    /// </summary>
+    /// <remarks>
     /// The first and last point in the coordinate sequence must be equal.
     /// Either orientation of the ring is allowed.
     /// A valid ring must not self-intersect.
-    /// </summary>
+    /// </remarks>
     [Serializable]
-    public class LinearRing : LineString, ILinearRing
+    public class LinearRing<TCoordinate> : LineString<TCoordinate>, ILinearRing<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
-        /// Constructs a <c>LinearRing</c> with the given points.
+        /// Constructs a <see cref="LinearRing{TCoordinate}" /> with the given points.
         /// </summary>
         /// <param name="points">
         /// Points forming a closed and simple linestring, or
-        /// <c>null</c> or an empty array to create the empty point.
-        /// This array must not contain <c>null</c> elements.
+        /// <see langword="null" /> or an empty array to create the empty point.
+        /// This array must not contain <see langword="null" /> elements.
         /// </param>
         /// <param name="factory"></param>
-        public LinearRing(ICoordinateSequence points, IGeometryFactory factory) : base(points, factory)
-        {            
-            ValidateConstruction();
+        public LinearRing(ICoordinateSequence<TCoordinate> points, IGeometryFactory<TCoordinate> factory) 
+            : base(points, factory)
+        {
+            validateConstruction();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void ValidateConstruction() 
+        public override Boolean IsSimple
         {
-	        if (!IsEmpty && !base.IsClosed) 
-                throw new ArgumentException("points must form a closed linestring");            
-            if (CoordinateSequence.Count >= 1 && CoordinateSequence.Count <= 3) 
-                throw new ArgumentException("Number of points must be 0 or >3");            
+            get { return true; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsSimple
+        public override OgcGeometryType GeometryType
         {
-            get
-            {
-                return true;
-            }
+            // NOTE: this was "LinearRing", but this value should suffice
+            get { return OgcGeometryType.LineString; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override string GeometryType
+        public override Boolean IsClosed
         {
-            get
-            {
-                return "LinearRing";
-            }
+            get { return true; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsClosed
+        public Boolean IsCcw
         {
-            get
-            {
-                return true;
-            }
+            get { throw new NotImplementedException(); }
         }
 
         /* BEGIN ADDED BY MPAUL42: monoGIS team */
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:LinearRing"/> class.
+        /// Initializes a new instance of the <see cref="LinearRing{TCoordinate}"/> class.
         /// </summary>
         /// <param name="points">The points used for create this instance.</param>
         /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="IPrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
         /// </remarks>
-        public LinearRing(ICoordinate[] points) : 
-            this(DefaultFactory.CoordinateSequenceFactory.Create(points), DefaultFactory) { }
-        
+        public LinearRing(IEnumerable<TCoordinate> points) :
+            this(DefaultFactory.CoordinateSequenceFactory.Create(points), DefaultFactory) {}
+
         /* END ADDED BY MPAUL42: monoGIS team */
+
+        private void validateConstruction()
+        {
+            if (!IsEmpty && !base.IsClosed)
+            {
+                throw new ArgumentException("points must form a closed linestring");
+            }
+
+            if (Coordinates.Count >= 1 && Coordinates.Count <= 3)
+            {
+                throw new ArgumentException("Number of points must be 0 or > 3");
+            }
+        }
     }
 }

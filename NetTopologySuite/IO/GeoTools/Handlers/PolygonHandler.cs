@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 
@@ -11,10 +13,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
 	/// Converts a Shapefile point to a OGIS Polygon.
 	/// </summary>
 	public class PolygonHandler : ShapeHandler
-	{
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PolygonHandler"/> class.
-        /// </summary>
+	{		
+		/// <summary>
+		/// Initializes a new instance of the PolygonHandler class.
+		/// </summary>
 		public PolygonHandler() { }	
 
 		/// <summary>
@@ -22,7 +24,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		/// </summary>
         public override ShapeGeometryTypes ShapeType
 		{
-			get { return ShapeGeometryTypes.Polygon; }
+			get
+			{
+                return ShapeGeometryTypes.Polygon;
+			}
 		}
 
 		/// <summary>
@@ -35,8 +40,8 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		{
 			int shapeTypeNum = file.ReadInt32();
             ShapeGeometryTypes shapeType = (ShapeGeometryTypes)Enum.Parse(typeof(ShapeGeometryTypes), shapeTypeNum.ToString());
-            if (!(shapeType == ShapeGeometryTypes.Polygon  || shapeType == ShapeGeometryTypes.PolygonM ||
-                  shapeType == ShapeGeometryTypes.PolygonZ || shapeType == ShapeGeometryTypes.PolygonZM))	
+            if ( ! ( shapeType == ShapeGeometryTypes.Polygon  || shapeType == ShapeGeometryTypes.PolygonM ||
+                     shapeType == ShapeGeometryTypes.PolygonZ || shapeType == ShapeGeometryTypes.PolygonZM))	
 				throw new ShapefileException("Attempting to load a non-polygon as polygon.");
 
 			// Read and for now ignore bounds.
@@ -168,7 +173,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 			// if (!geometry.IsValid)    
 			// Trace.WriteLine("Invalid polygon being written.");
 
-			IGeometryCollection multi;
+			IGeometryCollection multi = null;
 			if (geometry is IGeometryCollection)
 				multi = (IGeometryCollection) geometry;
 			else 
@@ -177,10 +182,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
 				multi = gf.CreateMultiPolygon(new IPolygon[] { (IPolygon) geometry, } );
 			}
 
-			file.Write(int.Parse(Enum.Format(typeof(ShapeGeometryTypes), ShapeType, "d")));
+			file.Write(int.Parse(Enum.Format(typeof(ShapeGeometryTypes), this.ShapeType, "d")));
 
             IEnvelope box = multi.EnvelopeInternal;
-			IEnvelope bounds = GetEnvelopeExternal(geometryFactory.PrecisionModel,  box);
+			IEnvelope bounds = ShapeHandler.GetEnvelopeExternal(geometryFactory.PrecisionModel,  box);
 			file.Write(bounds.MinX);
 			file.Write(bounds.MinY);
 			file.Write(bounds.MaxX);
@@ -248,7 +253,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		public override int GetLength(IGeometry geometry)
 		{
 			int numParts = GetNumParts(geometry);
-			return (22 + (2 * numParts) + geometry.NumPoints * 8); // 22 => shapetype(2) + bbox(4*4) + numparts(2) + numpoints(2)
+			return (22 + (2 * numParts) + geometry.NumPoints * 8);
 		}
 		
         /// <summary>

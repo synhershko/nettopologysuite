@@ -17,6 +17,7 @@
 
 using System;
 using System.IO;
+using GisSharpBlog.NetTopologySuite;
 
 namespace RTools_NTS.Util
 {
@@ -26,7 +27,7 @@ namespace RTools_NTS.Util
 	/// </summary>
 	public class BufferedTextReader
 	{
-		static readonly int BlockSize = 1024;
+		static readonly Int32 BlockSize = 1024;
 		TextReader reader;
 		char[] buffer;
 		CharBuffer cb;
@@ -51,8 +52,8 @@ namespace RTools_NTS.Util
 			if (cb.Length == 0)
 			{
 				// read from underlying reader
-				int readCount = reader.Read(buffer, 0, BlockSize);
-				if (readCount == 0) throw new ApplicationException("End of stream.");
+				Int32 readCount = reader.Read(buffer, 0, BlockSize);
+				if (readCount == 0) throw new NtsException("End of stream.");
 				cb.SetBuffer(buffer, readCount);
 			}
 

@@ -1,102 +1,101 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
-
-using Iesi_NTS.Collections;
-using Iesi_NTS.Collections.Generic;
-
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.DataStructures.Collections.Generic;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
-    /// Computes the convex hull of a <see cref="Geometry" />.
+    /// Computes the convex hull of a <see cref="Geometry{TCoordinate}" />.
     /// The convex hull is the smallest convex Geometry that contains all the
     /// points in the input Geometry.
     /// Uses the Graham Scan algorithm.
     /// </summary>
-    public class ConvexHull
+    public class ConvexHull<TCoordinate>
+         where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                             IComputable<Double, TCoordinate>, IConvertible
     {
-        private IGeometryFactory geomFactory = null;
-        private ICoordinate[] inputPts = null;
+        //private static IEnumerable<TCoordinate> extractCoordinates(IGeometry<TCoordinate> geom)
+        //{
+        //    UniqueCoordinateArrayFilter<TCoordinate> filter = new UniqueCoordinateArrayFilter<TCoordinate>();
+        //    geom.Apply(filter);
+        //    return filter.Coordinates;
+        //}
+
+        private readonly IGeometryFactory<TCoordinate> _geomFactory = null;
+        private readonly ICoordinateSequence<TCoordinate> _inputPts = null;
 
         /// <summary> 
-        /// Create a new convex hull construction for the input <c>Geometry</c>.
+        /// Create a new convex hull construction for the input <see cref="Geometry{TCoordinate}"/>.
         /// </summary>
-        /// <param name="geometry"></param>
-        public ConvexHull(IGeometry geometry) 
-            : this(ExtractCoordinates(geometry), geometry.Factory) { }
+        public ConvexHull(IGeometry<TCoordinate> geometry)
+            : this(geometry.Coordinates.WithoutDuplicatePoints(), geometry.Factory) { }
 
         /// <summary>
-        /// Create a new convex hull construction for the input <see cref="Coordinate" /> array.
+        /// Create a new convex hull construction for the input 
+        /// <typeparamref name="TCoordinate"/> set.
         /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="geomFactory"></param>   
-        public ConvexHull(ICoordinate[] pts, IGeometryFactory geomFactory)
+        public ConvexHull(ICoordinateSequence<TCoordinate> points, IGeometryFactory<TCoordinate> geomFactory)
         {
-            inputPts = pts;
-            this.geomFactory = geomFactory;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        private static ICoordinate[] ExtractCoordinates(IGeometry geom)
-        {
-            UniqueCoordinateArrayFilter filter = new UniqueCoordinateArrayFilter();
-            geom.Apply(filter);
-            return filter.Coordinates;
+            _inputPts = points;
+            _geomFactory = geomFactory;
         }
 
         /// <summary> 
-        /// Returns a <c>Geometry</c> that represents the convex hull of the input point.
+        /// Returns a <see cref="Geometry{TCoordinate}"/> that represents the convex hull of the input point.
         /// The point will contain the minimal number of points needed to
         /// represent the convex hull.  In particular, no more than two consecutive
         /// points will be collinear.
         /// </summary>
         /// <returns> 
-        /// If the convex hull contains 3 or more points, a <c>Polygon</c>;
+        /// If the convex hull contains 3 or more points, a <see cref="Polygon{TCoordinate}" />;
         /// 2 points, a <c>LineString</c>;
         /// 1 point, a <c>Point</c>;
-        /// 0 points, an empty <c>GeometryCollection</c>.
+        /// 0 points, an empty <see cref="GeometryCollection{TCoordinate}" />.
         /// </returns>
-        public IGeometry GetConvexHull()
+        public IGeometry<TCoordinate> GetConvexHull()
         {
-            if (inputPts.Length == 0)
-                return geomFactory.CreateGeometryCollection(null);
-            
-            if (inputPts.Length == 1)
-                return geomFactory.CreatePoint(inputPts[0]);
+            if (_inputPts.Count == 0)
+            {
+                return _geomFactory.CreateGeometryCollection(null);
+            }
 
-            if (inputPts.Length == 2)
-                return geomFactory.CreateLineString(inputPts);
-            
+            if (_inputPts.Count == 1)
+            {
+                return _geomFactory.CreatePoint(_inputPts[0]);
+            }
 
-            ICoordinate[] reducedPts = inputPts;
+            if (_inputPts.Count == 2)
+            {
+                return _geomFactory.CreateLineString(_inputPts);
+            }
+
+            ICoordinateSequence<TCoordinate> reducedPts = _inputPts;
+
             // use heuristic to reduce points, if large
-            if (inputPts.Length > 50)
-                reducedPts = Reduce(inputPts);
-            
+            if (_inputPts.Count > 50)
+            {
+                reducedPts = reduce(_inputPts);
+            }
+
             // sort points for Graham scan.
-            ICoordinate[] sortedPts = PreSort(reducedPts);
+            IEnumerable<TCoordinate> sortedPts = preSort(reducedPts);
 
             // Use Graham scan to find convex hull.
-            Stack<ICoordinate> cHS = GrahamScan(sortedPts);
-
-            // Convert stack to an array.
-            ICoordinate[] cH = cHS.ToArray();
+            Stack<TCoordinate> cHS = grahamScan(sortedPts);
 
             // Convert array to appropriate output geometry.
-            return LineOrPolygon(cH);
+            return lineOrPolygon(cHS);
         }
-          
+
         /// <summary>
         /// Uses a heuristic to reduce the number of points scanned to compute the hull.
         /// The heuristic is to find a polygon guaranteed to
@@ -108,296 +107,339 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// Note that even if the method used to determine the polygon vertices
         /// is not 100% robust, this does not affect the robustness of the convex hull.
         /// </summary>
-        /// <param name="pts"></param>
-        /// <returns></returns>
-        private ICoordinate[] Reduce(ICoordinate[] pts)
+        private ICoordinateSequence<TCoordinate> reduce(ICoordinateSequence<TCoordinate> pts)
         {
-            ICoordinate[] polyPts = ComputeOctRing(inputPts);
-            
+            IEnumerable<TCoordinate> polyPts = computeOctRing(pts);
+
             // unable to compute interior polygon for some reason
-            if(polyPts == null)
-                return inputPts;
-            
+            if (polyPts == null)
+            {
+                return pts;
+            }
+
             // add points defining polygon
-            SortedSet<ICoordinate> reducedSet = new SortedSet<ICoordinate>();
-            for (int i = 0; i < polyPts.Length; i++)
-                reducedSet.Add(polyPts[i]);
-            
+            SortedSet<TCoordinate> reducedSet = new SortedSet<TCoordinate>();
+
+            foreach (TCoordinate pt in polyPts)
+            {
+                reducedSet.Add(pt);
+            }
+
             /*
              * Add all unique points not in the interior poly.
              * CGAlgorithms.IsPointInRing is not defined for points actually on the ring,
              * but this doesn't matter since the points of the interior polygon
              * are forced to be in the reduced set.
              */
-            for (int i = 0; i < inputPts.Length; i++)
-                if (!CGAlgorithms.IsPointInRing(inputPts[i], polyPts))                
-                    reducedSet.Add(inputPts[i]);
+            foreach (TCoordinate pt in pts)
+            {
+                if (!CGAlgorithms<TCoordinate>.IsPointInRing(pt, polyPts))
+                {
+                    reducedSet.Add(pt);
+                }
+            }
 
-            ICoordinate[] arr = new ICoordinate[reducedSet.Count];
-            reducedSet.CopyTo(arr, 0);
-            return arr;
+            return _geomFactory.CoordinateSequenceFactory.Create(reducedSet);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <returns></returns>
-        private ICoordinate[] PreSort(ICoordinate[] pts)
+        private static ICoordinateSequence<TCoordinate> preSort(ICoordinateSequence<TCoordinate> pts)
         {
-            ICoordinate t;
+            TCoordinate first = Slice.GetFirst(pts);
 
             // find the lowest point in the set. If two or more points have
-            // the same minimum y coordinate choose the one with the minimu x.
-            // This focal point is put in array location pts[0].
-            for (int i = 1; i < pts.Length; i++)
+            // the same minimum y coordinate choose the one with the minimum x.
+            // This focal point is put in array location first.
+            for (int i = 1; i < pts.Count; i++)
             {
-                if ((pts[i].Y < pts[0].Y) || ((pts[i].Y == pts[0].Y) 
-                     && (pts[i].X < pts[0].X)))
+                TCoordinate coordinate = pts[i];
+
+                if ((coordinate[Ordinates.Y] < first[Ordinates.Y]) ||
+                    ((coordinate[Ordinates.Y] == first[Ordinates.Y]) && (coordinate[Ordinates.X] < first[Ordinates.X])))
                 {
-                    t = pts[0];
-                    pts[0] = pts[i];
+                    TCoordinate t;
+                    t = first;
+                    first = coordinate;
                     pts[i] = t;
                 }
             }
 
             // sort the points radially around the focal point.
-            Array.Sort(pts, 1, pts.Length - 1, new RadialComparator(pts[0]));
+            pts.Sort(1, pts.Count - 1, new RadialComparator(first));
             return pts;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="c"></param>
-        /// <returns></returns>        
-        private Stack<ICoordinate> GrahamScan(ICoordinate[] c)
+        private static Stack<TCoordinate> grahamScan(IEnumerable<TCoordinate> c)
         {
-            ICoordinate p;
-            Stack<ICoordinate> ps = new Stack<ICoordinate>(c.Length);
-            ps.Push(c[0]);
-            ps.Push(c[1]);
-            ps.Push(c[2]);
-            for (int i = 3; i < c.Length; i++)
+            TCoordinate p;
+            Stack<TCoordinate> ps = new Stack<TCoordinate>();
+            Triple<TCoordinate> triple = Slice.GetTriple(c).Value;
+
+            ps.Push(triple.First);
+            ps.Push(triple.Second);
+            ps.Push(triple.Third);
+
+            foreach (TCoordinate coordinate in Slice.StartAt(c, 3))
             {
                 p = ps.Pop();
-                while (CGAlgorithms.ComputeOrientation(ps.Peek(), p, c[i]) > 0)
+
+                while (CGAlgorithms<TCoordinate>.ComputeOrientation(ps.Peek(), p, coordinate) > 0)
+                {
                     p = ps.Pop();
+                }
+
                 ps.Push(p);
-                ps.Push(c[i]);
+                ps.Push(coordinate);
             }
-            ps.Push(c[0]);
+
+            ps.Push(triple.First);
             return ps;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ps"></param>
-        /// <returns></returns>    
-        private Stack<ICoordinate> ReverseStack(Stack<ICoordinate> ps) 
-        {        
-            // Do a manual reverse of the stack
-            int size = ps.Count;
-            ICoordinate[] tempArray = new ICoordinate[size];
-            for (int i = 0; i < size; i++)
-                tempArray[i] = ps.Pop();
-            Stack<ICoordinate> returnStack = new Stack<ICoordinate>(size);
-            foreach (ICoordinate obj in tempArray)
-                returnStack.Push(obj);
-            return returnStack;                        
-        }               
-       
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="c1"></param>
-        /// <param name="c2"></param>
-        /// <param name="c3"></param>
+        //private Stack<TCoordinate> reverseStack(Stack<TCoordinate> ps)
+        //{
+        //    // Do a manual reverse of the stack
+        //    Int32 size = ps.Count;
+        //    ICoordinate[] tempArray = new ICoordinate[size];
+
+        //    for (Int32 i = 0; i < size; i++)
+        //    {
+        //        tempArray[i] = ps.Pop();
+        //    }
+
+        //    Stack<ICoordinate> returnStack = new Stack<ICoordinate>(size);
+
+        //    foreach (ICoordinate obj in tempArray)
+        //    {
+        //        returnStack.Push(obj);
+        //    }
+
+        //    return returnStack;
+        //}
+
         /// <returns>
         /// Whether the three coordinates are collinear 
         /// and c2 lies between c1 and c3 inclusive.
         /// </returns>        
-        private bool IsBetween(ICoordinate c1, ICoordinate c2, ICoordinate c3)
+        private static Boolean isBetween(TCoordinate c1, TCoordinate c2, TCoordinate c3)
         {
-            if (CGAlgorithms.ComputeOrientation(c1, c2, c3) != 0)
+            if (CGAlgorithms<TCoordinate>.ComputeOrientation(c1, c2, c3) != 0)
+            {
                 return false;
-            if (c1.X != c3.X)
-            {
-                if (c1.X <= c2.X && c2.X <= c3.X)
-                    return true;
-                if (c3.X <= c2.X && c2.X <= c1.X)
-                    return true;
             }
-            if (c1.Y != c3.Y)
-            {
-                if (c1.Y <= c2.Y && c2.Y <= c3.Y)
-                    return true;
-                if (c3.Y <= c2.Y && c2.Y <= c1.Y)
-                    return true;
-            }
-            return false;
-        }              
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="inputPts"></param>
-        /// <returns></returns>
-        private ICoordinate[] ComputeOctRing(ICoordinate[] inputPts)
+            if (c1[Ordinates.X] != c3[Ordinates.X])
+            {
+                if (c1[Ordinates.X] <= c2[Ordinates.X] && c2[Ordinates.X] <= c3[Ordinates.X])
+                {
+                    return true;
+                }
+
+                if (c3[Ordinates.X] <= c2[Ordinates.X] && c2[Ordinates.X] <= c1[Ordinates.X])
+                {
+                    return true;
+                }
+            }
+
+            if (c1[Ordinates.Y] != c3[Ordinates.Y])
+            {
+                if (c1[Ordinates.Y] <= c2[Ordinates.Y] && c2[Ordinates.Y] <= c3[Ordinates.Y])
+                {
+                    return true;
+                }
+
+                if (c3[Ordinates.Y] <= c2[Ordinates.Y] && c2[Ordinates.Y] <= c1[Ordinates.Y])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private IEnumerable<TCoordinate> computeOctRing(IEnumerable<TCoordinate> inputPts)
         {
-            ICoordinate[] octPts = ComputeOctPts(inputPts);
-            CoordinateList coordList = new CoordinateList();
-            coordList.Add(octPts, false);
+            IEnumerable<TCoordinate> octPts = computeOctPts(inputPts);
+            ICoordinateSequence<TCoordinate> coords 
+                = _geomFactory.CoordinateSequenceFactory.Create(octPts, false);
 
             // points must all lie in a line
-            if (coordList.Count < 3)
-                return null;
-            
-            coordList.CloseRing();
-            return coordList.ToCoordinateArray();
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="inputPts"></param>
-        /// <returns></returns>
-        private ICoordinate[] ComputeOctPts(ICoordinate[] inputPts)
-        {
-            ICoordinate[] pts = new ICoordinate[8];
-            for (int j = 0; j < pts.Length; j++)
-                pts[j] = inputPts[0];
-            
-            for (int i = 1; i < inputPts.Length; i++)
+            if (coords.Count < 3)
             {
-                if (inputPts[i].X < pts[0].X)
-                    pts[0] = inputPts[i];
-                
-                if (inputPts[i].X - inputPts[i].Y < pts[1].X - pts[1].Y)
-                    pts[1] = inputPts[i];
-                
-                if (inputPts[i].Y > pts[2].Y)                
-                    pts[2] = inputPts[i];
-                
-                if (inputPts[i].X + inputPts[i].Y > pts[3].X + pts[3].Y)                
-                    pts[3] = inputPts[i];
-                
-                if (inputPts[i].X > pts[4].X)
-                    pts[4] = inputPts[i];
-                
-                if (inputPts[i].X - inputPts[i].Y > pts[5].X - pts[5].Y)                
-                    pts[5] = inputPts[i];
-                
-                if (inputPts[i].Y < pts[6].Y)
-                    pts[6] = inputPts[i];
-                
-                if (inputPts[i].X + inputPts[i].Y < pts[7].X + pts[7].Y)
-                    pts[7] = inputPts[i];                
+                return null;
             }
-            return pts;
 
+            coords.CloseRing();
+            return coords;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="coordinates"> The vertices of a linear ring, which may or may not be flattened (i.e. vertices collinear).</param>
-        /// <returns>A 2-vertex <c>LineString</c> if the vertices are collinear; 
-        /// otherwise, a <c>Polygon</c> with unnecessary (collinear) vertices removed. </returns>       
-        private IGeometry LineOrPolygon(ICoordinate[] coordinates)
+        private static IEnumerable<TCoordinate> computeOctPts(IEnumerable<TCoordinate> inputPts)
         {
-            coordinates = CleanRing(coordinates);
-            if (coordinates.Length == 3)
-                return geomFactory.CreateLineString(new ICoordinate[] { coordinates[0], coordinates[1] });
-            ILinearRing linearRing = geomFactory.CreateLinearRing(coordinates);
-            return geomFactory.CreatePolygon(linearRing, null);
+            TCoordinate[] pts = new TCoordinate[8];
+
+            TCoordinate first = Slice.GetFirst(inputPts);
+
+            for (Int32 j = 0; j < pts.Length; j++)
+            {
+                pts[j] = first;
+            }
+
+            foreach (TCoordinate coordinate in inputPts)
+            {
+                Double x = coordinate[Ordinates.X];
+                Double y = coordinate[Ordinates.Y];
+
+                if (x < pts[0][Ordinates.X])
+                {
+                    pts[0] = coordinate;
+                }
+
+                if (x - y < pts[1][Ordinates.X] - pts[1][Ordinates.Y])
+                {
+                    pts[1] = coordinate;
+                }
+
+                if (y > pts[2][Ordinates.Y])
+                {
+                    pts[2] = coordinate;
+                }
+
+                if (x + y > pts[3][Ordinates.X] + pts[3][Ordinates.Y])
+                {
+                    pts[3] = coordinate;
+                }
+
+                if (x > pts[4][Ordinates.X])
+                {
+                    pts[4] = coordinate;
+                }
+
+                if (x - y > pts[5][Ordinates.X] - pts[5][Ordinates.Y])
+                {
+                    pts[5] = coordinate;
+                }
+
+                if (y < pts[6][Ordinates.Y])
+                {
+                    pts[6] = coordinate;
+                }
+
+                if (x + y < pts[7][Ordinates.X] + pts[7][Ordinates.Y])
+                {
+                    pts[7] = coordinate;
+                }
+            }
+
+            return pts;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <param name="coordinates"> The vertices of a linear ring, which may or may not be flattened (i.e. vertices collinear).</param>
+        /// <returns>
+        /// A 2-vertex <c>LineString</c> if the vertices are collinear; 
+        /// otherwise, a <see cref="Polygon{TCoordinate}" /> with unnecessary (collinear) vertices removed.
+        /// </returns>       
+        private IGeometry<TCoordinate> lineOrPolygon(IEnumerable<TCoordinate> coordinates)
+        {
+            coordinates = cleanRing(coordinates);
+
+            if (!Slice.CountGreaterThan(coordinates, 3))
+            {
+                Pair<TCoordinate> points = Slice.GetPair(coordinates).Value;
+                return _geomFactory.CreateLineString(points.First, points.Second);
+            }
+
+            ILinearRing<TCoordinate> linearRing = _geomFactory.CreateLinearRing(coordinates);
+            return _geomFactory.CreatePolygon(linearRing, null);
+        }
+
         /// <param name="original">The vertices of a linear ring, which may or may not be flattened (i.e. vertices collinear).</param>
         /// <returns>The coordinates with unnecessary (collinear) vertices removed.</returns>
-        private ICoordinate[] CleanRing(ICoordinate[] original)
+        private IEnumerable<TCoordinate> cleanRing(IEnumerable<TCoordinate> original)
         {
-            Assert.Equals(original[0], original[original.Length - 1]);
-            List<ICoordinate> cleanedRing = new List<ICoordinate>();
-            ICoordinate previousDistinctCoordinate = null;
-            for (int i = 0; i <= original.Length - 2; i++)
+            Debug.Assert(Equals(Slice.GetFirst(original), Slice.GetLast(original)));
+
+            List<TCoordinate> cleanedRing = new List<TCoordinate>();
+            TCoordinate previousDistinctCoordinate = default(TCoordinate);
+
+            foreach (Pair<TCoordinate> pair in Slice.GetOverlappingPairs(original))
             {
-                ICoordinate currentCoordinate = original[i];
-                ICoordinate nextCoordinate = original[i + 1];
+                TCoordinate currentCoordinate = pair.First;
+                TCoordinate nextCoordinate = pair.Second;
+
                 if (currentCoordinate.Equals(nextCoordinate))
+                {
                     continue;
-                if (previousDistinctCoordinate != null &&
-                    IsBetween(previousDistinctCoordinate, currentCoordinate, nextCoordinate))
-                    continue;                
+                }
+
+                if (!Coordinates<TCoordinate>.IsEmpty(previousDistinctCoordinate) &&
+                    isBetween(previousDistinctCoordinate, currentCoordinate, nextCoordinate))
+                {
+                    continue;
+                }
+
                 cleanedRing.Add(currentCoordinate);
                 previousDistinctCoordinate = currentCoordinate;
             }
-            cleanedRing.Add(original[original.Length - 1]);
-            return cleanedRing.ToArray();
+
+            cleanedRing.Add(Slice.GetLast(original));
+            return cleanedRing;
         }
 
         /// <summary>
-        /// Compares <see cref="Coordinate" />s for their angle and distance
+        /// Compares <typeparamref name="TCoordinate" />s for their angle and distance
         /// relative to an origin.
         /// </summary>
-        private class RadialComparator : IComparer<ICoordinate>
+        private class RadialComparator : IComparer<TCoordinate>
         {
-            private ICoordinate origin = null;
+            private readonly TCoordinate _origin = default(TCoordinate);
 
             /// <summary>
             /// Initializes a new instance of the <see cref="RadialComparator"/> class.
             /// </summary>
-            /// <param name="origin"></param>
-            public RadialComparator(ICoordinate origin)
+            public RadialComparator(TCoordinate origin)
             {
-                this.origin = origin;
+                _origin = origin;
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="p1"></param>
-            /// <param name="p2"></param>
-            /// <returns></returns>
-            public int Compare(ICoordinate p1, ICoordinate p2)
-            {                
-                return PolarCompare(origin, p1, p2);
+            public Int32 Compare(TCoordinate p1, TCoordinate p2)
+            {
+                return polarCompare(_origin, p1, p2);
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="o"></param>
-            /// <param name="p"></param>
-            /// <param name="q"></param>
-            /// <returns></returns>
-            private static int PolarCompare(ICoordinate o, ICoordinate p, ICoordinate q)
+            private static Int32 polarCompare(TCoordinate o, TCoordinate p, TCoordinate q)
             {
-                double dxp = p.X - o.X;
-                double dyp = p.Y - o.Y;
-                double dxq = q.X - o.X;
-                double dyq = q.Y - o.Y;
-             
-                int orient = CGAlgorithms.ComputeOrientation(o, p, q);
+                Double dxp = p[Ordinates.X] - o[Ordinates.X];
+                Double dyp = p[Ordinates.Y] - o[Ordinates.Y];
+                Double dxq = q[Ordinates.X] - o[Ordinates.X];
+                Double dyq = q[Ordinates.Y] - o[Ordinates.Y];
 
-                if(orient == CGAlgorithms.CounterClockwise)
+                Orientation orient = CGAlgorithms<TCoordinate>.ComputeOrientation(o, p, q);
+
+                if (orient == Orientation.CounterClockwise)
+                {
                     return 1;
-                if(orient == CGAlgorithms.Clockwise) 
+                }
+
+                if (orient == Orientation.Clockwise)
+                {
                     return -1;
+                }
 
                 // points are collinear - check distance
-                double op = dxp * dxp + dyp * dyp;
-                double oq = dxq * dxq + dyq * dyq;
+                Double op = dxp * dxp + dyp * dyp;
+                Double oq = dxq * dxq + dyq * dyq;
+
                 if (op < oq)
-                    return -1;                
+                {
+                    return -1;
+                }
+
                 if (op > oq)
+                {
                     return 1;
+                }
+
                 return 0;
             }
-        }       
+        }
     }
 }

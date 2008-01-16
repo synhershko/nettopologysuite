@@ -1,184 +1,201 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
+using GeoAPI.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Strtree
 {
     /// <summary>  
     /// A query-only R-tree created using the Sort-Tile-Recursive (STR) algorithm.
     /// For two-dimensional spatial data. 
+    /// </summary>
+    /// <remarks>
     /// The STR packed R-tree is simple to implement and maximizes space
     /// utilization; that is, as many leaves as possible are filled to capacity.
     /// Overlap between nodes is far less than in a basic R-tree. However, once the
-    /// tree has been built (explicitly or on the first call to #query), items may
-    /// not be added or removed. 
+    /// tree has been built (explicitly or on the first call to <see cref="Query"/>), 
+    /// items may not be added or removed. 
     /// Described in: P. Rigaux, Michel Scholl and Agnes Voisard. Spatial Databases With
     /// Application To GIS. Morgan Kaufmann, San Francisco, 2002.
-    /// </summary>
-    public class STRtree : AbstractSTRtree, ISpatialIndex 
+    /// </remarks>
+    public class StrTree<TCoordinate, TItem> : AbstractStrTree<IExtents<TCoordinate>, TItem>, ISpatialIndex<IExtents<TCoordinate>, TItem>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>, IComputable<Double, TCoordinate>,
+            IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>        
-        private class AnonymousXComparerImpl : IComparer
+        #region Nested types
+
+        //// TODO: Make this a delegate
+        //private class AnonymousXComparerImpl : IComparer
+        //{
+        //    private StrTree<TCoordinate, TItem> container = null;
+
+        //    public AnonymousXComparerImpl(StrTree<TCoordinate, TItem> container)
+        //    {
+        //        this.container = container;
+        //    }
+
+        //    public Int32 Compare(object o1, object o2)
+        //    {
+        //        return container.CompareDoubles(container.getCenterX((IExtents) ((IBoundable) o1).Bounds),
+        //                                        container.getCenterX((IExtents) ((IBoundable) o2).Bounds));
+        //    }
+        //}
+
+        //// TODO: Make this a delegate
+        //private class AnonymousYComparerImpl : IComparer
+        //{
+        //    private StrTree<TCoordinate, TItem> container = null;
+
+        //    public AnonymousYComparerImpl(StrTree<TCoordinate, TItem> container)
+        //    {
+        //        this.container = container;
+        //    }
+
+        //    public Int32 Compare(object o1, object o2)
+        //    {
+        //        return container.CompareDoubles(container.getCenterY((IExtents) ((IBoundable) o1).Bounds),
+        //                                        container.getCenterY((IExtents) ((IBoundable) o2).Bounds));
+        //    }
+        //}
+
+        //// TODO: Make this a delegate
+        //private class AnonymousIntersectsOpImpl : IIntersectsOp
+        //{
+        //    private StrTree<TCoordinate, TItem> container = null;
+
+        //    public AnonymousIntersectsOpImpl(StrTree<TCoordinate, TItem> container)
+        //    {
+        //        this.container = container;
+        //    }
+
+        //    public Boolean Intersects(object aBounds, object bBounds)
+        //    {
+        //        return ((IExtents) aBounds).Intersects((IExtents) bBounds);
+        //    }
+        //}
+
+        private class StrItemBoundable : ItemBoundable<IExtents<TCoordinate>, TItem>
         {
-            private STRtree container = null;
+            public StrItemBoundable(IExtents<TCoordinate> bounds, TItem item)
+                : base(bounds, item) { }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public AnonymousXComparerImpl(STRtree container)
+            public override Boolean Intersects(IExtents<TCoordinate> bounds)
             {
-                this.container = container;
-            }
+                if (bounds == null || Bounds == null)
+                {
+                    return false;
+                }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="o1"></param>
-            /// <param name="o2"></param>
-            /// <returns></returns>
-            public int Compare(object o1, object o2) 
-            {
-                return container.CompareDoubles(container.CentreX((IEnvelope) ((IBoundable) o1).Bounds),
-                                                container.CentreX((IEnvelope) ((IBoundable) o2).Bounds));
+                return bounds.Intersects(Bounds);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private class AnonymousYComparerImpl : IComparer
+        private class StrNode : AbstractNode<IExtents<TCoordinate>, IBoundable<IExtents<TCoordinate>>>
         {
-            private STRtree container = null;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public AnonymousYComparerImpl(STRtree container)
-            {
-                this.container = container;
-            }
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="o1"></param>
-            /// <param name="o2"></param>
-            /// <returns></returns>
-            public int Compare(object o1, object o2) 
-            {
-                return container.CompareDoubles(container.CentreY((IEnvelope) ((IBoundable) o1).Bounds),
-                                                container.CentreY((IEnvelope) ((IBoundable) o2).Bounds));
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private class AnonymousAbstractNodeImpl : AbstractNode
-        {
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="nodeCapacity"></param>
-            public AnonymousAbstractNodeImpl(int nodeCapacity) :
+            public StrNode(Int32 nodeCapacity) :
                 base(nodeCapacity) { }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <returns></returns>
-            protected override object ComputeBounds() 
+            protected override IExtents<TCoordinate> ComputeBounds()
             {
-                IEnvelope bounds = null;
-                for (IEnumerator i = ChildBoundables.GetEnumerator(); i.MoveNext(); ) 
+                IExtents<TCoordinate> bounds = null;
+
+                foreach (IBoundable<IExtents<TCoordinate>> childBoundable in Children)
                 {
-                    IBoundable childBoundable = (IBoundable) i.Current;
-                    if (bounds == null) 
-                         bounds =  new Envelope((IEnvelope) childBoundable.Bounds);                
-                    else bounds.ExpandToInclude((IEnvelope) childBoundable.Bounds);
+                    if (bounds == null)
+                    {
+                        bounds = new Extents<TCoordinate>(childBoundable.Bounds);
+                    }
+                    else
+                    {
+                        bounds.ExpandToInclude(childBoundable.Bounds);
+                    }
                 }
+
                 return bounds;
             }
-        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private class AnonymousIntersectsOpImpl : IIntersectsOp
-        {
-            private STRtree container = null;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public AnonymousIntersectsOpImpl(STRtree container)
+            public override Boolean Intersects(IExtents<TCoordinate> bounds)
             {
-                this.container = container;
+                if (bounds == null || Bounds == null)
+                {
+                    return false;
+                }
+
+                return bounds.Intersects(Bounds);
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="aBounds"></param>
-            /// <param name="bBounds"></param>
-            /// <returns></returns>
-            public bool Intersects(object aBounds, object bBounds) 
+            protected override Boolean IsSearchMatch(IExtents<TCoordinate> query)
             {
-                return ((IEnvelope) aBounds).Intersects((IEnvelope) bBounds);
+                return query.Intersects(Bounds);
             }
         }
+
+        #endregion
 
         /// <summary> 
         /// Constructs an STRtree with the default (10) node capacity.
         /// </summary>
-        public STRtree() : this(10) { }
+        public StrTree() : this(10) { }
 
         /// <summary> 
         /// Constructs an STRtree with the given maximum number of child nodes that
         /// a node may have.
         /// </summary>
-        public STRtree(int nodeCapacity) :
+        public StrTree(Int32 nodeCapacity) :
             base(nodeCapacity) { }
 
         /// <summary>
-        /// 
+        /// Inserts an item having the given bounds into the tree.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        private double Avg(double a, double b)
+        public void Insert(IExtents<TCoordinate> bounds, TItem item)
         {
-            return (a + b) / 2d;
+            if (bounds.IsEmpty)
+            {
+                return;
+            }
+
+            base.Insert(bounds, item);
         }
 
         /// <summary>
-        /// 
+        /// Returns items whose bounds intersect the given envelope.
         /// </summary>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        private double CentreX(IEnvelope e)
+        public IEnumerable<TItem> Query(IExtents<TCoordinate> bounds)
         {
-            return Avg(e.MinX, e.MaxX);
+            //Yes this method does something. It specifies that the bounds is an
+            //Envelope. super.query takes an object, not an Envelope. [Jon Aquino 10/24/2003]
+            return base.Query(bounds);
         }
 
-        /// <summary>
-        /// 
+        ///// <summary>
+        ///// Returns items whose bounds intersect the given envelope.
+        ///// </summary>
+        //public void Query(IExtents<TCoordinate> searchEnv, Action<TItem> visitor)
+        //{
+        //    //Yes this method does something. It specifies that the bounds is an
+        //    //Envelope. super.query takes an Object, not an Envelope. [Jon Aquino 10/24/2003]
+        //    base.Query(searchEnv, visitor);
+        //}
+
+        /// <summary> 
+        /// Removes a single item from the tree.
         /// </summary>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        private double CentreY(IEnvelope e)
+        /// <param name="itemEnv">The Envelope of the item to remove.</param>
+        /// <param name="item">The item to remove.</param>
+        /// <returns><see langword="true"/> if the item was found.</returns>
+        public Boolean Remove(IExtents<TCoordinate> itemEnv, TItem item)
         {
-            return Avg(e.MinY, e.MaxY);
+            return base.Remove(itemEnv, item);
+        }
+
+        protected override AbstractNode<IExtents<TCoordinate>, IBoundable<IExtents<TCoordinate>>> CreateNode(Int32 level)
+        {
+            return new StrNode(level);
         }
 
         /// <summary>
@@ -188,155 +205,137 @@ namespace GisSharpBlog.NetTopologySuite.Index.Strtree
         /// group them into runs of size M (the node capacity). For each run, creates
         /// a new (parent) node.
         /// </summary>
-        /// <param name="childBoundables"></param>
-        /// <param name="newLevel"></param>
-        protected override IList CreateParentBoundables(IList childBoundables, int newLevel)
+        protected override IList<IBoundable<IExtents<TCoordinate>>> CreateParentBoundables(
+            IList<IBoundable<IExtents<TCoordinate>>> childBoundables, Int32 newLevel)
         {
             Assert.IsTrue(childBoundables.Count != 0);
-            int minLeafCount = (int)Math.Ceiling((childBoundables.Count / (double)NodeCapacity));
-            ArrayList sortedChildBoundables = new ArrayList(childBoundables);
-            sortedChildBoundables.Sort(new AnonymousXComparerImpl(this));
-            IList[] verticalSlices = VerticalSlices(sortedChildBoundables,
-                (int) Math.Ceiling(Math.Sqrt(minLeafCount)));
-            IList tempList = CreateParentBoundablesFromVerticalSlices(verticalSlices, newLevel);
+
+            Int32 minLeafCount = (Int32)Math.Ceiling((childBoundables.Count / (Double)NodeCapacity));
+
+            List<IBoundable<IExtents<TCoordinate>>> sortedChildBoundables
+                = new List<IBoundable<IExtents<TCoordinate>>>(childBoundables);
+
+            sortedChildBoundables.Sort(XOrdinateComparer);
+
+            IList<IList<IBoundable<IExtents<TCoordinate>>>> verticalSlices 
+                = VerticalSlices(sortedChildBoundables, (Int32)Math.Ceiling(Math.Sqrt(minLeafCount)));
+
+            IList<IBoundable<IExtents<TCoordinate>>> tempList 
+                = CreateParentBoundablesFromVerticalSlices(verticalSlices, newLevel);
+
             return tempList;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="verticalSlices"></param>
-        /// <param name="newLevel"></param>
-        /// <returns></returns>
-        private IList CreateParentBoundablesFromVerticalSlices(IList[] verticalSlices, int newLevel)
+        protected static Comparison<IBoundable<IExtents<TCoordinate>>> XOrdinateComparer
         {
-            Assert.IsTrue(verticalSlices.Length > 0);
-            IList parentBoundables = new ArrayList();
-            for (int i = 0; i < verticalSlices.Length; i++)
+            get
             {
-                IList tempList = CreateParentBoundablesFromVerticalSlice(verticalSlices[i], newLevel);
-                foreach (object o in tempList)
-                    parentBoundables.Add(o);
+                return delegate(IBoundable<IExtents<TCoordinate>> left, IBoundable<IExtents<TCoordinate>> right)
+                       {
+                           return left.Bounds.Center[Ordinates.X].CompareTo(right.Bounds.Center[Ordinates.X]);
+                       };
             }
+        }
+
+        protected static Comparison<IBoundable<IExtents<TCoordinate>>> YOrdinateComparer
+        {
+            get
+            {
+                return delegate(IBoundable<IExtents<TCoordinate>> left, IBoundable<IExtents<TCoordinate>> right)
+                {
+                    return left.Bounds.Center[Ordinates.Y].CompareTo(right.Bounds.Center[Ordinates.Y]);
+                };
+            }
+        }
+
+        protected override Comparison<IBoundable<IExtents<TCoordinate>>> CompareOp
+        {
+            get { return YOrdinateComparer; }
+        }
+
+        protected IList<IBoundable<IExtents<TCoordinate>>> CreateParentBoundablesFromVerticalSlices(
+            IEnumerable<IList<IBoundable<IExtents<TCoordinate>>>> verticalSlices,
+            Int32 newLevel)
+        {
+            Assert.IsTrue(Slice.CountGreaterThan(verticalSlices, 0));
+            List<IBoundable<IExtents<TCoordinate>>> parentBoundables 
+                = new List<IBoundable<IExtents<TCoordinate>>>();
+
+            foreach (IList<IBoundable<IExtents<TCoordinate>>> verticalSlice in verticalSlices)
+            {
+                parentBoundables.AddRange(
+                    CreateParentBoundablesFromVerticalSlice(verticalSlice, newLevel));
+            }
+
             return parentBoundables;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="childBoundables"></param>
-        /// <param name="newLevel"></param>
-        /// <returns></returns>
-        protected IList CreateParentBoundablesFromVerticalSlice(IList childBoundables, int newLevel)
+        protected IList<IBoundable<IExtents<TCoordinate>>> CreateParentBoundablesFromVerticalSlice(
+            IList<IBoundable<IExtents<TCoordinate>>> childBoundables, Int32 newLevel)
         {
             return base.CreateParentBoundables(childBoundables, newLevel);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="childBoundables">Must be sorted by the x-value of the envelope midpoints.</param>
-        /// <param name="sliceCount"></param>
-        protected IList[] VerticalSlices(IList childBoundables, int sliceCount)
+        protected override IBoundable<IExtents<TCoordinate>> CreateItemBoundable(IExtents<TCoordinate> bounds, TItem item)
         {
-            int sliceCapacity = (int)Math.Ceiling(childBoundables.Count / (double)sliceCount);
-            IList[] slices = new IList[sliceCount];
-            IEnumerator i = childBoundables.GetEnumerator();
-            for (int j = 0; j < sliceCount; j++)
+            return new StrItemBoundable(bounds, item);
+        }
+
+        //protected override Func<IExtents<TCoordinate>, IExtents<TCoordinate>, Boolean> IntersectsOp
+        //{
+        //    get
+        //    {
+        //        return delegate(IExtents<TCoordinate> left, IExtents<TCoordinate> right)
+        //               {
+        //                   return left.Intersects(right);
+        //               };
+        //    }
+        //}
+
+        /// <param name="childBoundables">
+        /// Must be sorted by the x-value of the envelope midpoints.
+        /// </param>
+        protected IList<IList<IBoundable<IExtents<TCoordinate>>>> VerticalSlices(
+            ICollection<IBoundable<IExtents<TCoordinate>>> childBoundables, Int32 sliceCount)
+        {
+            Int32 sliceCapacity = (Int32)Math.Ceiling(childBoundables.Count / (Double)sliceCount);
+            IList<IList<IBoundable<IExtents<TCoordinate>>>> slices = new IList<IBoundable<IExtents<TCoordinate>>>[sliceCount];
+
+            for (Int32 j = 0; j < sliceCount; j++)
             {
-                slices[j] = new ArrayList();
-                int boundablesAddedToSlice = 0;
-                /* 
-                 *          Diego Guidi says:
-                 *          the line below introduce an error: 
-                 *          the first element at the iteration (not the first) is lost! 
-                 *          This is simply a different implementation of Iteration in .NET against Java
-                 */
-                // while (i.MoveNext() && boundablesAddedToSlice < sliceCapacity)
-                while (boundablesAddedToSlice < sliceCapacity && i.MoveNext())
+                List<IBoundable<IExtents<TCoordinate>>> sliceChildren
+                    = new List<IBoundable<IExtents<TCoordinate>>>();
+                slices[j] = sliceChildren;
+                Int32 boundablesAddedToSlice = 0;
+
+                foreach (IBoundable<IExtents<TCoordinate>> childBoundable in childBoundables)
                 {
-                    IBoundable childBoundable = (IBoundable) i.Current;
+                    if (boundablesAddedToSlice >= sliceCapacity)
+                    {
+                        break;
+                    }
+
                     slices[j].Add(childBoundable);
                     boundablesAddedToSlice++;
                 }
             }
+
             return slices;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="level"></param>
-        /// <returns></returns>
-        protected override AbstractNode CreateNode(int level) 
-        {
-            return new AnonymousAbstractNodeImpl(level);
-        }
+        //private Double avg(Double a, Double b)
+        //{
+        //    return (a + b) / 2D;
+        //}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        protected override IIntersectsOp IntersectsOp
-        {
-            get
-            {
-                return new AnonymousIntersectsOpImpl(this);
-            }
-        }
+        //private Double getCenterX(IExtents<TCoordinate> e)
+        //{
+        //    return avg(e.GetMin(Ordinates.X, e.MaxX);
+        //}
 
-        /// <summary>
-        /// Inserts an item having the given bounds into the tree.
-        /// </summary>
-        /// <param name="itemEnv"></param>
-        /// <param name="item"></param>
-        public void Insert(IEnvelope itemEnv, object item) 
-        {
-            if (itemEnv.IsNull)  
-                return;
-            base.Insert(itemEnv, item);
-        }
-
-        /// <summary>
-        /// Returns items whose bounds intersect the given envelope.
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        public IList Query(IEnvelope searchEnv) 
-        {
-            //Yes this method does something. It specifies that the bounds is an
-            //Envelope. super.query takes an object, not an Envelope. [Jon Aquino 10/24/2003]
-            return base.Query(searchEnv);
-        }
-
-        /// <summary>
-        /// Returns items whose bounds intersect the given envelope.
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <param name="visitor"></param>
-        public void Query(IEnvelope searchEnv, IItemVisitor visitor)
-        {
-            //Yes this method does something. It specifies that the bounds is an
-            //Envelope. super.query takes an Object, not an Envelope. [Jon Aquino 10/24/2003]
-            base.Query(searchEnv, visitor);
-        }
-
-        /// <summary> 
-        /// Removes a single item from the tree.
-        /// </summary>
-        /// <param name="itemEnv">The Envelope of the item to remove.</param>
-        /// <param name="item">The item to remove.</param>
-        /// <returns><c>true</c> if the item was found.</returns>
-        public bool Remove(IEnvelope itemEnv, object item) 
-        {
-            return base.Remove(itemEnv, item);
-        }        
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override IComparer GetComparer() 
-        {
-            return new AnonymousYComparerImpl(this);
-        }
+        //private Double getCenterY(IExtents<TCoordinate> e)
+        //{
+        //    return avg(e.MinY, e.MaxY);
+        //}
     }
 }

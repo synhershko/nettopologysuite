@@ -1,75 +1,90 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Precision
 {
     /// <summary> 
     /// Provides versions of Geometry spatial functions which use
     /// common bit removal to reduce the likelihood of robustness problems.
+    /// </summary>
+    /// <remarks>
     /// In the current implementation no rounding is performed on the
     /// reshifted result point, which means that it is possible
     /// that the returned Geometry is invalid.
     /// Client classes should check the validity of the returned result themselves.
-    /// </summary>
-    public class CommonBitsOp
+    /// </remarks>
+    public class CommonBitsOp<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<TCoordinate>, IConvertible
     {
-        private bool returnToOriginalPrecision = true;
-        private CommonBitsRemover cbr;
+        private readonly Boolean _returnToOriginalPrecision = true;
+        private CommonBitsRemover<TCoordinate> _commonBitsRemover;
 
         /// <summary>
-        /// Creates a new instance of class, which reshifts result <c>Geometry</c>s.
+        /// Creates a new instance of class, which reshifts result 
+        /// <see cref="Geometry{TCoordinate}"/>s.
         /// </summary>
-        public CommonBitsOp() : this(true) { }
+        public CommonBitsOp() : this(true) {}
 
         /// <summary>
         /// Creates a new instance of class, specifying whether
-        /// the result <c>Geometry</c>s should be reshifted.
+        /// the result <see cref="Geometry{TCoordinate}"/>s should be reshifted.
         /// </summary>
-        /// <param name="returnToOriginalPrecision"></param>
-        public CommonBitsOp(bool returnToOriginalPrecision)
+        public CommonBitsOp(Boolean returnToOriginalPrecision)
         {
-            this.returnToOriginalPrecision = returnToOriginalPrecision;
+            _returnToOriginalPrecision = returnToOriginalPrecision;
         }
 
         /// <summary>
-        /// Computes the set-theoretic intersection of two <c>Geometry</c>s, using enhanced precision.
+        /// Computes the set-theoretic intersection of two <see cref="Geometry{TCoordinate}"/>s, 
+        /// using enhanced precision.
         /// </summary>
         /// <param name="geom0">The first Geometry.</param>
         /// <param name="geom1">The second Geometry.</param>
         /// <returns>The Geometry representing the set-theoretic intersection of the input Geometries.</returns>
-        public IGeometry Intersection(IGeometry geom0, IGeometry geom1)
+        public IGeometry<TCoordinate> Intersection(IGeometry<TCoordinate> geom0, IGeometry<TCoordinate> geom1)
         {
-            IGeometry[] geom = RemoveCommonBits(geom0, geom1);
-            return ComputeResultPrecision(geom[0].Intersection(geom[1]));
+            IGeometry<TCoordinate> geom0Output;
+            IGeometry<TCoordinate> geom1Output;
+            geom0Output = removeCommonBits(geom0, geom1, out geom1Output);
+            return computeResultPrecision(geom0Output.Intersection(geom1Output));
         }
 
         /// <summary>
-        /// Computes the set-theoretic union of two <c>Geometry</c>s, using enhanced precision.
+        /// Computes the set-theoretic union of two <see cref="Geometry{TCoordinate}"/>s, 
+        /// using enhanced precision.
         /// </summary>
         /// <param name="geom0">The first Geometry.</param>
         /// <param name="geom1">The second Geometry.</param>
-        /// <returns>The Geometry representing the set-theoretic union of the input Geometries.</returns>
-        public IGeometry Union(IGeometry geom0, IGeometry geom1)
+        /// <returns>
+        /// The Geometry representing the set-theoretic union of the input Geometries.
+        /// </returns>
+        public IGeometry<TCoordinate> Union(IGeometry<TCoordinate> geom0, IGeometry<TCoordinate> geom1)
         {
-            IGeometry[] geom = RemoveCommonBits(geom0, geom1);
-            return ComputeResultPrecision(geom[0].Union(geom[1]));
+            IGeometry<TCoordinate> geom0Output;
+            IGeometry<TCoordinate> geom1Output;
+            geom0Output = removeCommonBits(geom0, geom1, out geom1Output);
+            return computeResultPrecision(geom0Output.Union(geom1Output));
         }
 
         /// <summary>
-        /// Computes the set-theoretic difference of two <c>Geometry</c>s, using enhanced precision.
+        /// Computes the set-theoretic difference of two <see cref="Geometry{TCoordinate}"/>s, 
+        /// using enhanced precision.
         /// </summary>
         /// <param name="geom0">The first Geometry.</param>
         /// <param name="geom1">The second Geometry, to be subtracted from the first.</param>
-        /// <returns>The Geometry representing the set-theoretic difference of the input Geometries.</returns>
-        public IGeometry Difference(IGeometry geom0, IGeometry geom1)
+        /// <returns>
+        /// The Geometry representing the set-theoretic difference of the input Geometries.
+        /// </returns>
+        public IGeometry<TCoordinate> Difference(IGeometry<TCoordinate> geom0, IGeometry<TCoordinate> geom1)
         {
-            IGeometry[] geom = RemoveCommonBits(geom0, geom1);
-            return ComputeResultPrecision(geom[0].Difference(geom[1]));
+            IGeometry<TCoordinate> geom0Output;
+            IGeometry<TCoordinate> geom1Output;
+            geom0Output = removeCommonBits(geom0, geom1, out geom1Output);
+            return computeResultPrecision(geom0Output.Difference(geom1Output));
         }
 
         /// <summary
@@ -79,10 +94,12 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// <param name="geom0">The first Geometry.</param>
         /// <param name="geom1">The second Geometry.</param>
         /// <returns>The Geometry representing the set-theoretic symmetric difference of the input Geometries.</returns>
-        public IGeometry SymDifference(IGeometry geom0, IGeometry geom1)
+        public IGeometry<TCoordinate> SymDifference(IGeometry<TCoordinate> geom0, IGeometry<TCoordinate> geom1)
         {
-            IGeometry[] geom = RemoveCommonBits(geom0, geom1);
-            return ComputeResultPrecision(geom[0].SymmetricDifference(geom[1]));
+            IGeometry<TCoordinate> geom0Output;
+            IGeometry<TCoordinate> geom1Output;
+            geom0Output = removeCommonBits(geom0, geom1, out geom1Output);
+            return computeResultPrecision(geom0Output.SymmetricDifference(geom1Output));
         }
 
         /// <summary>
@@ -91,10 +108,10 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// <param name="geom0">The Geometry to buffer.</param>
         /// <param name="distance">The buffer distance.</param>
         /// <returns>The Geometry representing the buffer of the input Geometry.</returns>
-        public IGeometry Buffer(IGeometry geom0, double distance)
+        public IGeometry<TCoordinate> Buffer(IGeometry<TCoordinate> geom0, Double distance)
         {
-            IGeometry geom = RemoveCommonBits(geom0);
-            return ComputeResultPrecision(geom.Buffer(distance));
+            IGeometry<TCoordinate> geom = removeCommonBits(geom0);
+            return computeResultPrecision(geom.Buffer(distance));
         }
 
         /// <summary>
@@ -105,29 +122,32 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// </summary>
         /// <param name="result">The result Geometry to modify.</param>
         /// <returns>The result Geometry with the required precision.</returns>
-        private IGeometry ComputeResultPrecision(IGeometry result)
+        private IGeometry<TCoordinate> computeResultPrecision(IGeometry<TCoordinate> result)
         {
-            if (returnToOriginalPrecision)
-                cbr.AddCommonBits(result);
+            if (_returnToOriginalPrecision)
+            {
+                _commonBitsRemover.AddCommonBits(result);
+            }
+
             return result;
         }
 
         /// <summary>
-        /// Computes a copy of the input <c>Geometry</c> with the calculated common bits
+        /// Computes a copy of the input <see cref="Geometry{TCoordinate}"/> with the calculated common bits
         /// removed from each coordinate.
         /// </summary>
         /// <param name="geom0">The Geometry to remove common bits from.</param>
         /// <returns>A copy of the input Geometry with common bits removed.</returns>
-        private IGeometry RemoveCommonBits(IGeometry geom0)
+        private IGeometry<TCoordinate> removeCommonBits(IGeometry<TCoordinate> geom0)
         {
-            cbr = new CommonBitsRemover();
-            cbr.Add(geom0);
-            IGeometry geom = cbr.RemoveCommonBits((IGeometry) geom0.Clone());
+            _commonBitsRemover = new CommonBitsRemover<TCoordinate>();
+            _commonBitsRemover.Add(geom0);
+            IGeometry<TCoordinate> geom = _commonBitsRemover.RemoveCommonBits(geom0.Clone());
             return geom;
         }
 
         /// <summary>
-        /// Computes a copy of each input <c>Geometry</c>s with the calculated common bits
+        /// Computes a copy of each input <see cref="Geometry{TCoordinate}"/>s with the calculated common bits
         /// removed from each coordinate.
         /// </summary>
         /// <param name="geom0">A Geometry to remove common bits from.</param>
@@ -136,15 +156,15 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// An array containing copies
         /// of the input Geometry's with common bits removed.
         /// </returns>
-        private IGeometry[] RemoveCommonBits(IGeometry geom0, IGeometry geom1)
+        private IGeometry<TCoordinate> removeCommonBits(IGeometry<TCoordinate> geom0, IGeometry<TCoordinate> geom1,
+                                                        out IGeometry<TCoordinate> geom1Output)
         {
-            cbr = new CommonBitsRemover();
-            cbr.Add(geom0);
-            cbr.Add(geom1);
-            IGeometry[] geom = new IGeometry[2];
-            geom[0] = cbr.RemoveCommonBits((IGeometry) geom0.Clone());
-            geom[1] = cbr.RemoveCommonBits((IGeometry) geom1.Clone());
-            return geom;
+            _commonBitsRemover = new CommonBitsRemover<TCoordinate>();
+            _commonBitsRemover.Add(geom0);
+            _commonBitsRemover.Add(geom1);
+
+            geom1Output = _commonBitsRemover.RemoveCommonBits(geom1.Clone());
+            return _commonBitsRemover.RemoveCommonBits(geom0.Clone());
         }
     }
 }

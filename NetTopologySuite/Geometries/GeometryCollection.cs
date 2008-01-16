@@ -1,74 +1,76 @@
 using System;
 using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary>
-    /// Basic implementation of <c>GeometryCollection</c>.
+    /// Basic implementation of <see cref="GeometryCollection{TCoordinate}" />.
     /// </summary>
     [Serializable]
-    public class GeometryCollection : Geometry, IGeometryCollection
+    public class GeometryCollection<TCoordinate> : Geometry<TCoordinate>, IGeometryCollection<TCoordinate>, IHasGeometryComponents<TCoordinate>, IComparable<IGeometryCollection<TCoordinate>>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                    IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary>
-        /// Represents an empty <c>GeometryCollection</c>.
+        /// Represents an empty <see cref="GeometryCollection{TCoordinate}" />.
         /// </summary>
-        public static readonly IGeometryCollection Empty = DefaultFactory.CreateGeometryCollection(null);
+        public static readonly IGeometryCollection<TCoordinate> Empty = DefaultFactory.CreateGeometryCollection(null);
 
-        /// <summary>
-        /// Internal representation of this <c>GeometryCollection</c>.        
-        /// </summary>
-        protected IGeometry[] geometries = null;
+        public static Boolean HasNonEmptyElements<TGeometry>(IEnumerable<TGeometry> geometries)
+            where TGeometry : IGeometry
+        {
+            foreach (TGeometry geometry in geometries)
+            {
+                if (!geometry.IsEmpty)
+                {
+                    return true;
+                }
+            }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geometries">
-        /// The <c>Geometry</c>s for this <c>GeometryCollection</c>,
-        /// or <c>null</c> or an empty array to create the empty
-        /// point. Elements may be empty <c>Geometry</c>s,
-        /// but not <c>null</c>s.
-        /// </param>
-        /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
-        /// </remarks>
-        public GeometryCollection(IGeometry[] geometries) : this(geometries, DefaultFactory) { }
-              
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geometries">
-        /// The <c>Geometry</c>s for this <c>GeometryCollection</c>,
-        /// or <c>null</c> or an empty array to create the empty
-        /// point. Elements may be empty <c>Geometry</c>s,
-        /// but not <c>null</c>s.
-        /// </param>
-        /// <param name="factory"></param>
-        public GeometryCollection(IGeometry[] geometries, IGeometryFactory factory) : base(factory)
-        {            
-            if (geometries == null)             
-                geometries = new IGeometry[] { };            
-            if (HasNullElements(geometries))             
-                throw new ArgumentException("geometries must not contain null elements");            
-            this.geometries = geometries;
+            return false;
         }
 
         /// <summary>
-        /// 
+        /// Internal representation of this <see cref="GeometryCollection{TCoordinate}" />.        
         /// </summary>
-        public override ICoordinate Coordinate 
+        private readonly List<IGeometry<TCoordinate>> _geometries = new List<IGeometry<TCoordinate>>();
+
+        public GeometryCollection() : this(DefaultFactory) { }
+
+        public GeometryCollection(IGeometryFactory<TCoordinate> factory) : base(factory) { }
+
+        /// <param name="geometries">
+        /// The <see cref="Geometry{TCoordinate}"/>s for this <see cref="GeometryCollection{TCoordinate}" />,
+        /// or <see langword="null" /> or an empty array to create the empty
+        /// point. Elements may be empty <see cref="Geometry{TCoordinate}"/>s,
+        /// but not <see langword="null" />s.
+        /// </param>
+        /// <remarks>
+        /// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        /// with <see cref="PrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
+        /// </remarks>
+        public GeometryCollection(IEnumerable<IGeometry<TCoordinate>> geometries) : this(geometries, DefaultFactory) { }
+
+        /// <param name="geometries">
+        /// The <see cref="Geometry{TCoordinate}"/>s for this <see cref="GeometryCollection{TCoordinate}" />,
+        /// or <see langword="null" /> or an empty array to create the empty
+        /// point. Elements may be empty <see cref="Geometry{TCoordinate}"/>s,
+        /// but not <see langword="null" />s.
+        /// </param>
+        public GeometryCollection(IEnumerable<IGeometry<TCoordinate>> geometries, IGeometryFactory<TCoordinate> factory)
+            : base(factory)
         {
-            get
+            if (geometries == null)
             {
-                if (IsEmpty) 
-                    return null;
-                return geometries[0].Coordinate;
+                geometries = new IGeometry<TCoordinate>[] { };
             }
+
+            _geometries.AddRange(geometries);
         }
 
         /// <summary>
@@ -78,128 +80,100 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// is only a temporary container which is not synchronized back.
         /// </summary>
         /// <returns>The collected coordinates.</returns>
-        public override ICoordinate[] Coordinates
+        public override ICoordinateSequence<TCoordinate> Coordinates
         {
             get
             {
-                ICoordinate[] coordinates = new ICoordinate[NumPoints];
-                int k = -1;
-                for (int i = 0; i < geometries.Length; i++)
+                // TODO: cache this to improve performance?
+                ICoordinateSequence<TCoordinate> sequence
+                    = Factory.CoordinateSequenceFactory.Create();
+
+                foreach (IGeometry<TCoordinate> geometry in this)
                 {
-                    ICoordinate[] childCoordinates = geometries[i].Coordinates;
-                    for (int j = 0; j < childCoordinates.Length; j++)
-                    {
-                        k++;
-                        coordinates[k] = childCoordinates[j];
-                    }
+                    sequence.AddSequence(geometry.Coordinates);
                 }
-                return coordinates;
+
+                return sequence;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsEmpty
+        public override Boolean IsEmpty
         {
             get
             {
-                for (int i = 0; i < geometries.Length; i++)
-                    if (!geometries[i].IsEmpty) 
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    if (!geometry.IsEmpty)
+                    {
                         return false;
+                    }
+                }
+
                 return true;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override Dimensions Dimension 
+        public override Dimensions Dimension
         {
             get
             {
                 Dimensions dimension = Dimensions.False;
-                for (int i = 0; i < geometries.Length; i++)
-                    dimension = (Dimensions) Math.Max((int)dimension, (int)geometries[i].Dimension);
+
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    dimension = (Dimensions)Math.Max((Int32)dimension, (Int32)geometry.Dimension);
+                }
+
                 return dimension;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public override Dimensions BoundaryDimension
         {
             get
             {
                 Dimensions dimension = Dimensions.False;
-                for (int i = 0; i < geometries.Length; i++)
-                    dimension = (Dimensions) Math.Max((int) dimension, (int) (geometries[i].BoundaryDimension));
+
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    dimension = (Dimensions)Math.Max((Int32)dimension, (Int32)geometry.BoundaryDimension);
+                }
+
                 return dimension;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override int NumGeometries
+        public override Int32 GeometryCount
+        {
+            get { return _geometries.Count; }
+        }
+
+        public IList<IGeometry<TCoordinate>> Geometries
+        {
+            get { return _geometries.AsReadOnly(); }
+        }
+
+        public override Int32 PointCount
         {
             get
             {
-                return geometries.Length;
+                Int32 count = 0;
+
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    count += geometry.PointCount;
+                }
+
+                return count;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        public override IGeometry GetGeometryN(int n) 
+        public override OgcGeometryType GeometryType
         {
-            return geometries[n];
+            get { return OgcGeometryType.GeometryCollection; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IGeometry[] Geometries
-        {
-            get
-            {
-                return geometries;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override int NumPoints 
-        {
-            get
-            {
-                int numPoints = 0;
-                for (int i = 0; i < geometries.Length; i++)
-                    numPoints += geometries[i].NumPoints;
-                return numPoints;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>        
-        public override string GeometryType
-        {
-            get
-            {                
-                return "GeometryCollection";
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsSimple
+        public override Boolean IsSimple
         {
             get
             {
@@ -209,10 +183,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override IGeometry Boundary
+        public override IGeometry<TCoordinate> Boundary
         {
             get
             {
@@ -223,188 +194,440 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         }
 
         /// <summary>  
-        /// Returns the area of this <c>GeometryCollection</c>.
+        /// Returns the area of this <see cref="GeometryCollection{TCoordinate}" />.
         /// </summary>        
-        public override double Area
+        public override Double Area
         {
             get
             {
-                double area = 0.0;
-                for (int i = 0; i < geometries.Length; i++)
-                    area += geometries[i].Area;
+                Double area = 0.0;
+
+                foreach (ISurface<TCoordinate> surface in _geometries)
+                {
+                    if (surface != null)
+                    {
+                        area += surface.Area;
+                    }
+                }
+
                 return area;
             }
         }
 
         /// <summary>  
-        /// Returns the length of this <c>GeometryCollection</c>.
+        /// Returns the length of this <see cref="GeometryCollection{TCoordinate}" />.
         /// </summary>        
-        public override double Length
+        public override Double Length
         {
             get
             {
-                double sum = 0.0;
-                for (int i = 0; i < geometries.Length; i++)
-                    sum += (geometries[i]).Length;
+                Double sum = 0.0;
+
+                foreach (ICurve<TCoordinate> curve in _geometries)
+                {
+                    if (curve != null)
+                    {
+                        sum += curve.Length;
+                    }
+                }
+
                 return sum;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
         {
-            if (!IsEquivalentClass(other)) 
-                return false;            
-
-            IGeometryCollection otherCollection = (IGeometryCollection) other;
-            if (geometries.Length != otherCollection.Geometries.Length)
+            if (!IsEquivalentClass(other))
+            {
                 return false;
+            }
 
-            for (int i = 0; i < geometries.Length; i++) 
-                if (!geometries[i].EqualsExact(
-                     otherCollection.Geometries[i], tolerance)) 
-                        return false;
+            IGeometryCollection<TCoordinate> otherCollection = other as IGeometryCollection<TCoordinate>;
+
+            if (otherCollection == null)
+            {
+                return false;
+            }
+
+            if (Count != otherCollection.Count)
+            {
+                return false;
+            }
+
+            for (Int32 i = 0; i < _geometries.Count; i++)
+            {
+                if (!_geometries[i].Equals(otherCollection[i], tolerance))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(ICoordinateFilter filter)
+        /*
+         * [codekaizen 2008-01-14] removed when replaced visitor patterns with
+         *                         enumeration / query patterns
+         */
+
+        //public override void Apply(ICoordinateFilter<TCoordinate> filter)
+        //{
+        //    foreach (IGeometry<TCoordinate> geometry in _geometries)
+        //    {
+        //        geometry.Apply(filter);
+        //    }
+        //}
+
+        //public override void Apply(IGeometryFilter<TCoordinate> filter)
+        //{
+        //    filter.Filter(this);
+
+        //    foreach (IGeometry<TCoordinate> geometry in _geometries)
+        //    {
+        //        geometry.Apply(filter);
+        //    }
+        //}
+
+        //public void Apply(IGeometryComponentFilter<TCoordinate> filter)
+        //{
+        //    filter.Filter(this);
+
+        //    foreach (IGeometry<TCoordinate> geometry in _geometries)
+        //    {
+        //        geometry.Apply(filter);
+        //    }
+        //}
+
+        public override IGeometry<TCoordinate> Clone()
         {
-            for (int i = 0; i < geometries.Length; i++)
-                 geometries[i].Apply(filter);
+            List<IGeometry<TCoordinate>> geometries = new List<IGeometry<TCoordinate>>();
+
+            foreach (IGeometry<TCoordinate> geometry in _geometries)
+            {
+                geometries.Add(geometry.Clone());
+            }
+
+            return Factory.CreateGeometryCollection(geometries);
+        }
+
+        public override void Normalize()
+        {
+            foreach (IGeometry<TCoordinate> geometry in _geometries)
+            {
+                geometry.Normalize();
+            }
+
+            _geometries.Sort();
+        }
+
+        protected override Extents<TCoordinate> ComputeExtentsInternal()
+        {
+            Extents<TCoordinate> extents = new Extents<TCoordinate>();
+
+            foreach (IGeometry<TCoordinate> geometry in _geometries)
+            {
+                extents.ExpandToInclude(geometry.Extents);
+            }
+
+            return extents;
+        }
+
+        protected internal override Int32 CompareToSameClass(IGeometry<TCoordinate> other)
+        {
+            if (other == null)
+            {
+                return 1;
+            }
+
+            IGeometryCollection<TCoordinate> collection = other as IGeometryCollection<TCoordinate>;
+            return CompareTo(collection);
         }
 
         /// <summary>
-        /// 
+        /// Return <see langword="true"/> if all features in collection are of the same type.
         /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryFilter filter)
-        {
-            filter.Filter(this);
-            for (int i = 0; i < geometries.Length; i++)
-                 geometries[i].Apply(filter);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryComponentFilter filter) 
-        {
-            filter.Filter(this);
-            for (int i = 0; i < geometries.Length; i++)
-                 geometries[i].Apply(filter);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override object Clone() 
-        {
-            GeometryCollection gc = (GeometryCollection) base.Clone();
-            gc.geometries = new IGeometry[geometries.Length];
-            for (int i = 0; i < geometries.Length; i++) 
-                gc.geometries[i] = (IGeometry) geometries[i].Clone();
-            return gc; 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override void Normalize() 
-        {
-            for (int i = 0; i < geometries.Length; i++) 
-                geometries[i].Normalize();
-            Array.Sort(geometries);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override IEnvelope ComputeEnvelopeInternal()
-        {
-            IEnvelope envelope = new Envelope();
-            for (int i = 0; i < geometries.Length; i++) 
-                envelope.ExpandToInclude(geometries[i].EnvelopeInternal);
-            return envelope;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="o"></param>
-        /// <returns></returns>
-        protected internal override int CompareToSameClass(object o) 
-        {
-            ArrayList theseElements = new ArrayList(geometries);
-            ArrayList otherElements = new ArrayList(((GeometryCollection) o).geometries);
-            return Compare(theseElements, otherElements);
-        }
-
-        /// <summary>
-        /// Return <c>true</c> if all features in collection are of the same type.
-        /// </summary>
-        public bool IsHomogeneous
+        public Boolean IsHomogeneous
         {
             get
             {
+                if (IsEmpty)
+                {
+                    return true;
+                }
+
                 IGeometry baseGeom = Geometries[0];
-                for (int i = 1; i < Geometries.Length; i++)
-                    if (baseGeom.GetType() != Geometries[i].GetType())
+
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    if (baseGeom.GeometryType != geometry.GeometryType)
+                    {
                         return false;
+                    }
+                }
+
                 return true;
             }
         }
 
         /// <summary>
-        /// Returns a <c>GeometryCollectionEnumerator</c>:
+        /// Returns an element Geometry from a GeometryCollection.
+        /// </summary>
+        /// <param name="index">The index of the geometry element.</param>
+        /// <returns>
+        /// The geometry contained in this geometry at the given 
+        /// <paramref name="index"/>.
+        /// </returns>
+        public virtual IGeometry<TCoordinate> this[Int32 index]
+        {
+            get
+            {
+                if (index < 0 || index > _geometries.Count)
+                {
+                    throw new ArgumentOutOfRangeException("index", index,
+                        "Index must be 0 or greater and less than Count.");
+                }
+
+                return _geometries[index];
+            }
+            set { throw new NotSupportedException(GetType() + " is immutable."); }
+        }
+
+        /// <summary>
+        /// Returns the number of geometries contained by this <see cref="GeometryCollection{TCoordinate}" />.
+        /// </summary>
+        public Int32 Count
+        {
+            get { return _geometries.Count; }
+        }
+
+        #region IHasGeometryComponents<TCoordinate> Members
+
+        public IEnumerable<IGeometry<TCoordinate>> Components
+        {
+            get
+            {
+                foreach (IGeometry<TCoordinate> geometry in _geometries)
+                {
+                    foreach (IGeometry<TCoordinate> component in enumerateComponents(geometry))
+                    {
+                        yield return component;
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region IList<IGeometry> Members
+
+        public Int32 IndexOf(IGeometry item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Insert(Int32 index, IGeometry item)
+        {
+            throw new NotImplementedException();
+        }
+
+        #region ICollection<IGeometry> Members
+
+        public void Add(IGeometry item)
+        {
+            throw new NotImplementedException();
+        }
+
+        #region IEnumerable<IGeometry> Members
+
+        /// <summary>
+        /// Returns a <see cref="GeometryCollectionEnumerator{TCoordinate}"/>:
         /// this IEnumerator returns the parent geometry as first element.
-        /// In most cases is more useful the code
-        /// <c>geometryCollectionInstance.Geometries.GetEnumerator()</c>: 
-        /// this returns an IEnumerator over geometries composing GeometryCollection.
         /// </summary>
-        /// <returns></returns>
-        public IEnumerator GetEnumerator()
+        public IEnumerator<IGeometry<TCoordinate>> GetEnumerator()
         {
-            return new GeometryCollectionEnumerator(this);
+            return new GeometryCollectionEnumerator<TCoordinate>(this);
         }
 
-        /// <summary>
-        /// Returns the iTh element in the collection.
-        /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public IGeometry this[int i]
+        #endregion
+
+        #region IList<IGeometry<TCoordinate>> Members
+
+        public Int32 IndexOf(IGeometry<TCoordinate> item)
         {
-            get
+            return _geometries.IndexOf(item);
+        }
+
+        void IList<IGeometry<TCoordinate>>.Insert(Int32 index, IGeometry<TCoordinate> item)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        void IList<IGeometry<TCoordinate>>.RemoveAt(Int32 index)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        void IList<IGeometry>.RemoveAt(Int32 index)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        #endregion
+
+        #endregion
+
+        #region ICollection<IGeometry<TCoordinate>> Members
+
+        void ICollection<IGeometry<TCoordinate>>.Add(IGeometry<TCoordinate> item)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        void ICollection<IGeometry<TCoordinate>>.Clear()
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        void ICollection<IGeometry>.Clear()
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        bool ICollection<IGeometry>.Contains(IGeometry item)
+        {
+            return Contains(item as IGeometry<TCoordinate>);
+        }
+
+        void ICollection<IGeometry>.CopyTo(IGeometry[] array, Int32 arrayIndex)
+        {
+            // TODO: implement
+            throw new NotImplementedException();
+        }
+
+        bool ICollection<IGeometry>.Remove(IGeometry item)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        bool ICollection<IGeometry>.IsReadOnly
+        {
+            get { return true; }
+        }
+
+        #endregion
+
+        public void CopyTo(IGeometry<TCoordinate>[] array, Int32 arrayIndex)
+        {
+            _geometries.CopyTo(array, arrayIndex);
+        }
+
+        bool ICollection<IGeometry<TCoordinate>>.Remove(IGeometry<TCoordinate> item)
+        {
+            throw new NotSupportedException("Collection is read only.");
+        }
+
+        public bool IsReadOnly
+        {
+            get { return true; }
+        }
+
+        IGeometry IList<IGeometry>.this[Int32 index]
+        {
+            get { return this[index]; }
+            set { this[index] = value as IGeometry<TCoordinate>; }
+        }
+
+        #endregion
+
+        #region IEnumerable Members
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        #endregion
+
+        #region IEnumerable<IGeometry> Members
+
+        IEnumerator<IGeometry> IEnumerable<IGeometry>.GetEnumerator()
+        {
+            foreach (IGeometry<TCoordinate> geometry in this)
             {
-                return this.geometries[i];
+                yield return geometry;
             }
         }
 
-        /* BEGIN ADDED BY MPAUL42: monoGIS team */
+        #endregion
 
-        /// <summary>
-        /// Returns the number of geometries contained by this <see cref="GeometryCollection" />.
-        /// </summary>
-        public int Count
+        #region IComparable<IGeometryCollection<TCoordinate>> Members
+
+        public Int32 CompareTo(IGeometryCollection<TCoordinate> other)
         {
-            get
+            if (other == null)
             {
-                return geometries.Length;
+                return 1;
+            }
+
+            IEnumerator<IGeometry<TCoordinate>> i = GetEnumerator();
+            IEnumerator<IGeometry<TCoordinate>> j = other.GetEnumerator();
+
+            Boolean iHasNext = i.MoveNext();
+            Boolean jHasNext = j.MoveNext();
+
+            while (iHasNext && jHasNext)
+            {
+                int comparison = i.Current.CompareTo(j.Current);
+
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+            }
+
+            if (iHasNext)
+            {
+                return 1;
+            }
+
+            if (jHasNext)
+            {
+                return -1;
+            }
+
+            return 0;
+        }
+
+        #endregion
+
+        protected List<IGeometry<TCoordinate>> GeometriesInternal
+        {
+            get { return _geometries; }
+        }
+
+        private static IEnumerable<IGeometry<TCoordinate>> enumerateComponents(IGeometry<TCoordinate> geometry)
+        {
+            if (geometry is IHasGeometryComponents<TCoordinate>)
+            {
+                IHasGeometryComponents<TCoordinate> container =
+                    geometry as IHasGeometryComponents<TCoordinate>;
+
+                foreach (IGeometry<TCoordinate> component in container.Components)
+                {
+                    // avoid a recursion call (and another object on the heap), if possible
+                    if (component is IHasGeometryComponents<TCoordinate>)
+                    {
+                        foreach (IGeometry<TCoordinate> childComponent in enumerateComponents(geometry))
+                        {
+                            yield return childComponent;
+                        }
+                    }
+                    else
+                    {
+                        yield return component;
+                    }
+                }
             }
         }
-        
-        /* END ADDED BY MPAUL42: monoGIS team */
     }
 }

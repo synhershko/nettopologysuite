@@ -1,7 +1,8 @@
 using System;
-using System.Collections;
-using System.Text;
+using GeoAPI.Coordinates;
+using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Chain
 {
@@ -9,34 +10,43 @@ namespace GisSharpBlog.NetTopologySuite.Index.Chain
     /// The action for the internal iterator for performing
     /// envelope select queries on a MonotoneChain.
     /// </summary>
-    public class MonotoneChainSelectAction
+    public sealed class MonotoneChainSelectAction<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// These envelopes are used during the MonotoneChain search process.
-        /// </summary>
-        public Envelope TempEnv1 = new Envelope();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public LineSegment SelectedSegment = new LineSegment();
-
+        private readonly Extents<TCoordinate> _searchExtents1 = new Extents<TCoordinate>();
+        private LineSegment<TCoordinate> _selectedSegment = new LineSegment<TCoordinate>();
+        
         /// <summary> 
         /// This function can be overridden if the original chain is needed.
         /// </summary>
-        /// <param name="mc"></param>
-        /// <param name="start"></param>
-        public virtual void Select(MonotoneChain mc, int start)
+        public virtual void Select(MonotoneChain<TCoordinate> mc, Int32 start)
         {
-            mc.GetLineSegment(start, ref SelectedSegment);
-            Select(SelectedSegment);
+            _selectedSegment = mc.GetLineSegment(start);
+            Select(_selectedSegment);
         }
 
         /// <summary>
         /// This is a convenience function which can be overridden to obtain the actual
         /// line segment which is selected.
         /// </summary>
-        /// <param name="seg"></param>
-        public virtual void Select(LineSegment seg) { }
+        public virtual void Select(LineSegment<TCoordinate> seg) { }
+
+        public LineSegment<TCoordinate> SelectedSegment
+        {
+            get { return _selectedSegment; }
+        }
+
+        /// <summary>
+        /// Gets the <see cref="Extents{TCoordinate}"/> which is
+        /// used during the <see cref="MonotoneChain{TCoordinate}"/> search process.
+        /// </summary>
+        public IExtents<TCoordinate> SearchExtents
+        {
+            get
+            {
+                return _searchExtents1;
+            }
+        }
     }
 }

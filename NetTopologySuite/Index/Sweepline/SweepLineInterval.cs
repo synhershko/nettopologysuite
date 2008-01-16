@@ -1,59 +1,36 @@
 using System;
-using System.Collections;
-using System.Text;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Sweepline
 {
-    /// <summary>
-    /// 
-    /// </summary>
+    // DESIGN_NOTE: Looks like a value type
     public class SweepLineInterval
     {
-        private double min, max;
-        private object item;
+        private readonly Double _min;
+        private readonly Double _max;
+        private readonly Object _item;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="min"></param>
-        /// <param name="max"></param>
-        public SweepLineInterval(double min, double max) : this(min, max, null) { }
+        public SweepLineInterval(Double min, Double max) : this(min, max, null) {}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="min"></param>
-        /// <param name="max"></param>
-        /// <param name="item"></param>
-        public SweepLineInterval(double min, double max, object item)
+        public SweepLineInterval(Double min, Double max, object item)
         {
-            this.min = min < max ? min : max;
-            this.max = max > min ? max : min;
-            this.item = item;
+            _min = min < max ? min : max;
+            _max = max > min ? max : min;
+            _item = item;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double Min 
-        { 
-            get { return min; } 
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public double Max 
-        { 
-            get { return max; } 
+        public Double Min
+        {
+            get { return _min; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public object Item 
-        { 
-            get { return item; } 
+        public Double Max
+        {
+            get { return _max; }
+        }
+
+        public Object Item
+        {
+            get { return _item; }
         }
     }
 }

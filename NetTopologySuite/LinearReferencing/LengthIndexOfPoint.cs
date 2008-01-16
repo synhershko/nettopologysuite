@@ -1,68 +1,56 @@
 using System;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.LinearReferencing
 {
-
-    /// <summary>
-    /// 
-    /// </summary>
-    public class LengthIndexOfPoint
+    public class LengthIndexOfPoint<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="linearGeom"></param>
-        /// <param name="inputPt"></param>
-        /// <returns></returns>
-        public static double IndexOf(IGeometry linearGeom, ICoordinate inputPt)
+        public static Double IndexOf(IGeometry<TCoordinate> linearGeometry, TCoordinate inputPt)
         {
-            LengthIndexOfPoint locater = new LengthIndexOfPoint(linearGeom);
+            LengthIndexOfPoint<TCoordinate> locater = new LengthIndexOfPoint<TCoordinate>(linearGeometry);
             return locater.IndexOf(inputPt);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="linearGeom"></param>
-        /// <param name="inputPt"></param>
-        /// <param name="minIndex"></param>
-        /// <returns></returns>
-        public static double IndexOfAfter(IGeometry linearGeom, ICoordinate inputPt, double minIndex)
+        public static Double IndexOfAfter(IGeometry<TCoordinate> linearGeometry, TCoordinate inputPt, Double minIndex)
         {
-            LengthIndexOfPoint locater = new LengthIndexOfPoint(linearGeom);
+            LengthIndexOfPoint<TCoordinate> locater = new LengthIndexOfPoint<TCoordinate>(linearGeometry);
             return locater.IndexOfAfter(inputPt, minIndex);
         }
 
-        private IGeometry linearGeom;
+        private readonly IGeometry<TCoordinate> _linearGeometry;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:LengthIndexOfPoint"/> class.
+        /// Initializes a new instance of the <see cref="LengthIndexOfPoint{TCoordinate}"/> class.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
-        public LengthIndexOfPoint(IGeometry linearGeom)
+        public LengthIndexOfPoint(IGeometry<TCoordinate> linearGeom)
         {
-            this.linearGeom = linearGeom;
+            _linearGeometry = linearGeom;
         }
 
         /// <summary>
-        /// Find the nearest location along a linear {@link Geometry} to a given point.
+        /// Find the nearest location along a linear 
+        /// <see cref="IGeometry{TCoordinate}"/> to a given point.
         /// </summary>
         /// <param name="inputPt">The coordinate to locate.</param>
         /// <returns>The location of the nearest point.</returns>
-        public double IndexOf(ICoordinate inputPt)
+        public Double IndexOf(TCoordinate inputPt)
         {
             return IndexOfFromStart(inputPt, -1.0);
         }
 
         /// <summary>
-        /// Finds the nearest index along the linear <see cref="Geometry" />
-        /// to a given <see cref="Coordinate"/> after the specified minimum index.
+        /// Finds the nearest index along the linear <see cref="Geometry{TCoordinate}" />
+        /// to a given <typeparamref name="TCoordinate"/> after the specified minimum index.
         /// If possible the location returned will be strictly 
         /// greater than the <paramref name="minIndex" />.
         /// If this is not possible, the value returned 
@@ -73,16 +61,31 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// <param name="inputPt">The coordinate to locate.</param>
         /// <param name="minIndex">The minimum location for the point location.</param>
         /// <returns>The location of the nearest point.</returns>
-        public double IndexOfAfter(ICoordinate inputPt, double minIndex)
+        public Double IndexOfAfter(TCoordinate inputPt, Double minIndex)
         {
-            if (minIndex < 0.0) return IndexOf(inputPt);
+            if (minIndex < 0.0)
+            {
+                return IndexOf(inputPt);
+            }
+
+            Func<ILineString<TCoordinate>, Double> getLength = delegate(ILineString<TCoordinate> line)
+                                                         {
+                                                             return line.Length;
+                                                         };
+
+            Debug.Assert(_linearGeometry is ILineString || _linearGeometry is IEnumerable<ILineString<TCoordinate>>);
 
             // sanity check for minIndex at or past end of line
-            double endIndex = linearGeom.Length;
-            if (endIndex < minIndex)
-                return endIndex;
+            Double endIndex = _linearGeometry is IEnumerable<ILineString<TCoordinate>>
+                                  ? Enumerable.Sum(_linearGeometry as IEnumerable<ILineString<TCoordinate>>, getLength)
+                                  : ((ILineString)_linearGeometry).Length;
 
-            double closestAfter = IndexOfFromStart(inputPt, minIndex);
+            if (endIndex < minIndex)
+            {
+                return endIndex;
+            }
+
+            Double closestAfter = IndexOfFromStart(inputPt, minIndex);
 
             /*
              * Return the minDistanceLocation found.
@@ -92,54 +95,51 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
             return closestAfter;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="inputPt"></param>
-        /// <param name="minIndex"></param>
-        /// <returns></returns>
-        private double IndexOfFromStart(ICoordinate inputPt, double minIndex)
+        private Double IndexOfFromStart(TCoordinate inputPt, Double minIndex)
         {
-            double minDistance = Double.MaxValue;
+            Double minDistance = Double.MaxValue;
 
-            double ptMeasure = minIndex;
-            double segmentStartMeasure = 0.0;
+            Double ptMeasure = minIndex;
+            Double segmentStartMeasure = 0.0;
 
-            LineSegment seg = new LineSegment();
-            foreach(LinearIterator.LinearElement element in new LinearIterator(linearGeom))
+            LineSegment<TCoordinate> seg = new LineSegment<TCoordinate>();
+
+            foreach (LinearIterator<TCoordinate>.LinearElement element in new LinearIterator<TCoordinate>(_linearGeometry))
             {
                 if (!element.IsEndOfLine)
                 {
-                    seg.P0 = element.SegmentStart;
-                    seg.P1 = element.SegmentEnd;
-                    double segDistance = seg.Distance(inputPt);
-                    double segMeasureToPt = SegmentNearestMeasure(seg, inputPt, segmentStartMeasure);
+                    seg = new LineSegment<TCoordinate>(element.SegmentStart, element.SegmentEnd);
+
+                    Double segDistance = seg.Distance(inputPt);
+                    Double segMeasureToPt = segmentNearestMeasure(seg, inputPt, segmentStartMeasure);
+
                     if (segDistance < minDistance && segMeasureToPt > minIndex)
                     {
                         ptMeasure = segMeasureToPt;
                         minDistance = segDistance;
                     }
+
                     segmentStartMeasure += seg.Length;
-                }                
+                }
             }
             return ptMeasure;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="seg"></param>
-        /// <param name="inputPt"></param>
-        /// <param name="segmentStartMeasure"></param>
-        /// <returns></returns>
-        private double SegmentNearestMeasure(LineSegment seg, ICoordinate inputPt, double segmentStartMeasure)
+        private static Double segmentNearestMeasure(LineSegment<TCoordinate> seg, TCoordinate inputPt, Double segmentStartMeasure)
         {
             // found new minimum, so compute location distance of point
-            double projFactor = seg.ProjectionFactor(inputPt);
+            Double projFactor = seg.ProjectionFactor(inputPt);
+
             if (projFactor <= 0.0)
+            {
                 return segmentStartMeasure;
+            }
+            
             if (projFactor <= 1.0)
-                return segmentStartMeasure + projFactor * seg.Length;
+            {
+                return segmentStartMeasure + projFactor*seg.Length;
+            }
+
             // ASSERT: projFactor > 1.0
             return segmentStartMeasure + seg.Length;
         }

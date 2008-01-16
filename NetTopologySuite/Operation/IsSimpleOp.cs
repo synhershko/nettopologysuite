@@ -1,89 +1,133 @@
 using System;
-using System.Collections;
-using System.Text;
-
-using Iesi_NTS.Collections;
-
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures.Collections.Generic;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
-using GisSharpBlog.NetTopologySuite.Algorithm;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation
 {
     /// <summary>
-    /// Tests whether a <c>Geometry</c> is simple.
-    /// Only <c>Geometry</c>s whose definition allows them
-    /// to be simple or non-simple are tested.  (E.g. Polygons must be simple
-    /// by definition, so no test is provided.  To test whether a given Polygon is valid,
-    /// use <c>Geometry.IsValid</c>)
+    /// Tests whether a <see cref="IGeometry{TCoordinate}"/> is simple.
     /// </summary>
-    public class IsSimpleOp
+    /// <remarks>
+    /// Only <see cref="IGeometry{TCoordinate}"/>s whose definition allows them
+    /// to be simple or non-simple are tested. (e.g. <see cref="IPolygon{TCoordinate}"/>s
+    /// must be simple by definition, so no test is provided.  
+    /// To test whether a given Polygon is valid, use <see cref="IGeometry.IsValid"/>)
+    /// </remarks>
+    public class IsSimpleOp<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        public IsSimpleOp() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        public bool IsSimple(ILineString geom)
+        private struct EndpointInfo
         {
-            return IsSimpleLinearGeometry(geom);
+            private readonly TCoordinate _point;
+            private Boolean _isClosed;
+            private Int32 _degree;
+
+            public TCoordinate Point
+            {
+                get { return _point; }
+            }
+
+            public Boolean IsClosed
+            {
+                get { return _isClosed; }
+                private set { _isClosed = value; }
+            }
+
+            public Int32 Degree
+            {
+                get { return _degree; }
+                private set { _degree = value; }
+            }
+
+            public EndpointInfo(TCoordinate pt)
+            {
+                _point = pt;
+                _isClosed = false;
+                _degree = 0;
+            }
+
+            public void AddEndpoint(Boolean isClosed)
+            {
+                Degree++;
+                IsClosed |= isClosed;
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        public bool IsSimple(IMultiLineString geom)
+        public Boolean IsSimple(ILineString<TCoordinate> geom)
         {
-            return IsSimpleLinearGeometry(geom);
+            return isSimpleLinearGeometry(geom);
+        }
+
+        public Boolean IsSimple(IMultiLineString<TCoordinate> geom)
+        {
+            return isSimpleLinearGeometry(geom);
         }
 
         /// <summary>
         /// A MultiPoint is simple if it has no repeated points.
         /// </summary>
-        public bool IsSimple(IMultiPoint mp)
+        public Boolean IsSimple(IMultiPoint<TCoordinate> mp)
         {
-            if (mp.IsEmpty) 
-                return true;
-            ISet points = new ListSet();
-            for (int i = 0; i < mp.NumGeometries; i++)
+            if (mp.IsEmpty)
             {
-                IPoint pt = (IPoint) mp.GetGeometryN(i);
-                ICoordinate p = pt.Coordinate;
+                return true;
+            }
+
+            ISet<TCoordinate> points = new ListSet<TCoordinate>();
+
+            for (Int32 i = 0; i < mp.Count; i++)
+            {
+                IPoint<TCoordinate> pt = mp[i];
+                TCoordinate p = pt.Coordinate;
+
                 if (points.Contains(p))
+                {
                     return false;
+                }
+
                 points.Add(p);
             }
+
             return true;
-        }   
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        private bool IsSimpleLinearGeometry(IGeometry geom)
+        private static Boolean isSimpleLinearGeometry(IGeometry<TCoordinate> geom)
         {
-            if (geom.IsEmpty) 
+            if (geom.IsEmpty)
+            {
                 return true;
+            }
 
-            GeometryGraph graph = new GeometryGraph(0, geom);
-            LineIntersector li = new RobustLineIntersector();
-            SegmentIntersector si = graph.ComputeSelfNodes(li, true);
+            GeometryGraph<TCoordinate> graph = new GeometryGraph<TCoordinate>(0, geom);
+            LineIntersector<TCoordinate> li = CGAlgorithms<TCoordinate>.CreateRobustLineIntersector();
+            SegmentIntersector<TCoordinate> si = graph.ComputeSelfNodes(li, true);
+            
             // if no self-intersection, must be simple
-            if (!si.HasIntersection) return true;
-            if (si.HasProperIntersection) return false;
-            if (HasNonEndpointIntersection(graph)) return false;
-            if (HasClosedEndpointIntersection(graph)) return false;
+            if (!si.HasIntersection)
+            {
+                return true;
+            }
+
+            if (si.HasProperIntersection)
+            {
+                return false;
+            }
+
+            if (hasNonEndpointIntersection(graph))
+            {
+                return false;
+            }
+            if (hasClosedEndpointIntersection(graph))
+            {
+                return false;
+            }
             return true;
         }
 
@@ -91,81 +135,22 @@ namespace GisSharpBlog.NetTopologySuite.Operation
         /// For all edges, check if there are any intersections which are NOT at an endpoint.
         /// The Geometry is not simple if there are intersections not at endpoints.
         /// </summary>
-        /// <param name="graph"></param>
-        private bool HasNonEndpointIntersection(GeometryGraph graph)
+        private static Boolean hasNonEndpointIntersection(PlanarGraph<TCoordinate> graph)
         {
-            for (IEnumerator i = graph.GetEdgeEnumerator(); i.MoveNext(); )
+            foreach (Edge<TCoordinate> e in graph.Edges)
             {
-                Edge e = (Edge) i.Current;
-                int maxSegmentIndex = e.MaximumSegmentIndex;
-                for (IEnumerator eiIt = e.EdgeIntersectionList.GetEnumerator(); eiIt.MoveNext(); )
+                Int32 maxSegmentIndex = e.MaximumSegmentIndex;
+
+                foreach (EdgeIntersection<TCoordinate> intersection in e.EdgeIntersectionList)
                 {
-                    EdgeIntersection ei = (EdgeIntersection) eiIt.Current;
-                    if (!ei.IsEndPoint(maxSegmentIndex))
+                    if (!intersection.IsEndPoint(maxSegmentIndex))
+                    {
                         return true;
+                    } 
                 }
             }
+
             return false;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public class EndpointInfo
-        {
-            private ICoordinate pt;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public ICoordinate Point
-            {
-                get { return pt; }
-                set { pt = value; }
-            }
-
-            private bool isClosed = false;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public bool IsClosed
-            {
-                get { return isClosed; }
-                set { isClosed = value; }
-            }
-
-            private int degree;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            public int Degree
-            {
-                get { return degree; }
-                set { degree = value; }
-            }
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="pt"></param>
-            public EndpointInfo(ICoordinate pt)
-            {
-                this.pt = pt;
-                isClosed = false;
-                degree = 0;
-            }
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="isClosed"></param>
-            public void AddEndpoint(bool isClosed)
-            {
-                Degree++;
-                this.IsClosed |= isClosed;
-            }
         }
 
         /// <summary> 
@@ -174,42 +159,43 @@ namespace GisSharpBlog.NetTopologySuite.Operation
         /// degree of each endpoint. The degree of endpoints of closed lines
         /// must be exactly 2.
         /// </summary>
-        /// <param name="graph"></param>
-        private bool HasClosedEndpointIntersection(GeometryGraph graph)
+        private static Boolean hasClosedEndpointIntersection(PlanarGraph<TCoordinate> graph)
         {
-            IDictionary endPoints = new SortedList();
-            for (IEnumerator i = graph.GetEdgeEnumerator(); i.MoveNext(); )
+            SortedList<TCoordinate, EndpointInfo> endPoints = new SortedList<TCoordinate, EndpointInfo>();
+
+            foreach (Edge<TCoordinate> e in graph.Edges)
             {
-                Edge e = (Edge) i.Current;
-                bool isClosed = e.IsClosed;                
-                ICoordinate p0 = e.GetCoordinate(0);
-                AddEndpoint(endPoints, p0, isClosed);
-                ICoordinate p1 = e.GetCoordinate(e.NumPoints - 1);
-                AddEndpoint(endPoints, p1, isClosed);
+                Boolean isClosed = e.IsClosed;
+                TCoordinate p0 = e.Coordinates[0];
+                addEndpoint(endPoints, p0, isClosed);
+                TCoordinate p1 = e.Coordinates[e.PointCount - 1];
+                addEndpoint(endPoints, p1, isClosed);
             }
-            for (IEnumerator i = endPoints.Values.GetEnumerator(); i.MoveNext(); )
+
+            foreach (EndpointInfo info in endPoints.Values)
             {
-                EndpointInfo eiInfo = (EndpointInfo) i.Current;
-                if (eiInfo.IsClosed && eiInfo.Degree != 2)
+                if (info.IsClosed && info.Degree != 2)
+                {
                     return true;
+                }
             }
+
             return false;
         }
 
         /// <summary>
         /// Add an endpoint to the map, creating an entry for it if none exists.
         /// </summary>
-        /// <param name="endPoints"></param>
-        /// <param name="p"></param>
-        /// <param name="isClosed"></param>
-        private void AddEndpoint(IDictionary endPoints, ICoordinate p, bool isClosed)
+        private static void addEndpoint(IDictionary<TCoordinate, EndpointInfo> endPoints, TCoordinate p, Boolean isClosed)
         {
-            EndpointInfo eiInfo = (EndpointInfo) endPoints[p];
-            if (eiInfo == null)
+            EndpointInfo eiInfo;
+
+            if(!endPoints.TryGetValue(p, out eiInfo))
             {
                 eiInfo = new EndpointInfo(p);
                 endPoints.Add(p, eiInfo);
             }
+
             eiInfo.AddEndpoint(isClosed);
         }
     }

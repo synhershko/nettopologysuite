@@ -1,126 +1,96 @@
 using System;
-using System.Collections;
-using System.Text;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Sweepline
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public enum SweepLineEvents
+    public enum SweepLineEventType
     {
-        /// <summary>
-        /// 
-        /// </summary>
         Insert = 1,
-
-        /// <summary>
-        /// 
-        /// </summary>
         Delete = 2,
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    public class SweepLineEvent : IComparable
+    public class SweepLineEvent : IComparable<SweepLineEvent>
     {
-        private double xValue;
-        private SweepLineEvents eventType;
-        private SweepLineEvent insertEvent = null; // null if this is an Insert event
-        private int deleteEventIndex;
+        private readonly Double _xValue;
+        private readonly SweepLineEventType _eventType;
+        private readonly SweepLineEvent _insertEvent = null; // null if this is an Insert event
+        private Int32 _deleteEventIndex;
+        private readonly SweepLineInterval _sweepLineInterval;
 
-        private SweepLineInterval sweepInt;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="insertEvent"></param>
-        /// <param name="sweepInt"></param>
-        public SweepLineEvent(double x, SweepLineEvent insertEvent, SweepLineInterval sweepInt)
+        public SweepLineEvent(Double x, SweepLineEvent insertEvent, SweepLineInterval sweepInt)
         {
-            xValue = x;
-            this.insertEvent = insertEvent;            
+            _xValue = x;
+            _insertEvent = insertEvent;
+
             if (insertEvent != null)
-                 eventType = SweepLineEvents.Delete;
-            else eventType = SweepLineEvents.Insert;
-            this.sweepInt = sweepInt;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsInsert
-        {
-            get
             {
-                return insertEvent == null;
+                _eventType = SweepLineEventType.Delete;
             }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsDelete
-        {
-            get
+            else
             {
-                return insertEvent != null;
+                _eventType = SweepLineEventType.Insert;
             }
+
+            _sweepLineInterval = sweepInt;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        public Boolean IsInsert
+        {
+            get { return _insertEvent == null; }
+        }
+
+        public Boolean IsDelete
+        {
+            get { return _insertEvent != null; }
+        }
+
         public SweepLineEvent InsertEvent
         {
-            get
-            {
-                return insertEvent;
-            }
+            get { return _insertEvent; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int DeleteEventIndex
+        public Int32 DeleteEventIndex
         {
-            get
-            {
-                return deleteEventIndex;
-            }
-            set
-            {
-                this.deleteEventIndex = value;
-            }
+            get { return _deleteEventIndex; }
+            set { _deleteEventIndex = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public SweepLineInterval Interval
         {
-            get
-            {
-                return sweepInt;
-            }
+            get { return _sweepLineInterval; }
         }
 
         /// <summary>
+        /// Compares two <see cref="SweepLineEvent"/>s to sort them according to 
+        /// coordinate value and <see cref="SweepLineEventType"/>.
+        /// </summary>
+        /// <remarks>
         /// ProjectionEvents are ordered first by their x-value, and then by their eventType.
         /// It is important that Insert events are sorted before Delete events, so that
         /// items whose Insert and Delete events occur at the same x-value will be
         /// correctly handled.
-        /// </summary>
-        /// <param name="o"></param>
-        public int CompareTo(object o) 
-        {
-            SweepLineEvent pe = (SweepLineEvent) o;
-            if (xValue < pe.xValue) return  -1;
-            if (xValue > pe.xValue) return   1;
-            if (eventType < pe.eventType) return  -1;
-            if (eventType > pe.eventType) return   1;
+        /// </remarks>
+        public Int32 CompareTo(SweepLineEvent other)
+        { 
+            if (_xValue < other._xValue)
+            {
+                return -1;
+            }
+
+            if (_xValue > other._xValue)
+            {
+                return 1;
+            }
+
+            if (_eventType < other._eventType)
+            {
+                return -1;
+            }
+
+            if (_eventType > other._eventType)
+            {
+                return 1;
+            }
+
             return 0;
         }
     }

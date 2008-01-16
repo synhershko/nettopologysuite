@@ -1,19 +1,8 @@
-using System;
-using System.Collections;
-using System.Text;
-
 namespace GisSharpBlog.NetTopologySuite.Index.Sweepline
 {
-    /// <summary>
-    /// 
-    /// </summary>
+    // TODO: replace this with a generator rather than a visitor
     public interface ISweepLineOverlapAction
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="s0"></param>
-        /// <param name="s1"></param>
         void Overlap(SweepLineInterval s0, SweepLineInterval s1);
     }
 }

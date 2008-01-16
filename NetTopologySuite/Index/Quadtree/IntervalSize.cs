@@ -1,6 +1,5 @@
 using System;
-using System.Collections;
-using System.Text;
+using GisSharpBlog.NetTopologySuite.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
 {
@@ -13,20 +12,15 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
     /// computing a midpoint value which does not lie strictly between the
     /// endpoints.
     /// </summary>
-    public class IntervalSize 
+    public static class IntervalSize
     {
-        /// <summary>
-        /// Only static methods!
-        /// </summary>
-        private IntervalSize() { }
-
         /// <summary> 
         /// This value is chosen to be a few powers of 2 less than the
-        /// number of bits available in the double representation (i.e. 53).
+        /// number of bits available in the Double representation (i.e. 53).
         /// This should allow enough extra precision for simple computations to be correct,
         /// at least for comparison purposes.
         /// </summary>
-        public const int MinBinaryExponent = -50;
+        public const Int32 MinBinaryExponent = -50;
 
         /// <summary> 
         /// Computes whether the interval [min, max] is effectively zero width.
@@ -34,14 +28,18 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
         /// location of the interval that the midpoint of the interval cannot be
         /// represented precisely.
         /// </summary>
-        public static bool IsZeroWidth(double min, double max)
+        public static Boolean IsZeroWidth(Double min, Double max)
         {
-            double width = max - min;
-            if (width == 0.0) 
+            Double width = max - min;
+
+            if (width == 0.0)
+            {
                 return true;
-            double maxAbs = Math.Max(Math.Abs(min), Math.Abs(max));
-            double scaledInterval = width / maxAbs;
-            int level = DoubleBits.GetExponent(scaledInterval);
+            }
+
+            Double maxAbs = Math.Max(Math.Abs(min), Math.Abs(max));
+            Double scaledInterval = width / maxAbs;
+            Int32 level = DoubleBits.GetExponent(scaledInterval);
             return level <= MinBinaryExponent;
         }
     }

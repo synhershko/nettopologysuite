@@ -1,14 +1,13 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
-using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
@@ -16,66 +15,64 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
     /// Computes the topological relationship between two Geometries.
     /// RelateComputer does not need to build a complete graph structure to compute
     /// the IntersectionMatrix.  The relationship between the geometries can
-    /// be computed by simply examining the labelling of edges incident on each node.
+    /// be computed by simply examining the labeling of edges incident on each node.
     /// RelateComputer does not currently support arbitrary GeometryCollections.
     /// This is because GeometryCollections can contain overlapping Polygons.
     /// In order to correct compute relate on overlapping Polygons, they
     /// would first need to be noded and merged (if not explicitly, at least
     /// implicitly).
     /// </summary>
-    public class RelateComputer
+    public class RelateComputer<TCoordinate>
+         where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                             IComputable<Double, TCoordinate>, IConvertible
     {
-        private LineIntersector li = new RobustLineIntersector();
-        private PointLocator ptLocator = new PointLocator();
-        private GeometryGraph[] arg;     // the arg(s) of the operation
-        private NodeMap nodes = new NodeMap(new RelateNodeFactory());                
-        private ArrayList isolatedEdges = new ArrayList();        
+        private readonly LineIntersector<TCoordinate> _li = CGAlgorithms<TCoordinate>.CreateRobustLineIntersector();
+        private readonly PointLocator<TCoordinate> _ptLocator = new PointLocator<TCoordinate>();
+        // the arg(s) of the operation
+        private readonly GeometryGraph<TCoordinate> _g0;
+        private readonly GeometryGraph<TCoordinate> _g1;
+        private readonly NodeMap<TCoordinate> _nodes = new NodeMap<TCoordinate>(new RelateNodeFactory<TCoordinate>());
+        private readonly List<Edge<TCoordinate>> _isolatedEdges = new List<Edge<TCoordinate>>();
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="arg"></param>
-        public RelateComputer(GeometryGraph[] arg)
+        public RelateComputer(GeometryGraph<TCoordinate> graph1, GeometryGraph<TCoordinate> graph2)
         {
-            this.arg = arg;
+            _g0 = graph1;
+            _g1 = graph2;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public IntersectionMatrix ComputeIM()
+        public IntersectionMatrix ComputeIntersectionMatrix()
         {
             IntersectionMatrix im = new IntersectionMatrix();
             // since Geometries are finite and embedded in a 2-D space, the EE element must always be 2
             im.Set(Locations.Exterior, Locations.Exterior, Dimensions.Surface);
 
             // if the Geometries don't overlap there is nothing to do
-            if (!arg[0].Geometry.EnvelopeInternal.Intersects(arg[1].Geometry.EnvelopeInternal))
+            if (!_g0.Geometry.Extents.Intersects(_g1.Geometry.Extents))
             {
-                ComputeDisjointIM(im);
+                computeDisjointIntersectionMatrix(im);
                 return im;
             }
-            arg[0].ComputeSelfNodes(li, false);
-            arg[1].ComputeSelfNodes(li, false);
+
+            _g0.ComputeSelfNodes(_li, false);
+            _g1.ComputeSelfNodes(_li, false);
 
             // compute intersections between edges of the two input geometries
-            SegmentIntersector intersector = arg[0].ComputeEdgeIntersections(arg[1], li, false);           
-            ComputeIntersectionNodes(0);
-            ComputeIntersectionNodes(1);
+            SegmentIntersector<TCoordinate> intersector = _g0.ComputeEdgeIntersections(_g1, _li, false);
+            computeIntersectionNodes(0);
+            computeIntersectionNodes(1);
 
             /*
-             * Copy the labelling for the nodes in the parent Geometries.  These override
+             * Copy the labeling for the nodes in the parent Geometries.  These override
              * any labels determined by intersections between the geometries.
              */
-            CopyNodesAndLabels(0);
-            CopyNodesAndLabels(1);
+            copyNodesAndLabels(0);
+            copyNodesAndLabels(1);
 
-            // complete the labelling for any nodes which only have a label for a single point
-            LabelIsolatedNodes();
+            // complete the labeling for any nodes which only have a label for a single point
+            labelIsolatedNodes();
 
             // If a proper intersection was found, we can set a lower bound on the IM.
-            ComputeProperIntersectionIM(intersector, im);
+            computeProperIntersectionIntersectionMatrix(intersector, im);
 
             /*
              * Now process improper intersections
@@ -84,13 +81,13 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
              */
 
             // build EdgeEnds for all intersections
-            EdgeEndBuilder eeBuilder = new EdgeEndBuilder();
-            IList ee0 = eeBuilder.ComputeEdgeEnds(arg[0].GetEdgeEnumerator());
-            InsertEdgeEnds(ee0);
-            IList ee1 = eeBuilder.ComputeEdgeEnds(arg[1].GetEdgeEnumerator());
-            InsertEdgeEnds(ee1);
+            EdgeEndBuilder<TCoordinate> eeBuilder = new EdgeEndBuilder<TCoordinate>();
+            IEnumerable<EdgeEnd<TCoordinate>> ee0 = eeBuilder.ComputeEdgeEnds(_g0.Edges);
+            insertEdgeEnds(ee0);
+            IEnumerable<EdgeEnd<TCoordinate>> ee1 = eeBuilder.ComputeEdgeEnds(_g1.Edges);
+            insertEdgeEnds(ee1);
 
-            LabelNodeEdges();
+            labelNodeEdges();
 
             /*
              * Compute the labeling for isolated components
@@ -100,40 +97,30 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
              * contain labels containing ONLY a single element, the one for their parent point.
              * We only need to check components contained in the input graphs, since
              * isolated components will not have been replaced by new components formed by intersections.
-             */           
-            LabelIsolatedEdges(0, 1);            
-            LabelIsolatedEdges(1, 0);
+             */
+            labelIsolatedEdges(0, 1);
+            labelIsolatedEdges(1, 0);
 
             // update the IM from all components
-            UpdateIM(im);
+            updateIntersectionMatrix(im);
             return im;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ee"></param>
-        private void InsertEdgeEnds(IList ee)
+        private void insertEdgeEnds(IEnumerable<EdgeEnd<TCoordinate>> ee)
         {
-            for (IEnumerator i = ee.GetEnumerator(); i.MoveNext(); )
+            foreach (EdgeEnd<TCoordinate> end in ee)
             {
-                EdgeEnd e = (EdgeEnd)i.Current;
-                nodes.Add(e);
+                _nodes.Add(end);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="intersector"></param>
-        /// <param name="im"></param>
-        private void ComputeProperIntersectionIM(SegmentIntersector intersector, IntersectionMatrix im)
+        private void computeProperIntersectionIntersectionMatrix(SegmentIntersector<TCoordinate> intersector, IntersectionMatrix im)
         {
             // If a proper intersection is found, we can set a lower bound on the IM.
-            Dimensions dimA = arg[0].Geometry.Dimension;
-            Dimensions dimB = arg[1].Geometry.Dimension;
-            bool hasProper = intersector.HasProperIntersection;
-            bool hasProperInterior = intersector.HasProperInteriorIntersection;
+            Dimensions dimA = _g0.Geometry.Dimension;
+            Dimensions dimB = _g1.Geometry.Dimension;
+            Boolean hasProper = intersector.HasProperIntersection;
+            Boolean hasProperInterior = intersector.HasProperInteriorIntersection;
 
             // For Geometry's of dim 0 there can never be proper intersections.
             /*
@@ -141,11 +128,13 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
              */
             if (dimA == Dimensions.Surface && dimB == Dimensions.Surface)
             {
-                if (hasProper) 
+                if (hasProper)
+                {
                     im.SetAtLeast("212101212");
+                }
             }
 
-            /*
+                /*
              * If an Line segment properly intersects an edge segment of an Area,
              * it follows that the Interior of the Line intersects the Boundary of the Area.
              * If the intersection is a proper <i>interior</i> intersection, then
@@ -155,21 +144,29 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
              */
             else if (dimA == Dimensions.Surface && dimB == Dimensions.Curve)
             {
-                if (hasProper) 
+                if (hasProper)
+                {
                     im.SetAtLeast("FFF0FFFF2");
-                if (hasProperInterior) 
+                }
+                if (hasProperInterior)
+                {
                     im.SetAtLeast("1FFFFF1FF");
+                }
             }
 
             else if (dimA == Dimensions.Curve && dimB == Dimensions.Surface)
             {
-                if (hasProper) 
+                if (hasProper)
+                {
                     im.SetAtLeast("F0FFFFFF2");
+                }
                 if (hasProperInterior)
+                {
                     im.SetAtLeast("1F1FFFFFF");
+                }
             }
 
-            /* If edges of LineStrings properly intersect *in an interior point*, all
+                /* If edges of LineStrings properly intersect *in an interior point*, all
                we can deduce is that
                the interiors intersect.  (We can NOT deduce that the exteriors intersect,
                since some other segments in the geometries might cover the points in the
@@ -181,7 +178,9 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
             else if (dimA == Dimensions.Curve && dimB == Dimensions.Curve)
             {
                 if (hasProperInterior)
+                {
                     im.SetAtLeast("0FFFFFFFF");
+                }
             }
         }
 
@@ -194,14 +193,14 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// but in the original arg Geometry it is actually
         /// in the interior due to the Boundary Determination Rule)
         /// </summary>
-        /// <param name="argIndex"></param>
-        private void CopyNodesAndLabels(int argIndex)
+        private void copyNodesAndLabels(Int32 argIndex)
         {
-            for (IEnumerator i = arg[argIndex].GetNodeEnumerator(); i.MoveNext(); )
+            GeometryGraph<TCoordinate> graph = getGraph(argIndex);
+
+            foreach (Node<TCoordinate> node in graph.Nodes)
             {
-                Node graphNode = (Node)i.Current;
-                Node newNode = nodes.AddNode(graphNode.Coordinate);
-                newNode.SetLabel(argIndex, graphNode.Label.GetLocation(argIndex));                
+                Node<TCoordinate> newNode = _nodes.AddNode(node.Coordinate);
+                newNode.SetLabel(argIndex, node.Label.Value[argIndex].On);
             }
         }
 
@@ -209,26 +208,34 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// Insert nodes for all intersections on the edges of a Geometry.
         /// Label the created nodes the same as the edge label if they do not already have a label.
         /// This allows nodes created by either self-intersections or
-        /// mutual intersections to be labelled.
-        /// Endpoint nodes will already be labelled from when they were inserted.
+        /// mutual intersections to be labeled.
+        /// Endpoint nodes will already be labeled from when they were inserted.
         /// </summary>
-        /// <param name="argIndex"></param>
-        private void ComputeIntersectionNodes(int argIndex)
+        private void computeIntersectionNodes(Int32 argIndex)
         {
-            for (IEnumerator i = arg[argIndex].GetEdgeEnumerator(); i.MoveNext(); )
+            GeometryGraph<TCoordinate> graph = getGraph(argIndex);
+
+            foreach (Edge<TCoordinate> e in graph.Edges)
             {
-                Edge e = (Edge)i.Current;
-                Locations eLoc = e.Label.GetLocation(argIndex);
-                for (IEnumerator eiIt = e.EdgeIntersectionList.GetEnumerator(); eiIt.MoveNext(); )
+                Debug.Assert(e.Label != null);
+                Locations eLoc = e.Label.Value[argIndex].On;
+
+                foreach (EdgeIntersection<TCoordinate> intersection in e.EdgeIntersectionList)
                 {
-                    EdgeIntersection ei = (EdgeIntersection)eiIt.Current;
-                    RelateNode n = (RelateNode)nodes.AddNode(ei.Coordinate);
+                    RelateNode<TCoordinate> n = _nodes.AddNode(intersection.Coordinate) as RelateNode<TCoordinate>;
+                    Debug.Assert(n != null);
+
                     if (eLoc == Locations.Boundary)
+                    {
                         n.SetLabelBoundary(argIndex);
+                    }
                     else
                     {
-                        if (n.Label.IsNull(argIndex))
+                        Debug.Assert(n.Label != null);
+                        if (n.Label.Value.IsNull(argIndex))
+                        {
                             n.SetLabel(argIndex, Locations.Interior);
+                        }
                     }
                 }
             }
@@ -238,25 +245,32 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// For all intersections on the edges of a Geometry,
         /// label the corresponding node IF it doesn't already have a label.
         /// This allows nodes created by either self-intersections or
-        /// mutual intersections to be labelled.
-        /// Endpoint nodes will already be labelled from when they were inserted.
+        /// mutual intersections to be labeled.
+        /// Endpoint nodes will already be labeled from when they were inserted.
         /// </summary>
-        /// <param name="argIndex"></param>
-        private void LabelIntersectionNodes(int argIndex)
+        private void labelIntersectionNodes(Int32 argIndex)
         {
-            for (IEnumerator i = arg[argIndex].GetEdgeEnumerator(); i.MoveNext(); )
+            GeometryGraph<TCoordinate> graph = getGraph(argIndex);
+
+            foreach (Edge<TCoordinate> e in graph.Edges)
             {
-                Edge e = (Edge)i.Current;
-                Locations eLoc = e.Label.GetLocation(argIndex);
-                for (IEnumerator eiIt = e.EdgeIntersectionList.GetEnumerator(); eiIt.MoveNext(); )
+                Locations eLoc = e.Label.Value[argIndex].On;
+
+                foreach (EdgeIntersection<TCoordinate> intersection in e.EdgeIntersectionList)
                 {
-                    EdgeIntersection ei = (EdgeIntersection)eiIt.Current;
-                    RelateNode n = (RelateNode)nodes.Find(ei.Coordinate);
-                    if (n.Label.IsNull(argIndex))
+                    RelateNode<TCoordinate> n = _nodes.Find(intersection.Coordinate) as RelateNode<TCoordinate>;
+                    Debug.Assert(n != null);
+                    Debug.Assert(n.Label != null);
+                    if (n.Label.Value.IsNull(argIndex))
                     {
                         if (eLoc == Locations.Boundary)
-                             n.SetLabelBoundary(argIndex);
-                        else n.SetLabel(argIndex, Locations.Interior);
+                        {
+                            n.SetLabelBoundary(argIndex);
+                        }
+                        else
+                        {
+                            n.SetLabel(argIndex, Locations.Interior);
+                        }
                     }
                 }
             }
@@ -266,72 +280,68 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// If the Geometries are disjoint, we need to enter their dimension and
         /// boundary dimension in the Ext rows in the IM
         /// </summary>
-        /// <param name="im"></param>
-        private void ComputeDisjointIM(IntersectionMatrix im)
+        private void computeDisjointIntersectionMatrix(IntersectionMatrix im)
         {
-            IGeometry ga = arg[0].Geometry;
+            IGeometry ga = _g0.Geometry;
+
             if (!ga.IsEmpty)
             {
                 im.Set(Locations.Interior, Locations.Exterior, ga.Dimension);
                 im.Set(Locations.Boundary, Locations.Exterior, ga.BoundaryDimension);
             }
-            IGeometry gb = arg[1].Geometry;
+
+            IGeometry gb = _g1.Geometry;
+
             if (!gb.IsEmpty)
             {
                 im.Set(Locations.Exterior, Locations.Interior, gb.Dimension);
-                im.Set(Locations.Exterior, Locations.Boundary, gb.BoundaryDimension);    
+                im.Set(Locations.Exterior, Locations.Boundary, gb.BoundaryDimension);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void LabelNodeEdges()
+        private void labelNodeEdges()
         {
-            for (IEnumerator ni = nodes.GetEnumerator(); ni.MoveNext(); )
+            foreach (RelateNode<TCoordinate> node in _nodes)
             {
-                RelateNode node = (RelateNode)ni.Current;
-                node.Edges.ComputeLabelling(arg);                
+                node.Edges.ComputeLabeling(_g0, _g1);
             }
         }
 
         /// <summary>
         /// Update the IM with the sum of the IMs for each component.
         /// </summary>
-        /// <param name="im"></param>
-        private void UpdateIM(IntersectionMatrix im)
+        private void updateIntersectionMatrix(IntersectionMatrix im)
         {
-            for (IEnumerator ei = isolatedEdges.GetEnumerator(); ei.MoveNext(); )
+            foreach (Edge<TCoordinate> e in _isolatedEdges)
             {
-                Edge e = (Edge)ei.Current;
-                e.UpdateIM(im);
+                e.UpdateIntersectionMatrix(im);
             }
-            for (IEnumerator ni = nodes.GetEnumerator(); ni.MoveNext(); )
+
+            foreach (RelateNode<TCoordinate> node in _nodes)
             {
-                RelateNode node = (RelateNode)ni.Current;
-                node.UpdateIM(im);
-                node.UpdateIMFromEdges(im);
+                node.UpdateIntersectionMatrix(im);
+                node.UpdateIntersectionMatrixFromEdges(im);
             }
         }
 
         /// <summary> 
-        /// Processes isolated edges by computing their labelling and adding them
+        /// Processes isolated edges by computing their labeling and adding them
         /// to the isolated edges list.
         /// Isolated edges are guaranteed not to touch the boundary of the target (since if they
         /// did, they would have caused an intersection to be computed and hence would
         /// not be isolated).
         /// </summary>
-        /// <param name="thisIndex"></param>
-        /// <param name="targetIndex"></param>
-        private void LabelIsolatedEdges(int thisIndex, int targetIndex)
+        private void labelIsolatedEdges(Int32 thisIndex, Int32 targetIndex)
         {
-            for (IEnumerator ei = arg[thisIndex].GetEdgeEnumerator(); ei.MoveNext(); )
+            GeometryGraph<TCoordinate> graph = getGraph(thisIndex);
+
+            foreach (Edge<TCoordinate> e in graph.Edges)
             {
-                Edge e = (Edge)ei.Current;
                 if (e.IsIsolated)
                 {
-                    LabelIsolatedEdge(e, targetIndex, arg[targetIndex].Geometry);
-                    isolatedEdges.Add(e);
+                    GeometryGraph<TCoordinate> target = getGraph(targetIndex);
+                    labelIsolatedEdge(e, targetIndex, target.Geometry);
+                    _isolatedEdges.Add(e);
                 }
             }
         }
@@ -341,10 +351,7 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// If the target has dim 2 or 1, the edge can either be in the interior or the exterior.
         /// If the target has dim 0, the edge must be in the exterior.
         /// </summary>
-        /// <param name="e"></param>
-        /// <param name="targetIndex"></param>
-        /// <param name="target"></param>
-        private void LabelIsolatedEdge(Edge e, int targetIndex, IGeometry target)
+        private void labelIsolatedEdge(Edge<TCoordinate> e, Int32 targetIndex, IGeometry<TCoordinate> target)
         {
             // this won't work for GeometryCollections with both dim 2 and 1 geoms
             if (target.Dimension > 0)
@@ -352,34 +359,44 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
                 // since edge is not in boundary, may not need the full generality of PointLocator?
                 // Possibly should use ptInArea locator instead?  We probably know here
                 // that the edge does not touch the bdy of the target Geometry
-                Locations loc = ptLocator.Locate(e.Coordinate, target);
-                e.Label.SetAllLocations(targetIndex, loc);
+                Locations loc = _ptLocator.Locate(e.Coordinate, target);
+                e.Label = Label.SetAllLocations(e.Label.Value, targetIndex, loc);
             }
-            else e.Label.SetAllLocations(targetIndex, Locations.Exterior);            
+            else
+            {
+                e.Label = Label.SetAllLocations(e.Label.Value, targetIndex, Locations.Exterior);
+            }
         }
 
         /// <summary>
         /// Isolated nodes are nodes whose labels are incomplete
         /// (e.g. the location for one Geometry is null).
         /// This is the case because nodes in one graph which don't intersect
-        /// nodes in the other are not completely labelled by the initial process
+        /// nodes in the other are not completely labeled by the initial process
         /// of adding nodes to the nodeList.
-        /// To complete the labelling we need to check for nodes that lie in the
+        /// To complete the labeling we need to check for nodes that lie in the
         /// interior of edges, and in the interior of areas.
         /// </summary>
-        private void LabelIsolatedNodes()
+        private void labelIsolatedNodes()
         {
-            for (IEnumerator ni = nodes.GetEnumerator(); ni.MoveNext(); )
+            foreach (Node<TCoordinate> n in _nodes)
             {
-                Node n = (Node) ni.Current;
-                Label label = n.Label;
+                Debug.Assert(n.Label != null);
+                Label label = n.Label.Value;
+
                 // isolated nodes should always have at least one point in their label
                 Assert.IsTrue(label.GeometryCount > 0, "node with empty label found");
+
                 if (n.IsIsolated)
                 {
                     if (label.IsNull(0))
-                         LabelIsolatedNode(n, 0);
-                    else LabelIsolatedNode(n, 1);
+                    {
+                        labelIsolatedNode(n, 0);
+                    }
+                    else
+                    {
+                        labelIsolatedNode(n, 1);
+                    }
                 }
             }
         }
@@ -387,12 +404,16 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Relate
         /// <summary>
         /// Label an isolated node with its relationship to the target point.
         /// </summary>
-        /// <param name="n"></param>
-        /// <param name="targetIndex"></param>
-        private void LabelIsolatedNode(Node n, int targetIndex)
+        private void labelIsolatedNode(Node<TCoordinate> n, Int32 targetIndex)
         {
-            Locations loc = ptLocator.Locate(n.Coordinate, arg[targetIndex].Geometry);
-            n.Label.SetAllLocations(targetIndex, loc);        
+            GeometryGraph<TCoordinate> graph = getGraph(targetIndex);
+            Locations loc = _ptLocator.Locate(n.Coordinate, graph.Geometry);
+            n.Label = Label.SetAllLocations(n.Label.Value, targetIndex, loc);
+        }
+
+        private GeometryGraph<TCoordinate> getGraph(int argIndex)
+        {
+            return argIndex == 0 ? _g0 : _g1;
         }
     }
 }

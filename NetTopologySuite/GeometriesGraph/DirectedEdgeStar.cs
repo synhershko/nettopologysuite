@@ -1,199 +1,195 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary> 
     /// A DirectedEdgeStar is an ordered list of outgoing DirectedEdges around a node.
-    /// It supports labelling the edges as well as linking the edges to form both
+    /// It supports labeling the edges as well as linking the edges to form both
     /// MaximalEdgeRings and MinimalEdgeRings.
     /// </summary>
-    public class DirectedEdgeStar : EdgeEndStar
+    public class DirectedEdgeStar<TCoordinate> : EdgeEndStar<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary> 
-        /// A list of all outgoing edges in the result, in CCW order.
-        /// </summary>
-        private IList resultAreaEdgeList;
+        private const Int32 ScanningForIncoming = 1;
+        private const Int32 LinkingToOutgoing = 2;
 
-        private Label label;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public DirectedEdgeStar() { }
+        private readonly List<DirectedEdge<TCoordinate>> _resultAreaEdgeList = new List<DirectedEdge<TCoordinate>>();
+        private Label _label;
 
         /// <summary> 
         /// Insert a directed edge in the list.
         /// </summary>
-        /// <param name="ee"></param>
-        public override void Insert(EdgeEnd ee)
+        public override void Insert(EdgeEnd<TCoordinate> ee)
         {
-            DirectedEdge de = (DirectedEdge) ee;
+            DirectedEdge<TCoordinate> de = ee as DirectedEdge<TCoordinate>;
             InsertEdgeEnd(de, de);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public Label Label
         {
-            get
-            {
-                return label; 
-            }
+            get { return _label; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public int GetOutgoingDegree()
-        {            
-            int degree = 0;
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
-            {
-                DirectedEdge de = (DirectedEdge)it.Current;
-                if (de.IsInResult) 
-                    degree++;
-            }
-            return degree;         
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="er"></param>
-        /// <returns></returns>
-        public int GetOutgoingDegree(EdgeRing er)
+        public Int32 GetOutgoingDegree()
         {
-            int degree = 0;
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            Int32 degree = 0;
+
+            foreach (DirectedEdge<TCoordinate> end in EdgesInternal)
             {
-                DirectedEdge de = (DirectedEdge)it.Current;
-                if (de.EdgeRing == er) 
+                if (end.IsInResult)
+                {
                     degree++;
+                }
             }
+
             return degree;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public DirectedEdge GetRightmostEdge()
+        public Int32 GetOutgoingDegree(EdgeRing<TCoordinate> er)
         {
-            IList edges = Edges;
-            int size = edges.Count;
-            if (size < 1) 
-                return null;
-            DirectedEdge de0 = (DirectedEdge)edges[0];
-            if (size == 1) 
-                return de0;
-            DirectedEdge deLast = (DirectedEdge)edges[size - 1];
+            Int32 degree = 0;
 
-            int quad0 = de0.Quadrant;
-            int quad1 = deLast.Quadrant;
-            if (QuadrantOp.IsNorthern(quad0) && QuadrantOp.IsNorthern(quad1))
-                return de0;
-            else if (!QuadrantOp.IsNorthern(quad0) && !QuadrantOp.IsNorthern(quad1))
-                return deLast;
-            else 
+            foreach (DirectedEdge<TCoordinate> end in EdgesInternal)
             {
-            // edges are in different hemispheres - make sure we return one that is non-horizontal                        
-            if (de0.Dy != 0)
+                if (end.EdgeRing.Equals(er))
+                {
+                    degree++;
+                }
+            }
+
+            return degree;
+        }
+
+        public DirectedEdge<TCoordinate> GetRightmostEdge()
+        {
+            List<EdgeEnd<TCoordinate>> edges = EdgesInternal;
+            Int32 size = edges.Count;
+
+            if (size < 1)
+            {
+                return null;
+            }
+
+            DirectedEdge<TCoordinate> de0 = Slice.GetFirst(edges) as DirectedEdge<TCoordinate>;
+
+            Debug.Assert(de0 != null);
+
+            if (size == 1)
+            {
                 return de0;
-            else if (deLast.Dy != 0)
+            }
+
+            DirectedEdge<TCoordinate> deLast = Slice.GetLast(edges) as DirectedEdge<TCoordinate>;
+
+            Debug.Assert(deLast != null);
+
+            Quadrants quad0 = de0.Quadrant;
+            Quadrants quad1 = deLast.Quadrant;
+
+            if (QuadrantOp<TCoordinate>.IsNorthern(quad0) && QuadrantOp<TCoordinate>.IsNorthern(quad1))
+            {
+                return de0;
+            }
+            else if (!QuadrantOp<TCoordinate>.IsNorthern(quad0) && !QuadrantOp<TCoordinate>.IsNorthern(quad1))
+            {
                 return deLast;
             }
+            else
+            {
+                // edges are in different hemispheres - make sure we return one that is non-horizontal                        
+                if (de0.Direction[Ordinates.Y] != 0)
+                {
+                    return de0;
+                }
+                else if (deLast.Direction[Ordinates.Y] != 0)
+                {
+                    return deLast;
+                }
+            }
+
             Assert.ShouldNeverReachHere("found two horizontal edges incident on node");
             return null;
         }
 
         /// <summary> 
-        /// Compute the labelling for all dirEdges in this star, as well
-        /// as the overall labelling.
+        /// Compute the labeling for all dirEdges in this star, as well
+        /// as the overall labeling.
         /// </summary>
-        /// <param name="geom"></param>
-        public override void ComputeLabelling(GeometryGraph[] geom)
-        {        
-            base.ComputeLabelling(geom);
+        public override void ComputeLabeling(IEnumerable<GeometryGraph<TCoordinate>> geom)
+        {
+            base.ComputeLabeling(geom);
 
-            // determine the overall labelling for this DirectedEdgeStar
+            // determine the overall labeling for this DirectedEdgeStar
             // (i.e. for the node it is based at)
-            label = new Label(Locations.Null);
-            IEnumerator it = GetEnumerator();
-            while(it.MoveNext()) 
+            _label = new Label(Locations.None);
+
+            foreach (EdgeEnd<TCoordinate> ee in this)
             {
-                EdgeEnd ee = (EdgeEnd)it.Current;
-                Edge e = ee.Edge;
-                Label eLabel = e.Label;
-                for (int i = 0; i < 2; i++) 
+                Edge<TCoordinate> e = ee.Edge;
+                Debug.Assert(e.Label.HasValue);
+                Label eLabel = e.Label.Value;
+
+                for (Int32 i = 0; i < 2; i++)
                 {
-                    Locations eLoc = eLabel.GetLocation(i);
+                    Locations eLoc = eLabel[i].On;
+
                     if (eLoc == Locations.Interior || eLoc == Locations.Boundary)
-                        label.SetLocation(i, Locations.Interior);
+                    {
+                        _label = new Label(_label, i, Locations.Interior);
+                    }
                 }
-            }        
+            }
         }
 
         /// <summary> 
-        /// For each dirEdge in the star, merge the label .
+        /// For each <see cref="DirectedEdge{TCoordinate}"/> 
+        /// in the star, merge the label.
         /// </summary>
         public void MergeSymLabels()
         {
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            foreach (EdgeEnd<TCoordinate> end in this)
             {
-                DirectedEdge de = (DirectedEdge)it.Current;
-                Label label = de.Label;
-                label.Merge(de.Sym.Label);
+                DirectedEdge<TCoordinate> de = end as DirectedEdge<TCoordinate>;
+                Debug.Assert(de != null);
+                Debug.Assert(de.Label.HasValue);
+                Debug.Assert(de.Sym.Label.HasValue);
+                Label label = de.Label.Value;
+                label.Merge(de.Sym.Label.Value);
+                de.Label = label;
             }
         }
 
         /// <summary> 
-        /// Update incomplete dirEdge labels from the labelling for the node.
+        /// Update incomplete dirEdge labels from the labeling for the node.
         /// </summary>
-        /// <param name="nodeLabel"></param>
-        public void UpdateLabelling(Label nodeLabel)
+        public void UpdateLabeling(Label nodeLabel)
         {
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            foreach (EdgeEnd<TCoordinate> end in this)
             {
-                DirectedEdge de = (DirectedEdge)it.Current;
-                Label label = de.Label;
-                label.SetAllLocationsIfNull(0, nodeLabel.GetLocation(0));
-                label.SetAllLocationsIfNull(1, nodeLabel.GetLocation(1));
+                DirectedEdge<TCoordinate> de = end as DirectedEdge<TCoordinate>;
+                Debug.Assert(de != null);
+                Debug.Assert(de.Label.HasValue);
+                Label label = de.Label.Value;
+                label = Label.SetAllLocationsIfNull(label, 0, nodeLabel[0].On);
+                label = Label.SetAllLocationsIfNull(label, 1, nodeLabel[1].On);
+                de.Label = label;
             }
         }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private IList GetResultAreaEdges()
-        {            
-            if (resultAreaEdgeList != null) 
-                return resultAreaEdgeList;
-            resultAreaEdgeList = new ArrayList();
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
-            {
-                DirectedEdge de = (DirectedEdge)it.Current;
-                if (de.IsInResult || de.Sym.IsInResult)
-                    resultAreaEdgeList.Add(de);
-            }
-            return resultAreaEdgeList;         
-        }
-
-        private const int ScanningForIncoming = 1;
-        private const int LinkingToOutgoing = 2;
 
         /// <summary> 
         /// Traverse the star of DirectedEdges, linking the included edges together.
+        /// </summary>
+        /// <remarks>
         /// To link two dirEdges, the next pointer for an incoming dirEdge
         /// is set to the next outgoing edge.
         /// DirEdges are only linked if:
@@ -203,125 +199,160 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// This means that rings have their face on the Right
         /// (in other words, the topological location of the face is given by the RHS label of the DirectedEdge).
         /// PRECONDITION: No pair of dirEdges are both marked as being in the result.
-        /// </summary>
+        /// </remarks>
         public void LinkResultDirectedEdges()
         {
             // make sure edges are copied to resultAreaEdges list
-            GetResultAreaEdges();
+            List<DirectedEdge<TCoordinate>> resultAreaEdges = getResultAreaEdges();
+
             // find first area edge (if any) to start linking at
-            DirectedEdge firstOut = null;
-            DirectedEdge incoming = null;
-            int state = ScanningForIncoming;
+            DirectedEdge<TCoordinate> firstOut = null;
+            DirectedEdge<TCoordinate> incoming = null;
+            Int32 state = ScanningForIncoming;
+
             // link edges in CCW order
-            for (int i = 0; i < resultAreaEdgeList.Count; i++) 
+            for (Int32 i = 0; i < resultAreaEdges.Count; i++)
             {
-                DirectedEdge nextOut = (DirectedEdge)resultAreaEdgeList[i];
-                DirectedEdge nextIn = nextOut.Sym;
+                DirectedEdge<TCoordinate> nextOut = resultAreaEdges[i];
+                DirectedEdge<TCoordinate> nextIn = nextOut.Sym;
+                Debug.Assert(nextOut.Label.HasValue);
 
                 // skip de's that we're not interested in
-                if (! nextOut.Label.IsArea()) 
+                if (!nextOut.Label.Value.IsArea())
+                {
                     continue;
+                }
 
                 // record first outgoing edge, in order to link the last incoming edge
                 if (firstOut == null && nextOut.IsInResult)
-                    firstOut = nextOut;                
+                {
+                    firstOut = nextOut;
+                }
 
-                switch (state) 
+                switch (state)
                 {
                     case ScanningForIncoming:
                         if (!nextIn.IsInResult)
+                        {
                             continue;
+                        }
                         incoming = nextIn;
                         state = LinkingToOutgoing;
                         break;
                     case LinkingToOutgoing:
                         if (!nextOut.IsInResult)
+                        {
                             continue;
+                        }
+                        Debug.Assert(incoming != null);
                         incoming.Next = nextOut;
                         state = ScanningForIncoming;
                         break;
                     default:
-	                    break;
+                        break;
                 }
-            }        
-            if (state == LinkingToOutgoing) 
-            {        
+            }
+
+            if (state == LinkingToOutgoing)
+            {
                 if (firstOut == null)
-                    throw new TopologyException("no outgoing dirEdge found", Coordinate);            
+                {
+                    throw new TopologyException("no outgoing dirEdge found", Coordinate);
+                }
+
                 Assert.IsTrue(firstOut.IsInResult, "unable to link last incoming dirEdge");
+                Debug.Assert(incoming != null);
                 incoming.Next = firstOut;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="er"></param>
-        public void LinkMinimalDirectedEdges(EdgeRing er)
+        public void LinkMinimalDirectedEdges(EdgeRing<TCoordinate> er)
         {
+            // make sure edges are copied to resultAreaEdges list
+            List<DirectedEdge<TCoordinate>> resultAreaEdges = getResultAreaEdges();
+
             // find first area edge (if any) to start linking at
-            DirectedEdge firstOut = null;
-            DirectedEdge incoming = null;
-            int state = ScanningForIncoming;
+            DirectedEdge<TCoordinate> firstOut = null;
+            DirectedEdge<TCoordinate> incoming = null;
+            Int32 state = ScanningForIncoming;
+
             // link edges in CW order
-            for (int i = resultAreaEdgeList.Count - 1; i >= 0; i--) 
+            for (Int32 i = resultAreaEdges.Count - 1; i >= 0; i--)
             {
-                DirectedEdge nextOut = (DirectedEdge)resultAreaEdgeList[i];
-                DirectedEdge nextIn = nextOut.Sym;
+                DirectedEdge<TCoordinate> nextOut = resultAreaEdges[i];
+                DirectedEdge<TCoordinate> nextIn = nextOut.Sym;
 
                 // record first outgoing edge, in order to link the last incoming edge
-                if (firstOut == null && nextOut.EdgeRing == er) 
+                if (firstOut == null && nextOut.EdgeRing == er)
+                {
                     firstOut = nextOut;
+                }
 
-                switch (state) 
+                switch (state)
                 {
                     case ScanningForIncoming:
                         if (nextIn.EdgeRing != er)
+                        {
                             continue;
+                        }
                         incoming = nextIn;
                         state = LinkingToOutgoing;
                         break;
                     case LinkingToOutgoing:
                         if (nextOut.EdgeRing != er)
+                        {
                             continue;
+                        }
+                        Debug.Assert(incoming != null);
                         incoming.NextMin = nextOut;
                         state = ScanningForIncoming;
                         break;
-	                default:
-		                break;
+                    default:
+                        break;
                 }
-            }        
-            if (state == LinkingToOutgoing) 
+            }
+
+            if (state == LinkingToOutgoing)
             {
                 Assert.IsTrue(firstOut != null, "found null for first outgoing dirEdge");
+                Debug.Assert(firstOut != null);
                 Assert.IsTrue(firstOut.EdgeRing == er, "unable to link last incoming dirEdge");
+                Debug.Assert(incoming != null);
                 incoming.NextMin = firstOut;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public void LinkAllDirectedEdges()
         {
-            IList temp = Edges;
-            temp = null;    //Hack
+            List<EdgeEnd<TCoordinate>> edges = EdgesInternal;
+
             // find first area edge (if any) to start linking at
-            DirectedEdge prevOut = null;
-            DirectedEdge firstIn = null;
+            DirectedEdge<TCoordinate> prevOut = null;
+            DirectedEdge<TCoordinate> firstIn = null;
+
             // link edges in CW order
-            for (int i = edgeList.Count - 1; i >= 0; i--) 
+            for (Int32 i = edges.Count - 1; i >= 0; i--)
             {
-                DirectedEdge nextOut = (DirectedEdge)edgeList[i];
-                DirectedEdge nextIn = nextOut.Sym;
-                if (firstIn == null) 
+                DirectedEdge<TCoordinate> nextOut = edges[i] as DirectedEdge<TCoordinate>;
+                Debug.Assert(nextOut != null);
+                DirectedEdge<TCoordinate> nextIn = nextOut.Sym;
+
+                if (firstIn == null)
+                {
                     firstIn = nextIn;
-                if (prevOut != null) 
+                }
+
+                if (prevOut != null)
+                {
                     nextIn.Next = prevOut;
+                }
+
                 // record outgoing edge, in order to link the last incoming edge
                 prevOut = nextOut;
             }
-            firstIn.Next = prevOut;        
+
+            Debug.Assert(firstIn != null);
+            firstIn.Next = prevOut;
         }
 
         /// <summary> 
@@ -330,7 +361,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// If any L edges are found in the interior of the result, mark them as covered.
         /// </summary>
         public void FindCoveredLineEdges()
-        {        
+        {
             // Since edges are stored in CCW order around the node,
             // as we move around the ring we move from the right to the left side of the edge
 
@@ -341,14 +372,16 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
             * - Interior if the edge is outgoing
             * - Exterior if the edge is incoming
             */
-            Locations startLoc = Locations.Null;
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            Locations startLoc = Locations.None;
+
+            foreach (DirectedEdge<TCoordinate> nextOut in EdgesInternal)
             {
-                DirectedEdge nextOut = (DirectedEdge)it.Current;
-                DirectedEdge nextIn   = nextOut.Sym;
-                if (!nextOut.IsLineEdge) 
+                Debug.Assert(nextOut != null);
+                DirectedEdge<TCoordinate> nextIn = nextOut.Sym;
+
+                if (!nextOut.IsLineEdge)
                 {
-                    if (nextOut.IsInResult) 
+                    if (nextOut.IsInResult)
                     {
                         startLoc = Locations.Interior;
                         break;
@@ -360,9 +393,12 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
                     }
                 }
             }
+
             // no A edges found, so can't determine if Curve edges are covered or not
-            if (startLoc == Locations.Null)
+            if (startLoc == Locations.None)
+            {
                 return;
+            }
 
             /*
             * move around ring, keeping track of the current location
@@ -370,64 +406,55 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
             * If Curve edges are found, mark them as covered if they are in the interior
             */
             Locations currLoc = startLoc;
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+
+            foreach (DirectedEdge<TCoordinate> nextOut in EdgesInternal)
             {
-                DirectedEdge nextOut = (DirectedEdge)it.Current;
-                DirectedEdge nextIn   = nextOut.Sym;
+                Debug.Assert(nextOut != null);
+                DirectedEdge<TCoordinate> nextIn = nextOut.Sym;
+
                 if (nextOut.IsLineEdge)
+                {
                     nextOut.Edge.Covered = (currLoc == Locations.Interior);
-                else {  
+                }
+                else
+                {
                     // edge is an Area edge
                     if (nextOut.IsInResult)
+                    {
                         currLoc = Locations.Exterior;
+                    }
+
                     if (nextIn.IsInResult)
+                    {
                         currLoc = Locations.Interior;
-                }   
+                    }
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        public void ComputeDepths(DirectedEdge de)
+        public void ComputeDepths(DirectedEdge<TCoordinate> de)
         {
-            int edgeIndex = FindIndex(de);
-            int startDepth = de.GetDepth(Positions.Left);
-            int targetLastDepth = de.GetDepth(Positions.Right);
+            List<EdgeEnd<TCoordinate>> edges = EdgesInternal;
+            Int32 edgeIndex = FindIndex(de);
+            Int32 startDepth = de.GetDepth(Positions.Left);
+            Int32 targetLastDepth = de.GetDepth(Positions.Right);
             // compute the depths from this edge up to the end of the edge array
-            int nextDepth = ComputeDepths(edgeIndex + 1, edgeList.Count, startDepth);
+            Int32 nextDepth = computeDepths(edgeIndex + 1, edges.Count, startDepth);
             // compute the depths for the initial part of the array
-            int lastDepth = ComputeDepths(0, edgeIndex, nextDepth);        
+            Int32 lastDepth = computeDepths(0, edgeIndex, nextDepth);
+
             if (lastDepth != targetLastDepth)
-                throw new TopologyException("depth mismatch at " + de.Coordinate);            
-        }
-
-        /// <summary> 
-        /// Compute the DirectedEdge depths for a subsequence of the edge array.
-        /// </summary>
-        /// <returns>The last depth assigned (from the R side of the last edge visited).</returns>
-        private int ComputeDepths(int startIndex, int endIndex, int startDepth)
-        {
-            int currDepth = startDepth;
-            for (int i = startIndex; i < endIndex ; i++) 
             {
-                DirectedEdge nextDe = (DirectedEdge)edgeList[i];            
-                nextDe.SetEdgeDepths(Positions.Right, currDepth);
-                currDepth = nextDe.GetDepth(Positions.Left);
+                throw new TopologyException("depth mismatch at " + de.Coordinate);
             }
-            return currDepth;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
         public override void Write(StreamWriter outstream)
-        {            
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+        {
+            foreach (EdgeEnd<TCoordinate> end in this)
             {
-                DirectedEdge de = (DirectedEdge)it.Current;
+                DirectedEdge<TCoordinate> de = end as DirectedEdge<TCoordinate>;
+                Debug.Assert(de != null);
                 outstream.Write("out ");
                 de.Write(outstream);
                 outstream.WriteLine();
@@ -435,6 +462,49 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
                 de.Sym.Write(outstream);
                 outstream.WriteLine();
             }
+        }
+
+        private List<DirectedEdge<TCoordinate>> getResultAreaEdges()
+        {
+            if (_resultAreaEdgeList.Count == 0)
+            {
+                return _resultAreaEdgeList;
+            }
+
+            foreach (EdgeEnd<TCoordinate> end in this)
+            {
+                DirectedEdge<TCoordinate> de = end as DirectedEdge<TCoordinate>;
+                Debug.Assert(de != null);
+
+                if (de.IsInResult || de.Sym.IsInResult)
+                {
+                    _resultAreaEdgeList.Add(de);
+                }
+            }
+
+            return _resultAreaEdgeList;
+        }
+
+        /// <summary> 
+        /// Compute the DirectedEdge depths for a subsequence of the edge array.
+        /// </summary>
+        /// <returns>
+        /// The last depth assigned (from the R side of the last edge visited).
+        /// </returns>
+        private Int32 computeDepths(Int32 startIndex, Int32 endIndex, Int32 startDepth)
+        {
+            Int32 currDepth = startDepth;
+            List<EdgeEnd<TCoordinate>> edges = EdgesInternal;
+
+            for (Int32 i = startIndex; i < endIndex; i++)
+            {
+                DirectedEdge<TCoordinate> nextDe = edges[i] as DirectedEdge<TCoordinate>;
+                Debug.Assert(nextDe != null);
+                nextDe.SetEdgeDepths(Positions.Right, currDepth);
+                currDepth = nextDe.GetDepth(Positions.Left);
+            }
+
+            return currDepth;
         }
     }
 }

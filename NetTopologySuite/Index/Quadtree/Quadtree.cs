@@ -1,18 +1,26 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
 {
     /// <summary>
     /// A Quadtree is a spatial index structure for efficient querying
-    /// of 2D rectangles.  If other kinds of spatial objects
+    /// of 2D rectangles.  
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// If other kinds of spatial objects
     /// need to be indexed they can be represented by their
-    /// envelopes    
+    /// envelopes.
+    /// </para>
+    /// <para>
     /// The quadtree structure is used to provide a primary filter
     /// for range rectangle queries.  The Query() method returns a list of
     /// all objects which may intersect the query rectangle.  Note that
@@ -23,45 +31,99 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
     /// This implementation does not require specifying the extent of the inserted
     /// items beforehand.  It will automatically expand to accomodate any extent
     /// of dataset.
+    /// </para>
+    /// <para>
     /// This data structure is also known as an <c>MX-CIF quadtree</c>
     /// following the usage of Samet and others.
-    /// </summary>
-    public class Quadtree : ISpatialIndex
+    /// </para>
+    /// </remarks>
+    public class Quadtree<TCoordinate, TItem> : ISpatialIndex<IExtents<TCoordinate>, TItem>, IEnumerable<TItem>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// Ensure that the envelope for the inserted item has non-zero extents.
-        /// Use the current minExtent to pad the envelope, if necessary.
-        /// </summary>
-        /// <param name="itemEnv"></param>
-        /// <param name="minExtent"></param>
-        public static IEnvelope EnsureExtent(IEnvelope itemEnv, double minExtent)
+        struct QuadTreeEntry : IBoundable<IExtents<TCoordinate>>
         {
-            //The names "ensureExtent" and "minExtent" are misleading -- sounds like
-            //this method ensures that the extents are greater than minExtent.
-            //Perhaps we should rename them to "ensurePositiveExtent" and "defaultExtent".
-            //[Jon Aquino]
-            double minx = itemEnv.MinX;
-            double maxx = itemEnv.MaxX;
-            double miny = itemEnv.MinY;
-            double maxy = itemEnv.MaxY;            
+            private readonly TItem _item;
+            private readonly IExtents<TCoordinate> _bounds;
+
+            public QuadTreeEntry(TItem item, IExtents<TCoordinate> bounds)
+            {
+                if (bounds == null)
+                {
+                    throw new ArgumentNullException("bounds");
+                }
+
+                _item = item;
+                _bounds = bounds;
+            }
+
+            public TItem Item
+            {
+                get { return _item; }
+            }
+
+            #region IBoundable<IExtents<TCoordinate>> Members
+
+            public IExtents<TCoordinate> Bounds
+            {
+                get { return _bounds; }
+            }
+
+            public Boolean Intersects(IExtents<TCoordinate> bounds)
+            {
+                return _bounds.Intersects(bounds);
+            }
+
+            #endregion
+        }
+
+        public static Int32 ComputeQuadLevel(IExtents<TCoordinate> extents)
+        {
+            Double dx = extents.GetSize(Ordinates.X);
+            Double dy = extents.GetSize(Ordinates.Y);
+            Double dMax = dx > dy ? dx : dy;
+            Int32 level = DoubleBits.GetExponent(dMax) + 1;
+            return level;
+        }
+
+        /// <summary>
+        /// Ensure that the extents for the inserted item is non-zero.
+        /// Use <paramref name="minExtent"/> to pad the envelope, if necessary.
+        /// </summary>
+        public static IExtents<TCoordinate> EnsureExtent(IExtents<TCoordinate> itemExtents, Double minExtent)
+        {
+            // The names "ensureExtent" and "minExtent" are misleading -- sounds like
+            // this method ensures that the extents are greater than minExtent.
+            // Perhaps we should rename them to "ensurePositiveExtent" and "defaultExtent".
+            // [Jon Aquino]
+            Double minx = itemExtents.GetMin(Ordinates.X);
+            Double maxx = itemExtents.GetMax(Ordinates.X);
+            Double miny = itemExtents.GetMin(Ordinates.Y);
+            Double maxy = itemExtents.GetMax(Ordinates.Y);
+
             // has a non-zero extent
-            if (minx != maxx && miny != maxy) 
-                return itemEnv;
+            if (minx != maxx && miny != maxy)
+            {
+                return itemExtents;
+            }
+
             // pad one or both extents
-            if (minx == maxx) 
+            if (minx == maxx)
             {
                 minx = minx - minExtent / 2.0;
                 maxx = minx + minExtent / 2.0;
             }
-            if (miny == maxy) 
+
+            if (miny == maxy)
             {
                 miny = miny - minExtent / 2.0;
                 maxy = miny + minExtent / 2.0;
             }
-            return new Envelope(minx, maxx, miny, maxy);
+
+            return new Extents<TCoordinate>(minx, maxx, miny, maxy);
         }
 
-        private Root root;
+        private readonly Root<TCoordinate, QuadTreeEntry> _root = new Root<TCoordinate, QuadTreeEntry>();
 
         /// <summary>
         /// minExtent is the minimum envelope extent of all items
@@ -71,122 +133,150 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
         /// a zero extent in both directions.  This value may be non-optimal, but
         /// only one feature will be inserted with this value.
         /// </summary>
-        private double minExtent = 1.0;
+        private Double _minExtent = 1.0;
 
-        /// <summary>
-        /// Constructs a Quadtree with zero items.
-        /// </summary>
-        public Quadtree()
+        private Boolean _isDisposed = false;
+
+        #region IDisposable Members
+
+        public void Dispose()
         {
-            root = new Root();
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            Dispose(true);
+            GC.SuppressFinalize(this);
+            _isDisposed = true;
+        }
+
+        #endregion
+
+        public Boolean IsDiposed
+        {
+            get { return _isDisposed; }
+        }
+
+        protected virtual void Dispose(Boolean disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+        }
+
+        public IExtents<TCoordinate> Bounds
+        {
+            get { return _root.Bounds; }
         }
 
         /// <summary> 
         /// Returns the number of levels in the tree.
         /// </summary>
-        public int Depth
+        public Int32 Depth
         {
             get
             {
-                //I don't think it's possible for root to be null. Perhaps we should
-                //remove the check. [Jon Aquino]
-                //Or make an assertion [Jon Aquino 10/29/2003]
-                if (root != null) 
-                    return root.Depth;
-                return 0;
+                Debug.Assert(_root != null);
+                return _root.Depth;
             }
         }
 
         /// <summary> 
         /// Returns the number of items in the tree.
         /// </summary>
-        public int Count
+        public Int32 Count
         {
             get
             {
-                if (root != null) 
-                    return root.Count;
-                return 0;
+                Debug.Assert(_root != null);
+                return _root.TotalItems;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemEnv"></param>
-        /// <param name="item"></param>
-        public void Insert(IEnvelope itemEnv, object item)
+        public void Insert(IExtents<TCoordinate> itemExtents, TItem item)
         {
-            CollectStats(itemEnv);
-            IEnvelope insertEnv = EnsureExtent(itemEnv, minExtent);
-            root.Insert(insertEnv, item);
+            collectStats(itemExtents);
+            IExtents<TCoordinate> insertExtents = EnsureExtent(itemExtents, _minExtent);
+            _root.Insert(new QuadTreeEntry(item, itemExtents));
         }
 
         /// <summary> 
         /// Removes a single item from the tree.
         /// </summary>
-        /// <param name="itemEnv">The Envelope of the item to remove.</param>
+        /// <param name="itemExtents">The <see cref="IExtents{TCoordinate}"/> of the item to remove.</param>
         /// <param name="item">The item to remove.</param>
-        /// <returns><c>true</c> if the item was found.</returns>
-        public bool Remove(IEnvelope itemEnv, object item)
+        /// <returns><see langword="true"/> if the item was found.</returns>
+        public Boolean Remove(IExtents<TCoordinate> itemExtents, TItem item)
         {
-            IEnvelope posEnv = EnsureExtent(itemEnv, minExtent);
-            return root.Remove(posEnv, item);
-        }        
+            IExtents<TCoordinate> posEnv = EnsureExtent(itemExtents, _minExtent);
+            return _root.Remove(posEnv, new QuadTreeEntry(item, posEnv));
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <returns></returns>
-        public IList Query(IEnvelope searchEnv)
+        public IEnumerable<TItem> Query(IExtents<TCoordinate> query)
         {
             /*
             * the items that are matched are the items in quads which
             * overlap the search envelope
             */
-            ArrayListVisitor visitor = new ArrayListVisitor();
-            Query(searchEnv, visitor);
-            return visitor.Items;
+            foreach (QuadTreeEntry entry in _root.Query(query))
+            {
+                yield return entry.Item;
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <param name="visitor"></param>
-        public void Query(IEnvelope searchEnv, IItemVisitor visitor)
+        public IEnumerable<TItem> Query(IExtents<TCoordinate> query, Predicate<TItem> filter)
         {
             /*
             * the items that are matched are the items in quads which
             * overlap the search envelope
             */
-            root.Visit(searchEnv, visitor);
+            foreach (QuadTreeEntry entry in _root.Query(query))
+            {
+                if (filter(entry.Item))
+                {
+                    yield return entry.Item;
+                }
+            }
         }
 
-        /// <summary>
-        /// Return a list of all items in the Quadtree.
-        /// </summary>
-        public IList QueryAll()
-        {
-            IList foundItems = new ArrayList();
-            root.AddAllItems(ref foundItems);
-            return foundItems;
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemEnv"></param>
-        private void CollectStats(IEnvelope itemEnv)
-        {
-            double delX = itemEnv.Width;
-            if (delX < minExtent && delX > 0.0)
-            minExtent = delX;
+        #region IEnumerable<TItem> Members
 
-            double delY = itemEnv.Height;
-            if (delY < minExtent && delY > 0.0)
-            minExtent = delY;
+        public IEnumerator<TItem> GetEnumerator()
+        {
+            foreach (QuadTreeEntry entry in _root)
+            {
+                yield return entry.Item;
+            }
         }
+
+        #endregion
+
+        private void collectStats(IExtents itemExtents)
+        {
+            Double delX = itemExtents.GetSize(Ordinates.X);
+
+            if (delX < _minExtent && delX > 0.0)
+            {
+                _minExtent = delX;
+            }
+
+            Double delY = itemExtents.GetSize(Ordinates.Y);
+
+            if (delY < _minExtent && delY > 0.0)
+            {
+                _minExtent = delY;
+            }
+        }
+
+        #region IEnumerable Members
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
     }
 }

@@ -1,141 +1,99 @@
 using System;
-using System.Collections;
-using System.Text;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public class SweepLineEvent : IComparable
+    public enum SweepLineEventType
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        public const int Insert = 1;
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public const int Delete = 2;
+        Insert = 1,
+        Delete = 2
+    }
 
-        private object edgeSet;    // used for red-blue intersection detection
-        private double xValue;
-        private int eventType;
-        private SweepLineEvent insertEvent; // null if this is an Insert event
-        private int deleteEventIndex;
-        private object obj;
+    public class SweepLineEvent : IComparable<SweepLineEvent>
+    {
+        private object _edgeSet; // used for red-blue intersection detection
+        private readonly Double _xValue;
+        private readonly SweepLineEventType _eventType;
+        private readonly SweepLineEvent _insertEvent; // null if this is an Insert event
+        private Int32 _deleteEventIndex;
+        private readonly object _obj;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edgeSet"></param>
-        /// <param name="x"></param>
-        /// <param name="insertEvent"></param>
-        /// <param name="obj"></param>
-        public SweepLineEvent(object edgeSet, double x, SweepLineEvent insertEvent, object obj)
+        public SweepLineEvent(object edgeSet, Double x, SweepLineEvent insertEvent, object obj)
         {
-            this.edgeSet = edgeSet;
-            xValue = x;
-            this.insertEvent = insertEvent;
-            this.eventType = Insert;
+            _edgeSet = edgeSet;
+            _xValue = x;
+            _insertEvent = insertEvent;
+            _eventType = SweepLineEventType.Insert;
+
             if (insertEvent != null)
-                eventType = Delete;
-            this.obj = obj;
+            {
+                _eventType = SweepLineEventType.Delete;
+            }
+
+            _obj = obj;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  object EdgeSet
+        public object EdgeSet
         {
-            get
-            {
-                return this.edgeSet;
-            }
-            set
-            {
-                this.edgeSet = value;
-            }
+            get { return _edgeSet; }
+            set { _edgeSet = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  bool IsInsert 
+        public Boolean IsInsert
         {
-            get
-            {
-                return insertEvent == null; 
-            }
+            get { return _insertEvent == null; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  bool IsDelete
+        public Boolean IsDelete
         {
-            get
-            {
-                return insertEvent != null;
-            }
+            get { return _insertEvent != null; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public SweepLineEvent InsertEvent
         {
-            get
-            {
-                return insertEvent;
-            }
+            get { return _insertEvent; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  int DeleteEventIndex
+        public Int32 DeleteEventIndex
         {
-            get
-            {
-                return deleteEventIndex;
-            }
-            set
-            {
-                this.deleteEventIndex = value;
-            }
+            get { return _deleteEventIndex; }
+            set { _deleteEventIndex = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  object Object
+        public object Object
         {
-            get
-            {
-                return obj;
-            }
+            get { return _obj; }
         }
 
         /// <summary>
-        /// ProjectionEvents are ordered first by their x-value, and then by their eventType.
-        /// It is important that Insert events are sorted before Delete events, so that
+        /// <see cref="SweepLineEvent"/>s are ordered first by their x-value, 
+        /// and then by their event type. It is important that 
+        /// <see cref="SweepLineEventType.Insert"/> events are sorted before 
+        /// <see cref="SweepLineEventType.Delete"/> events, so that
         /// items whose Insert and Delete events occur at the same x-value will be
         /// correctly handled.
         /// </summary>
-        /// <param name="o"></param>
-        public  int CompareTo(object o)
+        public Int32 CompareTo(SweepLineEvent other)
         {
-            SweepLineEvent pe = (SweepLineEvent)o;
-            if (xValue < pe.xValue)
+            if (_xValue < other._xValue)
+            {
                 return -1;
-            if (xValue > pe.xValue)
+            }
+
+            if (_xValue > other._xValue)
+            {
                 return 1;
-            if (eventType < pe.eventType)
+            }
+
+            if (_eventType < other._eventType)
+            {
                 return -1;
-            if (eventType > pe.eventType)
+            }
+
+            if (_eventType > other._eventType)
+            {
                 return 1;
+            }
+
             return 0;
         }
     }

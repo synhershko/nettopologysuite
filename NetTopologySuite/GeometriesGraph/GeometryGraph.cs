@@ -1,20 +1,22 @@
 using System;
-using System.Collections;
-using System.Text;
-
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-
-using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
+using GeoAPI.Utilities;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
 using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary>
     /// A GeometryGraph is a graph that models a given Geometry.
     /// </summary>
-    public class GeometryGraph : PlanarGraph
+    public class GeometryGraph<TCoordinate> : PlanarGraph<TCoordinate>
+        where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+                            IComputable<Double, TCoordinate>, IConvertible
     {
         /// <summary> 
         /// This method implements the Boundary Determination Rule
@@ -26,310 +28,130 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// the "At Most One Rule":
         /// isInBoundary = (componentCount == 1)
         /// </summary>
-        public static bool IsInBoundary(int boundaryCount)
+        public static Boolean IsInBoundary(Int32 boundaryCount)
         {
             // the "Mod-2 Rule"
             return boundaryCount % 2 == 1;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="boundaryCount"></param>
-        /// <returns></returns>
-        public static Locations DetermineBoundary(int boundaryCount)
+        public static Locations DetermineBoundary(Int32 boundaryCount)
         {
             return IsInBoundary(boundaryCount) ? Locations.Boundary : Locations.Interior;
         }
 
-        private IGeometry parentGeom;
+        private readonly IGeometry<TCoordinate> _parentGeometry;
 
-        /// <summary>
-        /// The lineEdgeMap is a map of the linestring components of the
-        /// parentGeometry to the edges which are derived from them.
-        /// This is used to efficiently perform findEdge queries
-        /// </summary>
-        private IDictionary lineEdgeMap = new Hashtable();
+        // The lineEdgeMap is a map of the linestring components of the
+        // parentGeometry to the edges which are derived from them.
+        // This is used to efficiently perform findEdge queries.
+        private readonly Dictionary<ILineString<TCoordinate>, Edge<TCoordinate>> _lineEdgeMap
+            = new Dictionary<ILineString<TCoordinate>, Edge<TCoordinate>>();
 
         /// <summary>
         /// If this flag is true, the Boundary Determination Rule will used when deciding
         /// whether nodes are in the boundary or not
         /// </summary>
-        private bool useBoundaryDeterminationRule = false;
+        private Boolean _useBoundaryDeterminationRule = false;
 
-        private int argIndex;  // the index of this point as an argument to a spatial function (used for labelling)
-        private ICollection boundaryNodes;
-        private bool hasTooFewPoints = false;
-        private ICoordinate invalidPoint = null;
+        // the index of this point as an argument to a spatial function (used for labeling)
+        private readonly Int32 _argIndex;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private EdgeSetIntersector CreateEdgeSetIntersector()
+        private IEnumerable<Node<TCoordinate>> _boundaryNodes;
+        private Boolean _hasTooFewPoints = false;
+        private TCoordinate _invalidPoint = default(TCoordinate);
+
+        private static EdgeSetIntersector<TCoordinate> createEdgeSetIntersector()
         {
             // various options for computing intersections, from slowest to fastest                    
-            return new SimpleMCSweepLineIntersector();
+            return new SimpleMonotoneChaingSweepLineIntersector<TCoordinate>();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="argIndex"></param>
-        /// <param name="parentGeom"></param>
-        public GeometryGraph(int argIndex, IGeometry parentGeom)
+        public GeometryGraph(Int32 argIndex, IGeometry<TCoordinate> parentGeom)
         {
-            this.argIndex = argIndex;
-            this.parentGeom = parentGeom;
-            if (parentGeom != null)                    
-                Add(parentGeom);
-            
-        }
+            _argIndex = argIndex;
+            _parentGeometry = parentGeom;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public  bool HasTooFewPoints
-        {
-            get
+            if (parentGeom != null)
             {
-                return hasTooFewPoints;
+                add(parentGeom);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        public Boolean HasTooFewPoints
+        {
+            get { return _hasTooFewPoints; }
+        }
+
         public ICoordinate InvalidPoint
         {
-            get
-            {
-                return invalidPoint;
-            }
+            get { return _invalidPoint; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IGeometry Geometry
+        public IGeometry<TCoordinate> Geometry
+        {
+            get { return _parentGeometry; }
+        }
+
+        public IEnumerable<Node<TCoordinate>> BoundaryNodes
         {
             get
             {
-                return parentGeom;
+                if (_boundaryNodes == null)
+                {
+                    _boundaryNodes = NodeMap.GetBoundaryNodes(_argIndex);
+                }
+
+                return _boundaryNodes;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICollection BoundaryNodes
+        public IEnumerable<TCoordinate> GetBoundaryPoints()
         {
-            get
+            IEnumerable<Node<TCoordinate>> nodes = BoundaryNodes;
+
+            foreach (Node<TCoordinate> node in nodes)
             {
-                if (boundaryNodes == null)
-                    boundaryNodes = nodes.GetBoundaryNodes(argIndex);
-                return boundaryNodes;
+                yield return (TCoordinate)node.Coordinate.Clone();
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public ICoordinate[] GetBoundaryPoints()
+        public Edge<TCoordinate> FindEdge(ILineString<TCoordinate> line)
         {
-            ICollection coll = BoundaryNodes;
-            ICoordinate[] pts = new ICoordinate[coll.Count];
-            int i = 0;
-            for (IEnumerator it = coll.GetEnumerator(); it.MoveNext(); ) 
+            return _lineEdgeMap[line];
+        }
+
+        public IEnumerable<Edge<TCoordinate>> ComputeSplitEdges()
+        {
+            foreach (Edge<TCoordinate> edge in Edges)
             {
-                Node node = (Node) it.Current;
-                pts[i++] = (ICoordinate) node.Coordinate.Clone();
+                foreach (Edge<TCoordinate> splitEdge in edge.EdgeIntersectionList.GetSplitEdges())
+                {
+                    yield return splitEdge;
+                }
             }
-            return pts;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="line"></param>
-        /// <returns></returns>
-        public Edge FindEdge(ILineString line)
-        {
-            return (Edge) lineEdgeMap[line];
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edgelist"></param>
-        public  void ComputeSplitEdges(IList edgelist)
-        {
-            for (IEnumerator i = edges.GetEnumerator(); i.MoveNext(); ) 
-            {                
-                Edge e = (Edge) i.Current;                
-                e.EdgeIntersectionList.AddSplitEdges(edgelist);
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        private void Add(IGeometry g)
-        {
-            if (g.IsEmpty)
-                return;
-
-            // check if this Geometry should obey the Boundary Determination Rule
-            // all collections except MultiPolygons obey the rule
-            if (g is IGeometryCollection && !(g is IMultiPolygon))
-                useBoundaryDeterminationRule = true;
-
-            if (g is IPolygon)                 
-                AddPolygon((IPolygon) g);                                
-            // LineString also handles LinearRings
-            else if (g is ILineString)         
-                AddLineString((ILineString) g);
-            else if (g is IPoint) 
-                AddPoint((IPoint) g);
-            else if (g is IMultiPoint)
-                AddCollection((IMultiPoint) g);
-            else if (g is IMultiLineString) 
-                AddCollection((IMultiLineString) g);
-            else if (g is IMultiPolygon)
-                AddCollection((IMultiPolygon) g);
-            else if (g is IGeometryCollection) 
-                AddCollection((IGeometryCollection) g);
-            else  
-                throw new NotSupportedException(g.GetType().FullName);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="gc"></param>
-        private void AddCollection(IGeometryCollection gc)
-        {
-            for (int i = 0; i < gc.NumGeometries; i++) 
-            {
-                IGeometry g = gc.GetGeometryN(i);
-                Add(g);
-            }
-        }
-
-        /// <summary> 
-        /// Add a Point to the graph.
-        /// </summary>
-        /// <param name="p"></param>
-        private void AddPoint(IPoint p)
-        {
-            ICoordinate coord = p.Coordinate;
-            InsertPoint(argIndex, coord, Locations.Interior);
-        }
-
-        /// <summary> 
-        /// The left and right topological location arguments assume that the ring is oriented CW.
-        /// If the ring is in the opposite orientation,
-        /// the left and right locations must be interchanged.
-        /// </summary>
-        /// <param name="lr"></param>
-        /// <param name="cwLeft"></param>
-        /// <param name="cwRight"></param>
-        private void AddPolygonRing(ILinearRing lr, Locations cwLeft, Locations cwRight)
-        {
-            ICoordinate[] coord = CoordinateArrays.RemoveRepeatedPoints(lr.Coordinates);
-            if (coord.Length < 4) 
-            {
-                hasTooFewPoints = true;
-                invalidPoint = coord[0];
-                return;
-            }
-            Locations left = cwLeft;
-            Locations right = cwRight;
-            if (CGAlgorithms.IsCCW(coord)) 
-            {
-                left = cwRight;
-                right = cwLeft;
-            }
-            Edge e = new Edge(coord, new Label(argIndex, Locations.Boundary, left, right));
-            if (lineEdgeMap.Contains(lr))
-                lineEdgeMap.Remove(lr);
-            lineEdgeMap.Add(lr, e);
-            InsertEdge(e);
-            // insert the endpoint as a node, to mark that it is on the boundary
-            InsertPoint(argIndex, coord[0], Locations.Boundary);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        private void AddPolygon(IPolygon p)
-        {
-            AddPolygonRing(p.Shell, Locations.Exterior, Locations.Interior);
-
-            for (int i = 0; i < p.NumInteriorRings; i++)             
-                // Holes are topologically labelled opposite to the shell, since
-                // the interior of the polygon lies on their opposite side
-                // (on the left, if the hole is oriented CW)
-                AddPolygonRing(p.Holes[i], Locations.Interior, Locations.Exterior);            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="line"></param>
-        private void AddLineString(ILineString line)
-        {
-            ICoordinate[] coord = CoordinateArrays.RemoveRepeatedPoints(line.Coordinates);
-            if (coord.Length < 2) 
-            {
-                hasTooFewPoints = true;
-                invalidPoint = coord[0];
-                return;
-            }
-
-            // add the edge for the LineString
-            // line edges do not have locations for their left and right sides
-            Edge e = new Edge(coord, new Label(argIndex, Locations.Interior));
-            if (lineEdgeMap.Contains(line))
-                lineEdgeMap.Remove(line);
-            lineEdgeMap.Add(line, e);            
-            InsertEdge(e);
-
-            /*
-            * Add the boundary points of the LineString, if any.
-            * Even if the LineString is closed, add both points as if they were endpoints.
-            * This allows for the case that the node already exists and is a boundary point.
-            */
-            Assert.IsTrue(coord.Length >= 2, "found LineString with single point");
-            InsertBoundaryPoint(argIndex, coord[0]);
-            InsertBoundaryPoint(argIndex, coord[coord.Length - 1]);
         }
 
         /// <summary> 
         /// Add an Edge computed externally.  The label on the Edge is assumed
         /// to be correct.
         /// </summary>
-        /// <param name="e"></param>
-        public void AddEdge(Edge e)
+        public void AddEdge(Edge<TCoordinate> e)
         {
             InsertEdge(e);
-            ICoordinate[] coord = e.Coordinates;
+            IEnumerable<TCoordinate> coordinates = e.Coordinates;
+
             // insert the endpoint as a node, to mark that it is on the boundary
-            InsertPoint(argIndex, coord[0], Locations.Boundary);
-            InsertPoint(argIndex, coord[coord.Length - 1], Locations.Boundary);
+            insertPoint(_argIndex, Slice.GetFirst(coordinates), Locations.Boundary);
+            insertPoint(_argIndex, Slice.GetLast(coordinates), Locations.Boundary);
         }
 
         /// <summary>
         /// Add a point computed externally.  The point is assumed to be a
         /// Point Geometry part, which has a location of INTERIOR.
         /// </summary>
-        /// <param name="pt"></param>
-        public void AddPoint(ICoordinate pt)
+        public void AddPoint(TCoordinate pt)
         {
-            InsertPoint(argIndex, pt, Locations.Interior);
+            insertPoint(_argIndex, pt, Locations.Interior);
         }
 
         /// <summary>
@@ -340,49 +162,204 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// <param name="li">The <c>LineIntersector</c> to use.</param>
         /// <param name="computeRingSelfNodes">If <c>false</c>, intersection checks are optimized to not test rings for self-intersection.</param>
         /// <returns>The SegmentIntersector used, containing information about the intersections found.</returns>
-        public SegmentIntersector ComputeSelfNodes(LineIntersector li, bool computeRingSelfNodes)
+        public SegmentIntersector<TCoordinate> ComputeSelfNodes(
+            LineIntersector<TCoordinate> li, Boolean computeRingSelfNodes)
         {
-            SegmentIntersector si = new SegmentIntersector(li, true, false);
-            EdgeSetIntersector esi = CreateEdgeSetIntersector();
+            SegmentIntersector<TCoordinate> si = new SegmentIntersector<TCoordinate>(li, true, false);
+            EdgeSetIntersector<TCoordinate> esi = createEdgeSetIntersector();
+
             // optimized test for Polygons and Rings
             if (!computeRingSelfNodes &&
-               (parentGeom is ILinearRing || parentGeom is IPolygon || parentGeom is IMultiPolygon))
-                 esi.ComputeIntersections(edges, si, false);            
-            else esi.ComputeIntersections(edges, si, true);      
-            AddSelfIntersectionNodes(argIndex);
-            return si;
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        /// <param name="li"></param>
-        /// <param name="includeProper"></param>
-        /// <returns></returns>
-        public SegmentIntersector ComputeEdgeIntersections(GeometryGraph g, 
-            LineIntersector li, bool includeProper)
-        {
-            SegmentIntersector si = new SegmentIntersector(li, includeProper, true);
-            si.SetBoundaryNodes(BoundaryNodes, g.BoundaryNodes);
-            EdgeSetIntersector esi = CreateEdgeSetIntersector();
-            esi.ComputeIntersections(edges, g.edges, si);        
+                (_parentGeometry is ILinearRing<TCoordinate>
+                    || _parentGeometry is IPolygon<TCoordinate>
+                    || _parentGeometry is IMultiPolygon<TCoordinate>))
+            {
+                esi.ComputeIntersections(Edges, si, false);
+            }
+            else
+            {
+                esi.ComputeIntersections(Edges, si, true);
+            }
+
+            addSelfIntersectionNodes(_argIndex);
             return si;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="argIndex"></param>
-        /// <param name="coord"></param>
-        /// <param name="onLocation"></param>
-        private void InsertPoint(int argIndex, ICoordinate coord, Locations onLocation)
+        public SegmentIntersector<TCoordinate> ComputeEdgeIntersections(
+            GeometryGraph<TCoordinate> g, LineIntersector<TCoordinate> li, Boolean includeProper)
         {
-            Node n = nodes.AddNode((Coordinate) coord);
-            Label lbl = n.Label;
-            if (lbl == null) 
-                 n.Label = new Label(argIndex, onLocation);            
-            else lbl.SetLocation(argIndex, onLocation);
+            SegmentIntersector<TCoordinate> si = new SegmentIntersector<TCoordinate>(li, includeProper, true);
+            si.SetBoundaryNodes(BoundaryNodes, g.BoundaryNodes);
+            EdgeSetIntersector<TCoordinate> esi = createEdgeSetIntersector();
+            esi.ComputeIntersections(Edges, g.Edges, si);
+            return si;
+        }
+
+        private void add(IGeometry<TCoordinate> g)
+        {
+            if (g.IsEmpty)
+            {
+                return;
+            }
+
+            // check if this Geometry should obey the Boundary Determination Rule
+            // all collections except MultiPolygons obey the rule
+            if (g is IGeometryCollection<TCoordinate> && !(g is IMultiPolygon<TCoordinate>))
+            {
+                _useBoundaryDeterminationRule = true;
+            }
+
+            if (g is IPolygon<TCoordinate>)
+            {
+                addPolygon((IPolygon<TCoordinate>)g);
+            }
+            // LineString also handles LinearRings
+            else if (g is ILineString<TCoordinate>)
+            {
+                addLineString((ILineString<TCoordinate>)g);
+            }
+            else if (g is IPoint<TCoordinate>)
+            {
+                addPoint((IPoint<TCoordinate>)g);
+            }
+            else if (g is IMultiPoint<TCoordinate>)
+            {
+                addCollection((IGeometryCollection<TCoordinate>)g);
+            }
+            else if (g is IMultiLineString<TCoordinate>)
+            {
+                addCollection((IGeometryCollection<TCoordinate>)g);
+            }
+            else if (g is IMultiPolygon<TCoordinate>)
+            {
+                addCollection((IGeometryCollection<TCoordinate>)g);
+            }
+            else if (g is IGeometryCollection<TCoordinate>)
+            {
+                addCollection((IGeometryCollection<TCoordinate>)g);
+            }
+            else
+            {
+                throw new NotSupportedException(g.GetType().FullName);
+            }
+        }
+
+        private void addCollection(IGeometryCollection<TCoordinate> gc)
+        {
+            for (Int32 i = 0; i < gc.Count; i++)
+            {
+                IGeometry<TCoordinate> g = gc[i];
+                add(g);
+            }
+        }
+
+        /// <summary> 
+        /// Add a Point to the graph.
+        /// </summary>
+        private void addPoint(IPoint<TCoordinate> p)
+        {
+            TCoordinate coord = p.Coordinate;
+            insertPoint(_argIndex, coord, Locations.Interior);
+        }
+
+        /// <summary> 
+        /// The left and right topological location arguments assume that the ring is oriented CW.
+        /// If the ring is in the opposite orientation,
+        /// the left and right locations must be interchanged.
+        /// </summary>
+        private void addPolygonRing(ILineString<TCoordinate> ring, Locations cwLeft, Locations cwRight)
+        {
+            ICoordinateSequence<TCoordinate> coord = ring.Coordinates.WithoutRepeatedPoints();
+
+            if (coord.Count < 4)
+            {
+                _hasTooFewPoints = true;
+                _invalidPoint = coord[0];
+                return;
+            }
+
+            Locations left = cwLeft;
+            Locations right = cwRight;
+
+            if (CGAlgorithms<TCoordinate>.IsCCW(coord))
+            {
+                left = cwRight;
+                right = cwLeft;
+            }
+
+            Edge<TCoordinate> e = new Edge<TCoordinate>(coord, new Label(_argIndex, Locations.Boundary, left, right));
+
+            if (_lineEdgeMap.ContainsKey(ring))
+            {
+                _lineEdgeMap.Remove(ring);
+            }
+
+            _lineEdgeMap.Add(ring, e);
+            InsertEdge(e);
+
+            // insert the endpoint as a node, to mark that it is on the boundary
+            insertPoint(_argIndex, coord[0], Locations.Boundary);
+        }
+
+        private void addPolygon(IPolygon<TCoordinate> p)
+        {
+            addPolygonRing(p.ExteriorRing, Locations.Exterior, Locations.Interior);
+
+            for (Int32 i = 0; i < p.InteriorRingsCount; i++)
+            {
+                // Holes are topologically labeled opposite to the shell, since
+                // the interior of the polygon lies on their opposite side
+                // (on the left, if the hole is oriented CW)
+                addPolygonRing(p.InteriorRings[i], Locations.Interior, Locations.Exterior);
+            }
+        }
+
+        private void addLineString(ILineString<TCoordinate> line)
+        {
+            ICoordinateSequence<TCoordinate> coord = line.Coordinates.WithoutRepeatedPoints();
+
+            if (coord.Count < 2)
+            {
+                _hasTooFewPoints = true;
+                _invalidPoint = coord[0];
+                return;
+            }
+
+            // add the edge for the LineString
+            // line edges do not have locations for their left and right sides
+            Edge<TCoordinate> e = new Edge<TCoordinate>(coord, new Label(_argIndex, Locations.Interior));
+
+            if (_lineEdgeMap.ContainsKey(line))
+            {
+                _lineEdgeMap.Remove(line);
+            }
+
+            _lineEdgeMap.Add(line, e);
+            InsertEdge(e);
+
+            /*
+            * Add the boundary points of the LineString, if any.
+            * Even if the LineString is closed, add both points as if they were endpoints.
+            * This allows for the case that the node already exists and is a boundary point.
+            */
+            Assert.IsTrue(coord.Count >= 2, "found LineString with single point");
+            insertBoundaryPoint(_argIndex, coord[0]);
+            insertBoundaryPoint(_argIndex, coord[coord.Count - 1]);
+        }
+
+        private void insertPoint(Int32 argIndex, TCoordinate coord, Locations onLocation)
+        {
+            Node<TCoordinate> n = NodeMap.AddNode(coord);
+            Label? lbl = n.Label;
+
+            if (lbl == null)
+            {
+                n.Label = new Label(argIndex, onLocation);
+            }
+            else
+            {
+                n.Label = new Label(lbl.Value, argIndex, onLocation);
+            }
         }
 
         /// <summary> 
@@ -391,40 +368,44 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// an endpoint of a Curve is on the boundary
         /// if it is in the boundaries of an odd number of Geometries.
         /// </summary>
-        /// <param name="argIndex"></param>
-        /// <param name="coord"></param>
-        private void InsertBoundaryPoint(int argIndex, ICoordinate coord)
+        private void insertBoundaryPoint(Int32 argIndex, TCoordinate coord)
         {
-            Node n = nodes.AddNode((Coordinate) coord);
-            Label lbl = n.Label;
+            Node<TCoordinate> n = NodeMap.AddNode(coord);
+            Label? currentLabel = n.Label;
+
             // the new point to insert is on a boundary
-            int boundaryCount = 1;
+            Int32 boundaryCount = 1;
+
             // determine the current location for the point (if any)
-            Locations loc = Locations.Null;
-            if (lbl != null) 
-                loc = lbl.GetLocation(argIndex, Positions.On);
-            if (loc == Locations.Boundary) 
+            Locations loc = Locations.None;
+
+            if (currentLabel != null)
+            {
+                loc = currentLabel.Value[argIndex, Positions.On];
+            }
+            if (loc == Locations.Boundary)
+            {
                 boundaryCount++;
+            }
 
             // determine the boundary status of the point according to the Boundary Determination Rule
             Locations newLoc = DetermineBoundary(boundaryCount);
-            lbl.SetLocation(argIndex, newLoc);
+
+            n.Label = currentLabel != null 
+                ? new Label(currentLabel.Value, argIndex, newLoc)
+                : new Label(argIndex, newLoc);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="argIndex"></param>
-        private void AddSelfIntersectionNodes(int argIndex)
+        private void addSelfIntersectionNodes(Int32 argIndex)
         {
-            for (IEnumerator i = edges.GetEnumerator(); i.MoveNext(); ) 
+            foreach (Edge<TCoordinate> edge in Edges)
             {
-                Edge e = (Edge) i.Current;
-                Locations eLoc = e.Label.GetLocation(argIndex);
-                for (IEnumerator eiIt = e.EdgeIntersectionList.GetEnumerator(); eiIt.MoveNext(); ) 
+                Debug.Assert(edge.Label.HasValue);
+                Locations eLoc = edge.Label.Value[argIndex].On;
+
+                foreach (EdgeIntersection<TCoordinate> intersection in edge.EdgeIntersectionList)
                 {
-                    EdgeIntersection ei = (EdgeIntersection) eiIt.Current;
-                    AddSelfIntersectionNode(argIndex, ei.Coordinate, eLoc);
+                    addSelfIntersectionNode(argIndex, intersection.Coordinate, eLoc);
                 }
             }
         }
@@ -435,17 +416,22 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// is a boundary) then insert it as a potential boundary node.
         /// Otherwise, just add it as a regular node.
         /// </summary>
-        /// <param name="argIndex"></param>
-        /// <param name="coord"></param>
-        /// <param name="loc"></param>
-        private void AddSelfIntersectionNode(int argIndex, ICoordinate coord, Locations loc)
+        private void addSelfIntersectionNode(Int32 argIndex, TCoordinate coord, Locations loc)
         {
             // if this node is already a boundary node, don't change it
-            if (IsBoundaryNode(argIndex, coord)) 
+            if (IsBoundaryNode(argIndex, coord))
+            {
                 return;
-            if (loc == Locations.Boundary && useBoundaryDeterminationRule)
-                 InsertBoundaryPoint(argIndex, coord);
-            else InsertPoint(argIndex, coord, loc);
+            }
+
+            if (loc == Locations.Boundary && _useBoundaryDeterminationRule)
+            {
+                insertBoundaryPoint(argIndex, coord);
+            }
+            else
+            {
+                insertPoint(argIndex, coord, loc);
+            }
         }
     }
 }
