@@ -1,4 +1,9 @@
+using System;
 using System.Collections;
+using System.Text;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Noding;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph

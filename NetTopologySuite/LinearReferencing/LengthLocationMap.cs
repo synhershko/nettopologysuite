@@ -1,4 +1,7 @@
+using System;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.LinearReferencing
@@ -40,7 +43,7 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         private IGeometry linearGeom;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LengthLocationMap"/> class.
+        /// Initializes a new instance of the <see cref="T:LengthLocationMap"/> class.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
         public LengthLocationMap(IGeometry linearGeom)

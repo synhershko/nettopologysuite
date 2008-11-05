@@ -47,7 +47,10 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         public IPrecisionModel PrecisionModel
         {
-            get { return precisionModel; }
+            get
+            {
+                return precisionModel;
+            }
         }
 
         private ICoordinateSequenceFactory coordinateSequenceFactory;
@@ -57,7 +60,10 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         public ICoordinateSequenceFactory CoordinateSequenceFactory
         {
-            get { return coordinateSequenceFactory; }
+            get
+            {
+                return coordinateSequenceFactory;
+            }
         }
 
         private int srid;
@@ -67,7 +73,10 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </summary>
         public int SRID
         {
-            get { return srid; }
+            get
+            {
+                return srid;
+            }
         }        
 
         /// <summary>

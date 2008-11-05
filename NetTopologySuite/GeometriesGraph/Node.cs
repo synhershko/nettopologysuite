@@ -1,5 +1,11 @@
+using System;
+using System.Collections;
+using System.Text;
 using System.IO;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
@@ -173,7 +179,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// 
         /// </summary>
         /// <param name="outstream"></param>
-        public void Write(TextWriter outstream)
+        public void Write(StreamWriter outstream)
         {
             outstream.WriteLine("node " + coord + " lbl: " + label);
         }

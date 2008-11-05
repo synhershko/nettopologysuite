@@ -605,7 +605,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         public bool Intersects(IGeometry g) 
         {
             // short-circuit test
-            if (!EnvelopeInternal.Intersects(g.EnvelopeInternal))
+            if (! EnvelopeInternal.Intersects(g.EnvelopeInternal))
                 return false;
             // optimizations for rectangle arguments
             if (IsRectangle)
@@ -781,7 +781,6 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <returns><c>true</c> if the two <c>Geometry</c>s are equal.</returns>
         public bool Equals(IGeometry g)
         {
-            // NOTE: Not in JTS!!!
 			if (IsEmpty && g.IsEmpty)
 				return true;
 
@@ -789,7 +788,6 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
             if (!EnvelopeInternal.Intersects(g.EnvelopeInternal))
                 return false;
 
-            // NOTE: Not in JTS!!!
             // We use an alternative method for compare GeometryCollections (but not subclasses!), 
             if (isGeometryCollection(this) || isGeometryCollection(g))
                 return CompareGeometryCollections(this, g);
@@ -849,7 +847,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <returns></returns>
         public static bool operator ==(Geometry obj1, IGeometry obj2)
         {            
-            return Equals(obj1, obj2); 
+            return Object.Equals(obj1, obj2); 
         }
 
         /// <summary>

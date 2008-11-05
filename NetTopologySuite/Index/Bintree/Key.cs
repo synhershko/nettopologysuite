@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Text;
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Bintree

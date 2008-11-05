@@ -15,11 +15,12 @@
 // updates available in some way, such as by sending your updates to the
 // author.
 //
-
 using System;
-using System.CodeDom.Compiler;
+using System.Text;
 using System.Collections;
 using System.Diagnostics;
+using System.CodeDom.Compiler;
+
 using Microsoft.Win32;
 
 namespace RTools_NTS.Util

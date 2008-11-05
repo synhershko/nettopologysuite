@@ -16,6 +16,7 @@
 // author.
 
 using System;
+using System.Text;
 
 namespace RTools_NTS.Util
 {

@@ -1,9 +1,16 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text;
+
+using Iesi_NTS.Collections;
+using Iesi_NTS.Collections.Generic;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
-using Iesi_NTS.Collections.Generic;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
@@ -314,7 +321,7 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// <returns>The coordinates with unnecessary (collinear) vertices removed.</returns>
         private ICoordinate[] CleanRing(ICoordinate[] original)
         {
-            Equals(original[0], original[original.Length - 1]);
+            Assert.Equals(original[0], original[original.Length - 1]);
             List<ICoordinate> cleanedRing = new List<ICoordinate>();
             ICoordinate previousDistinctCoordinate = null;
             for (int i = 0; i <= original.Length - 2; i++)

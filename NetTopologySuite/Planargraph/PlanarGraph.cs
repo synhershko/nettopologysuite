@@ -1,5 +1,10 @@
+using System;
 using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph
 {
@@ -43,7 +48,7 @@ namespace GisSharpBlog.NetTopologySuite.Planargraph
         /// <returns></returns>
         public Node FindNode(ICoordinate pt)
         {
-            return nodeMap.Find(pt);
+            return (Node) nodeMap.Find(pt);
         }
 
         /// <summary>
@@ -94,7 +99,10 @@ namespace GisSharpBlog.NetTopologySuite.Planargraph
         /// </summary>
         public ICollection Nodes
         {
-            get { return nodeMap.Values; }
+            get
+            {
+                return nodeMap.Values;
+            }
         }
 
         /// <summary> 
@@ -122,7 +130,10 @@ namespace GisSharpBlog.NetTopologySuite.Planargraph
         /// </summary>
         public IList Edges
         {
-            get { return edges; }
+            get
+            {
+                return edges;
+            }
         }
 
         /// <summary>

@@ -1,3 +1,6 @@
+using System;
+using System.Collections;
+using System.Text;
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Chain

@@ -1,6 +1,7 @@
 using System;
-using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.Geometries
@@ -107,7 +108,7 @@ namespace GisSharpBlog.NetTopologySuite.Samples.Geometries
         /// </returns>
 		public override string ToString()
 		{
-			StringBuilder strBuf = new StringBuilder();
+			System.Text.StringBuilder strBuf = new System.Text.StringBuilder();
 			strBuf.Append("ExtendedCoordinateSequence [");
 			for (int i = 0; i < coordinates.Length; i++)
 			{

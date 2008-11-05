@@ -1,8 +1,11 @@
 using System;
-using System.Globalization;
 using System.IO;
+using System.Collections;
+using System.Globalization;
 using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
@@ -119,11 +122,9 @@ namespace GisSharpBlog.NetTopologySuite.IO
             return buf.ToString();
         }
 
-        private readonly string MaxPrecisionFormat = "{0:R}";
         private NumberFormatInfo formatter;
         private string format;
         private bool isFormatted = false;
-        private bool useMaxPrecision = false;
 
         /// <summary>
         /// 
@@ -202,27 +203,19 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// Converts a <c>Geometry</c> to its Well-known Text representation.
         /// </summary>
         /// <param name="geometry">A <c>Geometry</c> to process</param>
-        /// <param name="formatted"></param>
+        /// <param name="isFormatted"></param>
         /// <param name="writer"></param>
         /// <returns>
         /// A "Geometry Tagged Text" string (see the OpenGIS Simple
         /// Features Specification).
         /// </returns>
-        private void WriteFormatted(IGeometry geometry, bool formatted, TextWriter writer)
+        private void WriteFormatted(IGeometry geometry, bool isFormatted, TextWriter writer)
         {
-            if (geometry == null)
-                throw new ArgumentNullException("geometry");
-
-            // Enable maxPrecision (via {0:R} formatter) in WriteNumber method
-            useMaxPrecision = geometry.Factory.PrecisionModel.PrecisionModelType == PrecisionModels.Floating;
-
-            isFormatted = formatted;
-            formatter = CreateFormatter(geometry.PrecisionModel);           
+            this.isFormatted = isFormatted;
+            formatter = CreateFormatter(geometry.PrecisionModel);
             format = "0." + StringOfChar('#', formatter.NumberDecimalDigits);
-            AppendGeometryTaggedText(geometry, 0, writer);
 
-            // Disable maxPrecision as default setting
-            useMaxPrecision = false;
+            AppendGeometryTaggedText(geometry, 0, writer);
         }
 
         /// <summary>
@@ -417,17 +410,10 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// The <see cref="double" /> as a <see cref="string" />, 
         /// not in scientific notation.
         /// </returns>
-        private string WriteNumber(double d)
-        {            
-            string standard = d.ToString(format, formatter);
-            if (!useMaxPrecision)
-                return standard;
-
-            // Check if some precision is lost during text conversion: if so, use {0:R} formatter 
-            double converted = Convert.ToDouble(standard, formatter);            
-            if (converted != d)
-                return String.Format(formatter, MaxPrecisionFormat, d);
-            return standard;
+        private string WriteNumber(double d) 
+        {           
+            // return Convert.ToString(d, formatter) not generate decimals well formatted!
+		    return d.ToString(format, formatter);
         }
 
         /// <summary>

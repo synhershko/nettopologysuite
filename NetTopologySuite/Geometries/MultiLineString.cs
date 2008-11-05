@@ -1,6 +1,11 @@
+using System;
+using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+
 using GisSharpBlog.NetTopologySuite.Operation;
+using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {

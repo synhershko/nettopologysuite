@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using System.IO;
+using System.Diagnostics;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
@@ -45,6 +45,7 @@ namespace GisSharpBlog.NetTopologySuite.IO.Handlers
                 double d = file.ReadDouble();
                 bbox[bbindex] = d;
             }
+
             
             int[] partOffsets;        
             int numParts = file.ReadInt32();
@@ -143,7 +144,7 @@ namespace GisSharpBlog.NetTopologySuite.IO.Handlers
             IPolygon[] polygons = new IPolygon[shells.Count];
             for (int i = 0; i < shells.Count; i++)
                 polygons[i] = (geometryFactory.CreatePolygon((ILinearRing) shells[i], 
-                    (ILinearRing[]) ((ArrayList) holesForShells[i]).ToArray(typeof(ILinearRing))));
+                    (ILinearRing[]) ((ArrayList)holesForShells[i]).ToArray(typeof(ILinearRing))));
 
             if (polygons.Length == 1)
                  geom = polygons[0];
@@ -158,7 +159,7 @@ namespace GisSharpBlog.NetTopologySuite.IO.Handlers
         /// <param name="geometry">The geometry to write.</param>
         /// <param name="file">The file stream to write to.</param>
         /// <param name="geometryFactory">The geometry factory to use.</param>
-        public override void Write(IGeometry geometry, BinaryWriter file, IGeometryFactory geometryFactory)
+        public override void Write(IGeometry geometry, System.IO.BinaryWriter file, IGeometryFactory geometryFactory)
         {
             // This check seems to be not useful and slow the operations...
             // if (!geometry.IsValid)    
@@ -224,7 +225,7 @@ namespace GisSharpBlog.NetTopologySuite.IO.Handlers
         /// <param name="points"></param>
         /// <param name="file"></param>
         /// <param name="geometryFactory"></param>
-        private void WriteCoords(CoordinateList points, BinaryWriter file, IGeometryFactory geometryFactory)
+        private void WriteCoords(CoordinateList points, System.IO.BinaryWriter file, IGeometryFactory geometryFactory)
         {
             ICoordinate external;
             foreach (ICoordinate point in points)

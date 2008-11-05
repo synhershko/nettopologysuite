@@ -1,6 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Collections;
+using System.Text;
 
 namespace Iesi_NTS.Collections.Generic
 {
@@ -147,7 +148,7 @@ namespace Iesi_NTS.Collections.Generic
 
         #region IEnumerable Members
 
-        IEnumerator IEnumerable.GetEnumerator()
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
         {
             return innerSet.GetEnumerator();
         }

@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.IO;
 using GisSharpBlog.NetTopologySuite.Operation.Linemerge;
 
@@ -54,7 +57,7 @@ namespace GisSharpBlog.NetTopologySuite.Samples.Operation.Linemerge
 			{
 				test.Run();
 			}
-			catch (Exception ex)
+			catch (System.Exception ex)
 			{
 				Console.WriteLine(ex.StackTrace);
 			}
@@ -66,7 +69,7 @@ namespace GisSharpBlog.NetTopologySuite.Samples.Operation.Linemerge
 			
 			LineMerger lineMerger = new LineMerger();
 			lineMerger.Add(lineStrings);
-		    ICollection mergedLineStrings = lineMerger.GetMergedLineStrings();
+			ICollection mergedLineStrings = lineMerger.MergedLineStrings;
 			
 			Console.WriteLine("Lines formed (" + mergedLineStrings.Count + "):");
             foreach (object obj in mergedLineStrings)

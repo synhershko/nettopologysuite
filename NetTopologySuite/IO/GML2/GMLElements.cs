@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+
 namespace GisSharpBlog.NetTopologySuite.IO.GML2
 {
     /// <summary>

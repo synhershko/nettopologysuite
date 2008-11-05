@@ -1,6 +1,18 @@
 using System;
-using GisSharpBlog.NetTopologySuite.Samples.SimpleTests.ShapeTests;
+using System.Collections;
+using System.IO;
+using System.Text;
+
 using NUnit.Framework;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
+using GisSharpBlog.NetTopologySuite.IO;
+using GisSharpBlog.NetTopologySuite.Samples.LinearReferencing;
+
+using GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Geometries;
+using GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Attributes;
+using GisSharpBlog.NetTopologySuite.Samples.SimpleTests.ShapeTests;
+using GisSharpBlog.NetTopologySuite.Samples.Tests;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests
 {
@@ -38,43 +50,43 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests
         {
 			try
 			{
-                //sample = new PointSamples();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new PointSamples();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new LineStringSamples();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new LineStringSamples();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new PolygonSamples();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new PolygonSamples();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new MultiPointSamples();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new MultiPointSamples();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new ValidationSuite();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new ValidationSuite();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new SerializationSamples();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new SerializationSamples();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new AttributesTest();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new AttributesTest();
+				sample.Start();
+				Console.WriteLine();
 
-                //sample = new ShapeRead();
-                //sample.Start();
-                //Console.WriteLine();
+				sample = new ShapeRead();
+				sample.Start();
+				Console.WriteLine();
 
 				sample = new GMLTesting();
 				sample.Start();
 				Console.WriteLine();
 
-                //new LinearReferencingExample().Run();
+				new LinearReferencingExample().Run();
 
 			}
             finally

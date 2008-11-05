@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries

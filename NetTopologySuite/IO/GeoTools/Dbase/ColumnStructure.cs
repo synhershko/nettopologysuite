@@ -30,7 +30,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// <summary>
         /// 
         /// </summary>
-		public override Type ComponentType
+		public override System.Type ComponentType
 		{
 			get
 			{
@@ -41,7 +41,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// <summary>
         /// 
         /// </summary>
-		public override Type PropertyType
+		public override System.Type PropertyType
 		{
 			get
 			{

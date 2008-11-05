@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
-using System.IO;
+using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
@@ -251,7 +253,7 @@ namespace GisSharpBlog.NetTopologySuite.Noding
         /// 
         /// </summary>
         /// <param name="outstream"></param>
-        public void Write(StreamWriter outstream)
+        public void Write(System.IO.StreamWriter outstream)
         {
             outstream.Write("Intersections:");
             foreach(object obj in this)

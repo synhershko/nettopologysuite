@@ -1,3 +1,7 @@
+using System;
+using System.Collections;
+using System.Text;
+
 namespace GisSharpBlog.NetTopologySuite.Index.Bintree
 {
     /// <summary> 
@@ -10,27 +14,42 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// <summary>
         /// 
         /// </summary>
-        public double Min
+        public  double Min
         {
-            get { return min;  }
-            set { min = value; }
+            get 
+            { 
+                return min; 
+            }
+            set 
+            { 
+                min = value; 
+            }
         }
 
         /// <summary>
         /// 
         /// </summary>
-        public double Max
+        public  double Max
         {
-            get { return max;  }
-            set { max = value; }
+            get 
+            { 
+                return max; 
+            }
+            set 
+            { 
+                max = value; 
+            }
         }
 
         /// <summary>
         /// 
         /// </summary>
-        public double Width
+        public  double Width
         {
-            get { return Max - Min; }
+            get
+            {
+                return Max - Min;
+            }
         }
 
         /// <summary>
@@ -66,15 +85,15 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// </summary>
         /// <param name="min"></param>
         /// <param name="max"></param>
-        public void Init(double min, double max)
+        public  void Init(double min, double max)
         {
-            Min = min;
-            Max = max;
+            this.Min = min;
+            this.Max = max;
 
             if (min > max)
             {
-                Min = max;
-                Max = min;
+                this.Min = max;
+                this.Max = min;
             }
         }
                
@@ -82,7 +101,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// 
         /// </summary>
         /// <param name="interval"></param>
-        public void ExpandToInclude(Interval interval)
+        public  void ExpandToInclude(Interval interval)
         {
             if (interval.Max > Max) 
                 Max = interval.Max;
@@ -95,7 +114,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// </summary>
         /// <param name="interval"></param>
         /// <returns></returns>
-        public bool Overlaps(Interval interval)
+        public  bool Overlaps(Interval interval)
         {
             return Overlaps(interval.Min, interval.Max);
         }
@@ -106,9 +125,9 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// <param name="min"></param>
         /// <param name="max"></param>
         /// <returns></returns>
-        public bool Overlaps(double min, double max)
+        public  bool Overlaps(double min, double max)
         {
-            if (Min > max || Max < min) 
+            if (this.Min > max || this.Max < min) 
                 return false;
             return true;
         }
@@ -118,7 +137,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// </summary>
         /// <param name="interval"></param>
         /// <returns></returns>
-        public bool Contains(Interval interval)
+        public  bool Contains(Interval interval)
         {
             return Contains(interval.Min, interval.Max);
         }
@@ -129,9 +148,9 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// <param name="min"></param>
         /// <param name="max"></param>
         /// <returns></returns>
-        public bool Contains(double min, double max)
+        public  bool Contains(double min, double max)
         {
-            return (min >= Min && max <= Max);
+            return (min >= this.Min && max <= this.Max);
         }
 
         /// <summary>
@@ -139,9 +158,9 @@ namespace GisSharpBlog.NetTopologySuite.Index.Bintree
         /// </summary>
         /// <param name="p"></param>
         /// <returns></returns>
-        public bool Contains(double p)
+        public  bool Contains(double p)
         {
-            return (p >= Min && p <= Max);
+            return (p >= this.Min && p <= this.Max);
         }
     }
 }

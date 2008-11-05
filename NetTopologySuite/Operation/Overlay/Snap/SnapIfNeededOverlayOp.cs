@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
 
@@ -104,7 +106,7 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
                     isSuccess = true;
 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Ignore this exception, since the operation will be rerun                
             }

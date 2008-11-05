@@ -1,6 +1,12 @@
+using System;
 using System.Collections;
-using GeoAPI.Geometries;
+using System.Text;
+
 using Iesi_NTS.Collections;
+
+using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph
 {

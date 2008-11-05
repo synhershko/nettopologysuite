@@ -1,5 +1,10 @@
+using System;
 using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Polygonize
 {
@@ -78,9 +83,9 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Polygonize
         
         /// <summary>
         /// 
-        /// </summary>        
+        /// </summary>
+        
         protected IList shellList = null;
-
         /// <summary>
         /// 
         /// </summary>

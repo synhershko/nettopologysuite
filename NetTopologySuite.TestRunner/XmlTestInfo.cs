@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Specialized;
 
 namespace Open.Topology.TestRunner
@@ -32,14 +33,14 @@ namespace Open.Topology.TestRunner
             {
                 m_listParameters.Clear();
 
-                m_listParameters.Add("desc",   String.Empty);
-                m_listParameters.Add("a",      String.Empty);
-                m_listParameters.Add("b",      String.Empty);
-                m_listParameters.Add("name",   String.Empty);
-                m_listParameters.Add("result", String.Empty);
-                m_listParameters.Add("arg1",   String.Empty);
-                m_listParameters.Add("arg2",   String.Empty);
-                m_listParameters.Add("arg3",   String.Empty);
+                m_listParameters.Add("desc",   System.String.Empty);
+                m_listParameters.Add("a",      System.String.Empty);
+                m_listParameters.Add("b",      System.String.Empty);
+                m_listParameters.Add("name",   System.String.Empty);
+                m_listParameters.Add("result", System.String.Empty);
+                m_listParameters.Add("arg1",   System.String.Empty);
+                m_listParameters.Add("arg2",   System.String.Empty);
+                m_listParameters.Add("arg3",   System.String.Empty);
             }
         }
 

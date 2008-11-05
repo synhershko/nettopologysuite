@@ -1,6 +1,11 @@
+using System;
 using System.Collections;
+using System.Text;
 using System.IO;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Index;
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
 

@@ -1,7 +1,10 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 

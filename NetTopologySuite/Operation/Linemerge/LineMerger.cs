@@ -1,5 +1,10 @@
+using System;
 using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Planargraph;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
@@ -195,11 +200,13 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Linemerge
         /// <summary>
         /// Returns the LineStrings built by the merging process.
         /// </summary>
-        /// <returns></returns>
-        public IList GetMergedLineStrings() 
+        public IList MergedLineStrings 
         {
-            Merge();
-            return mergedLineStrings;
+            get
+            {
+                Merge();
+                return mergedLineStrings;
+            }
         }
     }
 }

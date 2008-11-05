@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+
 using GeoAPI.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
@@ -25,7 +27,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
             for (int i = 0; i < testPts.Length; i++)
             {
                 ICoordinate testPt = testPts[i];
-                if (IndexOf(testPt, pts) < 0)
+                if (CoordinateArrays.IndexOf(testPt, pts) < 0)
                     return testPt;
             }
             return null;

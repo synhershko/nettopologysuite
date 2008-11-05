@@ -1,8 +1,9 @@
 using System;
+using System.IO;
 using System.Collections;
 using System.Globalization;
-using System.IO;
 using System.Xml;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace Open.Topology.TestRunner

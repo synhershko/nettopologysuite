@@ -1,8 +1,15 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.IO;
+
 using GisSharpBlog.NetTopologySuite.Samples.SimpleTests;
+
 using NUnit.Framework;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.Tests.Operation.IO
@@ -15,7 +22,7 @@ namespace GisSharpBlog.NetTopologySuite.Samples.Tests.Operation.IO
     public class ShapeFileDataReaderTest : BaseSamples    
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="ShapeFileDataReaderTest"/> class.
+        /// Initializes a new instance of the <see cref="ShapeFileReadTest"/> class.
         /// </summary>
         public ShapeFileDataReaderTest() : base() 
         {

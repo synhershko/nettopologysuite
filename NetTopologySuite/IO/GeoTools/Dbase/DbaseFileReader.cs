@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Globalization;
 using System.IO;
-using System.Text;
 
 namespace GisSharpBlog.NetTopologySuite.IO
 {
@@ -32,7 +31,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 			{
 				_parent = parent;
 				FileStream stream = new FileStream(parent._filename, FileMode.Open, FileAccess.Read, FileShare.Read);
-				_dbfStream = new BinaryReader(stream, Encoding.Default);
+				_dbfStream = new BinaryReader(stream, System.Text.Encoding.Default);
 				ReadHeader();
 			}            
 
@@ -266,7 +265,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		{
 			if (_header==null)
 			{
-				FileStream stream = new FileStream(_filename, FileMode.Open, FileAccess.Read);
+				FileStream stream = new FileStream(_filename, System.IO.FileMode.Open, FileAccess.Read);
 				BinaryReader dbfStream = new BinaryReader(stream);
 
 				_header = new DbaseFileHeader();
@@ -290,7 +289,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// <returns>
         /// An object that implements the IEnumerator interface.
         /// </returns>
-		public IEnumerator GetEnumerator()
+		public System.Collections.IEnumerator GetEnumerator()
 		{
 			return new DbaseFileEnumerator(this);
 		}

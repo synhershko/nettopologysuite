@@ -195,9 +195,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         {
             Token token = tokens[index++] as Token;            
 
-            if (token == null)
-                throw new ArgumentNullException("tokens", "Token list contains a null value");
-            else if (token is EofToken)
+            if (token is EofToken)
                 throw new ParseException("Expected number but encountered end of stream");
             else if (token is EolToken)
                 throw new ParseException("Expected number but encountered end of line");

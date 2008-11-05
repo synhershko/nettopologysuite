@@ -1,5 +1,7 @@
 using System;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
@@ -11,6 +13,7 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
     /// </summary>
     public class LengthIndexOfPoint
     {
+
         /// <summary>
         /// 
         /// </summary>
@@ -39,7 +42,7 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         private IGeometry linearGeom;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LengthIndexOfPoint"/> class.
+        /// Initializes a new instance of the <see cref="T:LengthIndexOfPoint"/> class.
         /// </summary>
         /// <param name="linearGeom">A linear geometry.</param>
         public LengthIndexOfPoint(IGeometry linearGeom)

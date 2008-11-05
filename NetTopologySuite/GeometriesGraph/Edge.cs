@@ -1,10 +1,14 @@
 using System;
-using System.IO;
+using System.Collections;
 using System.Text;
+using System.IO;
+using System.Diagnostics;
+
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Algorithm;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
+using GisSharpBlog.NetTopologySuite.Algorithm;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
@@ -391,7 +395,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// <returns></returns>
         public static bool operator ==(Edge obj1, Edge obj2)
         {
-            return Equals(obj1, obj2);
+            return Object.Equals(obj1, obj2);
         }
 
         /// <summary>
@@ -432,7 +436,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// 
         /// </summary>
         /// <param name="outstream"></param>
-        public void Write(TextWriter outstream)
+        public void Write(StreamWriter outstream)
         {
             outstream.Write("edge " + name + ": ");
             outstream.Write("LINESTRING (");
@@ -448,7 +452,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// 
         /// </summary>
         /// <param name="outstream"></param>
-        public void WriteReverse(TextWriter outstream)
+        public void WriteReverse(StreamWriter outstream)
         {
             outstream.Write("edge " + name + ": ");
             for (int i = Points.Length - 1; i >= 0; i--) 

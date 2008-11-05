@@ -39,7 +39,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// NTS methods currently do not handle inputs with different precision models.
     /// </summary>
     [Serializable]
-    public class PrecisionModel : IPrecisionModel
+    public class PrecisionModel : IPrecisionModel, IEquatable<PrecisionModel>
     {
         private const int FloatingPrecisionDigits = 16;
         private const int FloatingSinglePrecisionDigits = 6;
@@ -370,10 +370,10 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
             if (other == null)
                 return false;
 
-            if (!(other is IPrecisionModel))
+            if (!(other is PrecisionModel))
                 return false;            
 
-            return Equals((IPrecisionModel) other);
+            return Equals((PrecisionModel) other);
         }
 
         /// <summary>
@@ -383,9 +383,19 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <returns></returns>
         public bool Equals(IPrecisionModel otherPrecisionModel)
         {
-            return  modelType == otherPrecisionModel.PrecisionModelType &&
-                    scale == otherPrecisionModel.Scale;
-        }        
+            return Equals((PrecisionModel) otherPrecisionModel);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="otherPrecisionModel"></param>
+        /// <returns></returns>
+        public bool Equals(PrecisionModel otherPrecisionModel)
+        {
+            return  modelType == otherPrecisionModel.modelType &&
+                    scale == otherPrecisionModel.scale;
+        }
         
         /// <summary>
         /// 
@@ -395,7 +405,7 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// <returns></returns>
         public static bool operator ==(PrecisionModel obj1, PrecisionModel obj2)
         {
-            return Equals(obj1, obj2);
+            return Object.Equals(obj1, obj2);
         }
 
         /// <summary>

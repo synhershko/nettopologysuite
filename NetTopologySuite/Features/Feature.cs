@@ -1,5 +1,10 @@
 using System;
+using System.Diagnostics;
+using System.Text;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Features
 {

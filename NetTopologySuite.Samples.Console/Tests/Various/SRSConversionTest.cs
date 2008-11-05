@@ -5,7 +5,6 @@ using GeoAPI.CoordinateSystems.Transformations;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.CoordinateSystems.Transformations;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Samples.SimpleTests;
 using NUnit.Framework;
 using SharpMap.CoordinateSystems;
 using SharpMap.CoordinateSystems.Transformations;
@@ -16,7 +15,7 @@ namespace GisSharpBlog.NetTopologySuite.Samples.Tests.Various
     /// 
     /// </summary>
     [TestFixture]
-    public class SRSConversionTest :  BaseSamples
+    public class SRSConversionTest :  SimpleTests.BaseSamples
     {
         /// <summary>
         /// 

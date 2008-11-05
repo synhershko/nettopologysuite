@@ -1,7 +1,10 @@
 using System;
+using System.Text;
 using System.Diagnostics;
 using System.Globalization;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace Open.Topology.TestRunner

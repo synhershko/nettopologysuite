@@ -1,6 +1,7 @@
 using System;
-using System.Collections.Specialized;
 using System.IO;
+using System.Collections;
+using System.Collections.Specialized;
 
 namespace Open.Topology.TestRunner
 {

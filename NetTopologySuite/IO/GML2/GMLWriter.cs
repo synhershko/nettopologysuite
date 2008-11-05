@@ -1,8 +1,13 @@
 using System;
+using System.Collections;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Xml;
+
 using GeoAPI.Geometries;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.IO.GML2
@@ -22,10 +27,19 @@ namespace GisSharpBlog.NetTopologySuite.IO.GML2
         /// <summary>
         /// Formatter for double values of coordinates
         /// </summary>
-        protected static NumberFormatInfo NumberFormatter
+        protected NumberFormatInfo NumberFormatter
         {
-            get { return Global.GetNfi(); }
+            get
+            {
+
+                return Global.GetNfi();
+            }
         }
+
+        /// <summary>
+        /// Initialize a new <c>GMLWriter</c>.
+        /// </summary>
+        public GMLWriter() { }
 
         /// <summary>
         /// Returns an <c>XmlReader</c> with feature informations.

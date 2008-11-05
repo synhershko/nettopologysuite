@@ -1,6 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Text;
+using System.Collections;
 
 namespace Iesi_NTS.Collections.Generic
 {

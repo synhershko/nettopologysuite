@@ -1,6 +1,10 @@
 using System;
+using System.Collections;
+using System.Text;
 using System.IO;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
@@ -348,7 +352,7 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
             Locations loc = label.GetLocation(0, position);
             Positions oppositePos = Position.Opposite(position);
             Locations oppositeLoc = label.GetLocation(0, oppositePos);
-            int delta = Math.Abs(depthDelta) * DepthFactor(loc, oppositeLoc);            
+            int delta = Math.Abs(depthDelta) * DirectedEdge.DepthFactor(loc, oppositeLoc);            
             int oppositeDepth = depth + delta;
             SetDepth(position, depth);
             SetDepth(oppositePos, oppositeDepth);

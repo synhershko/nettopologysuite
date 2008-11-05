@@ -171,7 +171,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		/// Returns a DataTable that describes the column metadata of the IDataReader.
 		/// </summary>
 		/// <returns>A DataTable that describes the column metadata.</returns>
-		public DataTable GetSchemaTable()
+		public System.Data.DataTable GetSchemaTable()
 		{
 			throw new NotSupportedException();
 		}
@@ -303,7 +303,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// </summary>
         /// <param name="i"></param>
         /// <returns></returns>
-		public Type GetFieldType(int i)
+		public System.Type GetFieldType(int i)
 		{
 			return _dbaseFields[i].Type;
 		}
@@ -382,7 +382,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// </summary>
         /// <param name="i"></param>
         /// <returns></returns>
-		public Guid GetGuid(int i)
+		public System.Guid GetGuid(int i)
 		{
             Guid value = Guid.Empty;
             try
@@ -403,7 +403,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// </summary>
         /// <param name="i"></param>
         /// <returns></returns>
-		public DateTime GetDateTime(int i)
+		public System.DateTime GetDateTime(int i)
 		{
             string strValue = _columnValues[i].ToString().Trim();
             DateTime value;
@@ -453,7 +453,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// </summary>
         /// <param name="i"></param>
         /// <returns></returns>
-		public IDataReader GetData(int i)
+		public System.Data.IDataReader GetData(int i)
 		{
 			/*
 			* The sample code does not support this method. Normally,
@@ -555,7 +555,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
         /// 
         /// </summary>
         /// <returns></returns>
-		public IEnumerator GetEnumerator()
+		public System.Collections.IEnumerator GetEnumerator()
 		{
             return new ShapefileDataReaderEnumerator(this);
 		}

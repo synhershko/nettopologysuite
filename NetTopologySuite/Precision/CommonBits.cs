@@ -1,5 +1,8 @@
+using System;
+using System.Collections;
+using System.Text;
+
 using GisSharpBlog.NetTopologySuite.Utilities;
-using BitConverter=System.BitConverter;
 
 namespace GisSharpBlog.NetTopologySuite.Precision
 {
@@ -87,7 +90,7 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// <param name="num"></param>
         public void Add(double num)
         {
-            long numBits = BitConverter.DoubleToInt64Bits(num);            
+            long numBits = System.BitConverter.DoubleToInt64Bits(num);            
             if (isFirst)
             {
                 commonBits = numBits;
@@ -113,7 +116,7 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         {
             get
             {
-                return BitConverter.Int64BitsToDouble(commonBits);
+                return System.BitConverter.Int64BitsToDouble(commonBits);
             }
         }
 
@@ -124,7 +127,7 @@ namespace GisSharpBlog.NetTopologySuite.Precision
         /// <returns></returns>
         public string ToString(long bits)
         {
-            double x = BitConverter.Int64BitsToDouble(bits);
+            double x = System.BitConverter.Int64BitsToDouble(bits);
             string numStr = HexConverter.ConvertAny2Any(bits.ToString(), 10, 2);            
             string padStr = "0000000000000000000000000000000000000000000000000000000000000000" + numStr;
             string bitStr = padStr.Substring(padStr.Length - 64);

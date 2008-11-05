@@ -1,3 +1,7 @@
+using System;
+using System.Collections;
+using System.Text;
+
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
 using GisSharpBlog.NetTopologySuite.Utilities;
 

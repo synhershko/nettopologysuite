@@ -1,7 +1,6 @@
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.Text;
+using System.Diagnostics;
 
 namespace GisSharpBlog.NetTopologySuite.IO
 {
@@ -12,14 +11,14 @@ namespace GisSharpBlog.NetTopologySuite.IO
 	/// <remarks>
 	/// The BinaryReader uses Little Endian format when reading binary streams.
 	/// </remarks>
-	public class BigEndianBinaryReader : BinaryReader
+	public class BigEndianBinaryReader : System.IO.BinaryReader
 	{		
 		/// <summary>
 		/// Initializes a new instance of the BigEndianBinaryReader class 
         /// based on the supplied stream and using UTF8Encoding.
 		/// </summary>
 		/// <param name="stream"></param>
-		public BigEndianBinaryReader(Stream stream)  : base(stream) { }
+		public BigEndianBinaryReader(System.IO.Stream stream)  : base(stream) { }
 
 		/// <summary>
 		/// Initializes a new instance of the BigEndianBinaryReader class 
@@ -27,7 +26,7 @@ namespace GisSharpBlog.NetTopologySuite.IO
 		/// </summary>
 		/// <param name="input"></param>
 		/// <param name="encoding"></param>
-		public BigEndianBinaryReader(Stream input, Encoding encoding) : base(input, encoding) { }		
+		public BigEndianBinaryReader(System.IO.Stream input, Encoding encoding) : base(input, encoding) { }		
 	
 		/// <summary>
 		/// Reads a 4-byte signed integer using the big-endian layout 

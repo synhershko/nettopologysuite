@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Collections;
 using System.Xml;
+
 using Open.Topology.TestRunner;
 
 namespace ConsoleTestRunner

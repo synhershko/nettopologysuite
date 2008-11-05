@@ -1,6 +1,9 @@
 using System;
-using System.IO;
+using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
+
 using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
@@ -92,7 +95,7 @@ namespace GisSharpBlog.NetTopologySuite.Noding
         /// 
         /// </summary>
         /// <param name="outstream"></param>
-        public void Write(StreamWriter outstream)
+        public void Write(System.IO.StreamWriter outstream)
         {
             outstream.Write(Coordinate);
             outstream.Write(" seg # = " + SegmentIndex);

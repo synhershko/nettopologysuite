@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
-using GisSharpBlog.NetTopologySuite.Planargraph;
+using System.Text;
+
+using GisSharpBlog.NetTopologySuite.Algorithm;
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph.Algorithm
 {
@@ -11,7 +14,7 @@ namespace GisSharpBlog.NetTopologySuite.Planargraph.Algorithm
         private PlanarGraph graph;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConnectedSubgraphFinder"/> class.
+        /// Initializes a new instance of the <see cref="T:ConnectedSubgraphFinder"/> class.
         /// </summary>
         /// <param name="graph">The <see cref="PlanarGraph" />.</param>
         public ConnectedSubgraphFinder(PlanarGraph graph)

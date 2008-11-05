@@ -1,7 +1,14 @@
+using System;
 using System.Collections;
+using System.Text;
+
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Algorithm;
+
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
+using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Operation;
 using GisSharpBlog.NetTopologySuite.Utilities;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay
@@ -98,7 +105,7 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Overlay
         private IGeometry resultGeom;
 
         private PlanarGraph graph;
-        private EdgeList edgeList      = new EdgeList();
+        private EdgeList edgeList     = new EdgeList();
 
         private IList resultPolyList   = new ArrayList();
         private IList resultLineList   = new ArrayList();

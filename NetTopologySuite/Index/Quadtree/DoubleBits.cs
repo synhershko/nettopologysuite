@@ -1,6 +1,7 @@
 using System;
+using System.Collections;
+using System.Text;
 using GisSharpBlog.NetTopologySuite.Utilities;
-using BitConverter=System.BitConverter;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
 {
@@ -31,7 +32,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
                 throw new ArgumentException("Exponent out of bounds");
             long expBias = exp + ExponentBias;
             long bits = (long)expBias << 52;
-            return BitConverter.Int64BitsToDouble(bits);
+            return System.BitConverter.Int64BitsToDouble(bits);
         }
 
         /// <summary>
@@ -100,7 +101,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
         public DoubleBits(double x)
         {
             this.x = x;
-            xBits = BitConverter.DoubleToInt64Bits(x);
+            xBits = System.BitConverter.DoubleToInt64Bits(x);
         }
 
         /// <summary>
@@ -110,7 +111,7 @@ namespace GisSharpBlog.NetTopologySuite.Index.Quadtree
         {
             get
             {
-                return BitConverter.Int64BitsToDouble(xBits);
+                return System.BitConverter.Int64BitsToDouble(xBits);
             }
         }
 
