@@ -107,7 +107,7 @@ namespace GisSharpBlog.NetTopologySuite.CoordinateSystems.Transformations
 			try 
             {
 				List<ICoordinate> coords = ExtractCoordinates(l, transform);
-				return new LineString(coords.ToArray()); 
+                return l.Factory.CreateLineString(coords.ToArray());
             }
 			catch { return null; }
 		}
@@ -123,7 +123,7 @@ namespace GisSharpBlog.NetTopologySuite.CoordinateSystems.Transformations
 			try 
             {
                 List<ICoordinate> coords = ExtractCoordinates(r, transform);
-                return new LinearRing(coords.ToArray()); 
+                return r.Factory.CreateLinearRing(coords.ToArray());
             }
 			catch { return null; }
 		}
@@ -157,7 +157,7 @@ namespace GisSharpBlog.NetTopologySuite.CoordinateSystems.Transformations
 			List<ILinearRing> rings = new List<ILinearRing>(p.InteriorRings.Length); 
             for (int i = 0; i < p.InteriorRings.Length; i++)
 				rings.Add(TransformLinearRing((ILinearRing)p.InteriorRings[i], transform));
-			return new Polygon(TransformLinearRing((ILinearRing)p.ExteriorRing, transform), rings.ToArray());
+		    return p.Factory.CreatePolygon(TransformLinearRing((ILinearRing) p.ExteriorRing, transform), rings.ToArray());
 		}
 
 		/// <summary>
