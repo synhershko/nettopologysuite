@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures.Collections.Generic;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
 
@@ -6,22 +9,20 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 {
     /// <summary>
     /// Contains information about the nature and location of 
-    /// a <see cref="Geometry" /> validation error.
+    /// a <see cref="Geometry{TCoordinate}" /> validation error.
     /// </summary>
     public enum TopologyValidationErrors
-    {     
+    {
         /// <summary>
-        /// Not used.
+        /// Unknown error; default value.
         /// </summary>
-        [Obsolete("Not used")]
-        Error = 0,
+        Unknown = 0,
 
         /// <summary>
-        /// No longer used: 
-        /// repeated points are considered valid as per the SFS.
+        /// Indicates a generic topology validation error which doesn't 
+        /// fit into any of the other <see cref="TopologyValidationErrors"/> values.
         /// </summary>
-        [Obsolete("No longer used: repeated points are considered valid as per the SFS")]
-        RepeatedPoint = 1,
+        GenericTopologyValidationError = 1,
 
         /// <summary>
         /// Indicates that a hole of a polygon lies partially 
@@ -54,7 +55,7 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 
         /// <summary>
         /// Indicates that a polygon component of a 
-        /// <see cref="MultiPolygon" /> lies inside another polygonal component.
+        /// <see cref="IMultiPolygon" /> lies inside another polygonal component.
         /// </summary>
         NestedShells = 7,
 
@@ -66,15 +67,16 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 
         /// <summary>
         /// Indicates that either:
-        /// - A <see cref="LineString" /> contains a single point.
-        /// - A <see cref="LinearRing" /> contains 2 or 3 points.
+        /// - An <see cref="ILineString" /> contains a single point.
+        /// - An <see cref="ILinearRing" /> contains 2 or 3 points.
         /// </summary>
         TooFewPoints = 9,
 
         /// <summary>
-        /// Indicates that the <c>X</c> or <c>Y</c> ordinate of
-        /// a <see cref="Coordinate" /> is not a valid 
-        /// numeric value (e.g. <see cref="Double.NaN" />).
+        /// Indicates that the <see cref="Ordinates.X">X</see>
+        /// or <see cref="Ordinates.Y">Y</see> ordinate of
+        /// an <see cref="ICoordinate" /> is not a valid 
+        /// numeric value (e.g. <see cref="double.NaN" />).
         /// </summary>
         InvalidCoordinate = 10,
 
@@ -86,93 +88,74 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
     }
 
     /// <summary>
-    /// Contains information about the nature and location of a <c>Geometry</c>
+    /// Contains information about the nature and location of an <see cref="IGeometry{TCoordinate}"/>
     /// validation error.
     /// </summary>
-    public class TopologyValidationError 
-    {        
-        // NOTE: modified for "safe" assembly in Sql 2005
-        // Added readonly!
-
+    public class TopologyValidationError
+    {
+        // NOTE: modified for "safe" assembly in Sql 2005:  Added readonly
         /// <summary>
-        /// These messages must synch up with the indexes above
+        /// These messages must match one-to-one up with the indexes above
         /// </summary>
-        private static readonly string[] errMsg = 
-        {
-            "Topology Validation Error",
-            "Repeated Point",
-            "Hole lies outside shell",
-            "Holes are nested",
-            "Interior is disconnected",
-            "Self-intersection",
-            "Ring Self-intersection",
-            "Nested shells",
-            "Duplicate Rings",
-            "Too few points in geometry component",
-            "Invalid Coordinate"
-        };
+        private static readonly IDictionary<TopologyValidationErrors, String> _errMsg;
 
-        private TopologyValidationErrors errorType;
-        private ICoordinate pt;
+        private readonly ICoordinate _coordinate;
+        private readonly TopologyValidationErrors _errorType;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="errorType"></param>
-        /// <param name="pt"></param>
-        public TopologyValidationError(TopologyValidationErrors errorType, ICoordinate pt)
+        static TopologyValidationError()
         {
-            this.errorType = errorType;
-            if(pt != null)
-                this.pt = (ICoordinate) pt.Clone();
+            // I18N_UNSAFE
+            Dictionary<TopologyValidationErrors, String> errors
+                = new Dictionary<TopologyValidationErrors, String>();
+            errors[TopologyValidationErrors.Unknown] = "Unknown error";
+            errors[TopologyValidationErrors.GenericTopologyValidationError] = "Topology validation error";
+            errors[TopologyValidationErrors.HoleOutsideShell] = "Hole lies outside shell";
+            errors[TopologyValidationErrors.NestedHoles] = "Holes are nested";
+            errors[TopologyValidationErrors.DisconnectedInteriors] = "Interior is disconnected";
+            errors[TopologyValidationErrors.SelfIntersection] = "Self-intersection";
+            errors[TopologyValidationErrors.RingSelfIntersection] = "Ring self-intersection";
+            errors[TopologyValidationErrors.NestedShells] = "Nested shells";
+            errors[TopologyValidationErrors.DuplicateRings] = "Duplicate Rings";
+            errors[TopologyValidationErrors.TooFewPoints] = "Too few points in geometry component";
+            errors[TopologyValidationErrors.InvalidCoordinate] = "Invalid Coordinate";
+            errors[TopologyValidationErrors.RingNotClosed] = "Ring not closed: first and last points are different";
+
+            _errMsg = new ReadOnlyDictionary<TopologyValidationErrors, String>(errors);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="errorType"></param>
-        public TopologyValidationError(TopologyValidationErrors errorType) : this(errorType, null) { }
+        public TopologyValidationError(TopologyValidationErrors errorType, ICoordinate coordinate)
+        {
+            _errorType = errorType;
 
-        /// <summary>
-        /// 
-        /// </summary>
+            if (coordinate != null)
+            {
+                _coordinate = (ICoordinate) coordinate.Clone();
+            }
+        }
+
+        public TopologyValidationError(TopologyValidationErrors errorType)
+            : this(errorType, null)
+        {
+        }
+
         public ICoordinate Coordinate
         {
-            get
-            {
-                return pt;
-            }
+            get { return _coordinate; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public TopologyValidationErrors ErrorType
         {
-            get
-            {
-                return errorType;
-            }
+            get { return _errorType; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public String Message
         {
-            get
-            {
-                return errMsg[(int) errorType];
-            }
+            get { return _errMsg[_errorType]; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString()
+        public override String ToString()
         {
-            return Message + " at or near point " + pt;
+            return Message + " at or near point " + _coordinate;
         }
     }
 }

@@ -1,5 +1,7 @@
-using System.Collections;
-using GeoAPI.Geometries;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
 {
@@ -9,48 +11,34 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
     /// comparing all segments.
     /// This algorithm is too slow for production use, but is useful for testing purposes.
     /// </summary>
-    public class SimpleEdgeSetIntersector : EdgeSetIntersector
-    {        
-        /// <summary>
-        /// 
-        /// </summary>
-        public SimpleEdgeSetIntersector() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edges"></param>
-        /// <param name="si"></param>
-        /// <param name="testAllSegments"></param>
-        public override void ComputeIntersections(IList edges, SegmentIntersector si, bool testAllSegments)
-        {            
-            for (IEnumerator i0 = edges.GetEnumerator(); i0.MoveNext(); ) 
+    public class SimpleEdgeSetIntersector<TCoordinate> : EdgeSetIntersector<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
+    {
+        public override void ComputeIntersections(IEnumerable<Edge<TCoordinate>> edges,
+                                                  SegmentIntersector<TCoordinate> si, Boolean testAllSegments)
+        {
+            foreach (Edge<TCoordinate> edge0 in edges)
             {
-                Edge edge0 = (Edge) i0.Current;
-                for (IEnumerator i1 = edges.GetEnumerator(); i1.MoveNext(); ) 
+                foreach (Edge<TCoordinate> edge1 in edges)
                 {
-                    Edge edge1 = (Edge) i1.Current;
                     if (testAllSegments || edge0 != edge1)
-                        ComputeIntersects(edge0, edge1, si);
+                    {
+                        computeIntersects(edge0, edge1, si);
+                    }
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edges0"></param>
-        /// <param name="edges1"></param>
-        /// <param name="si"></param>
-        public override void ComputeIntersections(IList edges0, IList edges1, SegmentIntersector si)
-        {            
-            for (IEnumerator i0 = edges0.GetEnumerator(); i0.MoveNext(); )
+        public override void ComputeIntersections(IEnumerable<Edge<TCoordinate>> edges0,
+                                                  IEnumerable<Edge<TCoordinate>> edges1,
+                                                  SegmentIntersector<TCoordinate> si)
+        {
+            foreach (Edge<TCoordinate> edge0 in edges0)
             {
-                Edge edge0 = (Edge) i0.Current;
-                for (IEnumerator i1 = edges1.GetEnumerator(); i1.MoveNext(); )
+                foreach (Edge<TCoordinate> edge1 in edges1)
                 {
-                    Edge edge1 = (Edge) i1.Current;
-                        ComputeIntersects(edge0, edge1, si);
+                    computeIntersects(edge0, edge1, si);
                 }
             }
         }
@@ -60,16 +48,25 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
         /// This has n^2 performance, and is about 100 times slower than using
         /// monotone chains.
         /// </summary>
-        /// <param name="e0"></param>
-        /// <param name="e1"></param>
-        /// <param name="si"></param>
-        private void ComputeIntersects(Edge e0, Edge e1, SegmentIntersector si)
+        private void computeIntersects(Edge<TCoordinate> e0, Edge<TCoordinate> e1, SegmentIntersector<TCoordinate> si)
         {
-            ICoordinate[] pts0 = e0.Coordinates;
-            ICoordinate[] pts1 = e1.Coordinates;
-            for (int i0 = 0; i0 < pts0.Length - 1; i0++) 
-                for (int i1 = 0; i1 < pts1.Length - 1; i1++)             
-                    si.AddIntersections(e0, i0, e1, i1);            
+            IEnumerator<TCoordinate> pts0 = e0.Coordinates.GetEnumerator();
+            IEnumerator<TCoordinate> pts1 = e1.Coordinates.GetEnumerator();
+
+            Int32 i0 = 0;
+            Int32 i1 = 0;
+
+            while (pts0.MoveNext())
+            {
+                while (pts1.MoveNext())
+                {
+                    si.AddIntersections(e0, i0, e1, i1);
+
+                    i1 += 1;
+                }
+
+                i0 += 1;
+            }
         }
     }
 }

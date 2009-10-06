@@ -1,224 +1,333 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
+using GeoAPI.Indexing;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Chain
 {
     /// <summary> 
-    /// MonotoneChains are a way of partitioning the segments of a linestring to
-    /// allow for fast searching of intersections.
-    /// They have the following properties:
-    /// the segments within a monotone chain will never intersect each other
+    /// A <see cref="MonotoneChain{TCoordinate}"/> is a way of partitioning 
+    /// the segments of a linestring to allow for fast searching of intersections.
+    /// </summary>
+    /// <remarks>
+    /// Monotone chains have the following properties:
+    /// <list type="bullet">
+    /// <item>
+    /// <description>
+    /// the segments within a monotone chain will never intersect each other, and
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
     /// the envelope of any contiguous subset of the segments in a monotone chain
-    /// is equal to the envelope of the endpoints of the subset.
+    /// is simply the envelope of the endpoints of the subset.
+    /// </description>
+    /// </item>
+    /// </list>
+    /// <para>
     /// Property 1 means that there is no need to test pairs of segments from within
     /// the same monotone chain for intersection.
-    /// Property 2 allows
-    /// binary search to be used to find the intersection points of two monotone chains.
+    /// </para>
+    /// <para>
+    /// Property 2 allows binary search to be used to find the intersection points 
+    /// of two monotone chains.
+    /// </para>
+    /// <para>
     /// For many types of real-world data, these properties eliminate a large number of
     /// segment comparisons, producing substantial speed gains.
+    /// </para>
+    /// <para>
     /// One of the goals of this implementation of MonotoneChains is to be
     /// as space and time efficient as possible. One design choice that aids this
-    /// is that a MonotoneChain is based on a subarray of a list of points.
+    /// is that a MonotoneChain is based on a subset of a list of points.
     /// This means that new arrays of points (potentially very large) do not
     /// have to be allocated.
+    /// </para>
     /// MonotoneChains support the following kinds of queries:
-    /// Envelope select: determine all the segments in the chain which
+    /// <list type="table">
+    /// <item>
+    /// <term>Envelope select</term>
+    /// <description>
+    /// Determines all the segments in the chain which
     /// intersect a given envelope.
-    /// Overlap: determine all the pairs of segments in two chains whose
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <term>Overlap</term>
+    /// <description>
+    /// Determines all the pairs of segments in two chains whose
     /// envelopes overlap.
-    /// This implementation of MonotoneChains uses the concept of internal iterators
-    /// to return the resultsets for the above queries.
-    /// This has time and space advantages, since it
-    /// is not necessary to build lists of instantiated objects to represent the segments
-    /// returned by the query.
-    /// However, it does mean that the queries are not thread-safe.
-    /// </summary>
-    public class MonotoneChain
+    /// </description>
+    /// </item>
+    /// </list>
+    /// </remarks>
+    public class MonotoneChain<TCoordinate> : IBoundable<IExtents<TCoordinate>>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private ICoordinate[] pts;
-        private int start, end;
-        private IEnvelope env = null;
-        private object context = null;  // user-defined information
-        private int id;                 // useful for optimizing chain comparisons
+        private readonly Object _context; // user-defined information
+        private readonly ICoordinateSequence<TCoordinate> _coordinates;
+        private readonly Int32 _end;
+        private readonly IGeometryFactory<TCoordinate> _geoFactory;
+        private readonly Int32 _start;
+        private IExtents<TCoordinate> _extents;
+        private Int32 _id; // useful for optimizing chain comparisons
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <param name="start"></param>
-        /// <param name="end"></param>
-        /// <param name="context"></param>
-        public MonotoneChain(ICoordinate[] pts, int start, int end, object context)
+        public MonotoneChain(IGeometryFactory<TCoordinate> geoFactory,
+                             ICoordinateSequence<TCoordinate> pts,
+                             Int32 start, Int32 end, Object context)
         {
-            this.pts = pts;
-            this.start = start;
-            this.end = end;
-            this.context = context;
+            if (pts == null) throw new ArgumentNullException("pts");
+
+            _geoFactory = geoFactory;
+            _coordinates = pts;
+            _start = start;
+            _end = end;
+            Debug.Assert(end - start + 1 <= _coordinates.Count);
+            _context = context;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int Id
+        public Int32 Id
+        {
+            get { return _id; }
+            set { _id = value; }
+        }
+
+        public Object Context
+        {
+            get { return _context; }
+        }
+
+        public IExtents<TCoordinate> Extents
         {
             get
             {
-                return this.id;
-            }
-            set
-            {
-                this.id = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public object Context
-        {
-            get
-            {
-                return context;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public IEnvelope Envelope
-        {
-            get
-            {
-                if (env == null)
+                if (_extents == null)
                 {
-                    ICoordinate p0 = pts[start];
-                    ICoordinate p1 = pts[end];
-                    env = new Envelope(p0, p1);
+                    TCoordinate p0 = Slice.GetAt(_coordinates, _start);
+                    TCoordinate p1 = Slice.GetAt(_coordinates, _end);
+                    _extents = _geoFactory.CreateExtents(p0, p1);
                 }
-                return env;
+
+                return _extents;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int StartIndex
+        public Int32 StartIndex
         {
-            get
-            {
-                return start;
-            }
+            get { return _start; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int EndIndex
+        public Int32 EndIndex
         {
-            get
-            {
-                return end;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <param name="ls"></param>
-        public void GetLineSegment(int index, ref LineSegment ls)
-        {
-            ls.P0 = pts[index];
-            ls.P1 = pts[index + 1];
+            get { return _end; }
         }
 
         /// <summary>
         /// Return the subsequence of coordinates forming this chain.
-        /// Allocates a new array to hold the Coordinates.
         /// </summary>
-        public ICoordinate[] Coordinates
+        public ICoordinateSequence<TCoordinate> Coordinates
         {
-            get
+            get { return _coordinates.Slice(_start, _end); }
+        }
+
+        #region IBoundable<IExtents<TCoordinate>> Members
+
+        IExtents<TCoordinate> IBoundable<IExtents<TCoordinate>>.Bounds
+        {
+            get { return Extents; }
+        }
+
+        Boolean IIntersectable<IExtents<TCoordinate>>.Intersects(IExtents<TCoordinate> bounds)
+        {
+            return Extents.Intersects(bounds);
+        }
+
+        #endregion
+
+        #region Private helper routines
+
+        private IEnumerable<LineSegment<TCoordinate>> computeSelect(
+            IExtents<TCoordinate> searchExtents,
+            Int32 start, Int32 end)
+        {
+            foreach (
+                KeyValuePair<Int32, LineSegment<TCoordinate>> pair in
+                    computeSelectWithIndexes(searchExtents, start, end))
             {
-                ICoordinate[] coord = new ICoordinate[end - start + 1];
-                int index = 0;
-                for (int i = start; i <= end; i++) 
-                    coord[index++] = pts[i];                
-                return coord;
+                yield return pair.Value;
             }
         }
 
-        /// <summary> 
-        /// Determine all the line segments in the chain whose envelopes overlap
-        /// the searchEnvelope, and process them.
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <param name="mcs"></param>
-        public void Select(IEnvelope searchEnv, MonotoneChainSelectAction mcs)
+        private IEnumerable<Int32> computeSelectIndexes(IExtents<TCoordinate> searchExtents,
+                                                        Int32 start, Int32 end)
         {
-            ComputeSelect(searchEnv, start, end, mcs);
+            foreach (
+                KeyValuePair<Int32, LineSegment<TCoordinate>> pair in
+                    computeSelectWithIndexes(searchExtents, start, end))
+            {
+                yield return pair.Key;
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="searchEnv"></param>
-        /// <param name="start0"></param>
-        /// <param name="end0"></param>
-        /// <param name="mcs"></param>
-        private void ComputeSelect(IEnvelope searchEnv, int start0, int end0, MonotoneChainSelectAction mcs)
+        private IEnumerable<KeyValuePair<Int32, LineSegment<TCoordinate>>> computeSelectWithIndexes(
+            IExtents<TCoordinate> searchExtents,
+            Int32 start, Int32 end)
         {
-            ICoordinate p0 = pts[start0];
-            ICoordinate p1 = pts[end0];
-            mcs.TempEnv1.Init(p0, p1);
-            
+            TCoordinate p0 = Slice.GetAt(_coordinates, start);
+            TCoordinate p1 = Slice.GetAt(_coordinates, end);
+
+            IExtents<TCoordinate> currentExtents = _geoFactory.CreateExtents(p0, p1);
+
             // terminating condition for the recursion
-            if (end0 - start0 == 1)
+            if (end - start == 1)
             {
-                mcs.Select(this, start0);
-                return;
+                LineSegment<TCoordinate> selectedSegment = GetLineSegment(start);
+                yield return new KeyValuePair<Int32, LineSegment<TCoordinate>>(start, selectedSegment);
             }
+
             // nothing to do if the envelopes don't overlap
-            if (!searchEnv.Intersects(mcs.TempEnv1))
-                return;
+            if (!searchExtents.Intersects(currentExtents))
+            {
+                yield break;
+            }
 
             // the chains overlap, so split each in half and iterate  (binary search)
-            int mid = (start0 + end0) / 2;
+            Int32 mid = (start + end)/2;
 
             // Assert: mid != start or end (since we checked above for end - start <= 1)
             // check terminating conditions before recursing
-            if (start0 < mid)
-                ComputeSelect(searchEnv, start0, mid, mcs);            
-            if (mid < end0)
-                ComputeSelect(searchEnv, mid, end0, mcs);            
-        }
-            
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="mc"></param>
-        /// <param name="mco"></param>
-        public  void ComputeOverlaps(MonotoneChain mc, MonotoneChainOverlapAction mco)
-        {
-            ComputeOverlaps(start, end, mc, mc.start, mc.end, mco);
+            if ((start == mid) || (mid == end))
+                yield break;
+
+            if (start < mid)
+            {
+                foreach (LineSegment<TCoordinate> ls in computeSelect(searchExtents, start, mid))
+                {
+                    yield return new KeyValuePair<int, LineSegment<TCoordinate>>(start, ls);
+                }
+                //computeSelect(searchExtents, start, mid);
+            }
+
+            if (mid < end)
+            {
+                foreach (LineSegment<TCoordinate> ls in computeSelect(searchExtents, mid, end))
+                {
+                    yield return new KeyValuePair<int, LineSegment<TCoordinate>>(mid, ls);
+                }
+                //computeSelect(searchExtents, mid, end);
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="start0"></param>
-        /// <param name="end0"></param>
-        /// <param name="mc"></param>
-        /// <param name="start1"></param>
-        /// <param name="end1"></param>
-        /// <param name="mco"></param>
-        private void ComputeOverlaps(int start0, int end0, MonotoneChain mc, int start1, int end1, MonotoneChainOverlapAction mco)
+        private IEnumerable<Pair<LineSegment<TCoordinate>>> computeOverlaps(
+            Int32 start0, Int32 end0,
+            MonotoneChain<TCoordinate> other,
+            Int32 start1, Int32 end1)
         {
-            ICoordinate p00 = pts[start0];
-            ICoordinate p01 = pts[end0];
-            ICoordinate p10 = mc.pts[start1];
-            ICoordinate p11 = mc.pts[end1];
-            
+            IEnumerable<Pair<Pair<Int32, LineSegment<TCoordinate>>>> overlaps
+                = computeOverlapsWithIndexes(start0, end0, other, start1, end1);
+
+            foreach (Pair<Pair<Int32, LineSegment<TCoordinate>>> pair in overlaps)
+            {
+                yield return new Pair<LineSegment<TCoordinate>>(pair.First.Second,
+                                                                pair.Second.Second);
+            }
+        }
+
+        private IEnumerable<Pair<Int32>> computeOverlapIndexes(
+            Int32 start0, Int32 end0,
+            MonotoneChain<TCoordinate> other,
+            Int32 start1, Int32 end1)
+        {
+            // this is starting to look like Lisp, except with angle brackets...
+            IEnumerable<Pair<Pair<Int32, LineSegment<TCoordinate>>>> overlaps
+                = computeOverlapsWithIndexes(start0, end0, other, start1, end1);
+
+            foreach (Pair<Pair<Int32, LineSegment<TCoordinate>>> pair in overlaps)
+            {
+                yield return new Pair<Int32>(pair.First.First, pair.Second.First);
+            }
+        }
+
+        private IEnumerable<Pair<Pair<Int32, LineSegment<TCoordinate>>>> computeOverlapsWithIndexes(
+            Int32 start0, Int32 end0,
+            MonotoneChain<TCoordinate> other,
+            Int32 start1, Int32 end1)
+        {
+            TCoordinate p00 = Slice.GetAt(_coordinates, start0);
+            TCoordinate p01 = Slice.GetAt(_coordinates, end0);
+
+            TCoordinate p10 = Slice.GetAt(other._coordinates, start1);
+            TCoordinate p11 = Slice.GetAt(other._coordinates, end1);
+
+            // terminating condition for the recursion
+            if (end0 - start0 == 1 && end1 - start1 == 1)
+            {
+                LineSegment<TCoordinate> s0 = GetLineSegment(start0);
+                LineSegment<TCoordinate> s1 = other.GetLineSegment(start1);
+
+                Pair<Int32, LineSegment<TCoordinate>> first
+                    = new Pair<Int32, LineSegment<TCoordinate>>(start0, s0);
+                Pair<Int32, LineSegment<TCoordinate>> second
+                    = new Pair<Int32, LineSegment<TCoordinate>>(start1, s1);
+
+                yield return new Pair<Pair<Int32, LineSegment<TCoordinate>>>(first, second);
+            }
+
+            // nothing to do if the envelopes of these chains don't overlap
+            if (!Extents<TCoordinate>.Intersects(p00, p01, p10, p11))
+            {
+                yield break;
+            }
+
+            // the chains overlap, so split each in half and iterate  (binary search)
+            Int32 mid0 = (start0 + end0)/2;
+            Int32 mid1 = (start1 + end1)/2;
+
+            // Assert: mid != start or end (since we checked above for end - start <= 1)
+            // check terminating conditions before recursing
+            if (start0 < mid0)
+            {
+                if (start1 < mid1)
+                {
+                    computeOverlaps(start0, mid0, other, start1, mid1);
+                }
+
+                if (mid1 < end1)
+                {
+                    computeOverlaps(start0, mid0, other, mid1, end1);
+                }
+            }
+
+            if (mid0 < end0)
+            {
+                if (start1 < mid1)
+                {
+                    computeOverlaps(mid0, end0, other, start1, mid1);
+                }
+
+                if (mid1 < end1)
+                {
+                    computeOverlaps(mid0, end0, other, mid1, end1);
+                }
+            }
+        }
+
+        private void computeOverlaps(int start0, int end0, MonotoneChain<TCoordinate> mc, int start1, int end1,
+                                     MonotoneChainOverlapAction<TCoordinate> mco)
+        {
+            TCoordinate p00 = _coordinates[start0];
+            TCoordinate p01 = _coordinates[end0];
+            TCoordinate p10 = mc._coordinates[start1];
+            TCoordinate p11 = mc._coordinates[end1];
+            //Debug.println("computeIntersectsForChain:" + p00 + p01 + p10 + p11);
             // terminating condition for the recursion
             if (end0 - start0 == 1 && end1 - start1 == 1)
             {
@@ -226,31 +335,65 @@ namespace GisSharpBlog.NetTopologySuite.Index.Chain
                 return;
             }
             // nothing to do if the envelopes of these chains don't overlap
-            mco.TempEnv1.Init(p00, p01);
-            mco.TempEnv2.Init(p10, p11);
-            if (! mco.TempEnv1.Intersects(mco.TempEnv2)) 
-                return;
+            mco.SearchExtents1.SetToEmpty();
+            mco.SearchExtents1.ExpandToInclude(p00, p01);
+            mco.SearchExtents2.SetToEmpty();
+            mco.SearchExtents2.ExpandToInclude(p10, p11);
+            if (!mco.SearchExtents1.Intersects(mco.SearchExtents2)) return;
 
             // the chains overlap, so split each in half and iterate  (binary search)
-            int mid0 = (start0 + end0) / 2;
-            int mid1 = (start1 + end1) / 2;
+            int mid0 = (start0 + end0)/2;
+            int mid1 = (start1 + end1)/2;
 
             // Assert: mid != start or end (since we checked above for end - start <= 1)
             // check terminating conditions before recursing
             if (start0 < mid0)
             {
-                if (start1 < mid1)
-                    ComputeOverlaps(start0, mid0, mc, start1, mid1, mco);
-                if (mid1 < end1) 
-                    ComputeOverlaps(start0, mid0, mc, mid1, end1, mco);
+                if (start1 < mid1) computeOverlaps(start0, mid0, mc, start1, mid1, mco);
+                if (mid1 < end1) computeOverlaps(start0, mid0, mc, mid1, end1, mco);
             }
             if (mid0 < end0)
             {
-                if (start1 < mid1) 
-                    ComputeOverlaps(mid0, end0, mc, start1, mid1, mco);
-                if (mid1 < end1) 
-                    ComputeOverlaps(mid0, end0, mc, mid1, end1, mco);
+                if (start1 < mid1) computeOverlaps(mid0, end0, mc, start1, mid1, mco);
+                if (mid1 < end1) computeOverlaps(mid0, end0, mc, mid1, end1, mco);
             }
+        }
+
+        #endregion
+
+        public LineSegment<TCoordinate> GetLineSegment(Int32 index)
+        {
+            Pair<TCoordinate> pair = Slice.GetPairAt(_coordinates, index).Value;
+            return new LineSegment<TCoordinate>(pair);
+        }
+
+        /// <summary> 
+        /// Determine all the line segments in the chain whose envelopes intersect
+        /// the <paramref name="searchExtents"/>, and return them.
+        /// </summary>
+        public IEnumerable<LineSegment<TCoordinate>> Select(IExtents<TCoordinate> searchExtents)
+        {
+            return computeSelect(searchExtents, _start, _end);
+        }
+
+        public IEnumerable<Int32> SelectIndexes(IExtents<TCoordinate> searchExtents)
+        {
+            return computeSelectIndexes(searchExtents, _start, _end);
+        }
+
+        public IEnumerable<Pair<LineSegment<TCoordinate>>> Overlap(MonotoneChain<TCoordinate> other)
+        {
+            return computeOverlaps(_start, _end, other, other._start, other._end);
+        }
+
+        public void ComputeOverlaps(MonotoneChain<TCoordinate> other, MonotoneChainOverlapAction<TCoordinate> mco)
+        {
+            computeOverlaps(StartIndex, EndIndex, other, other.StartIndex, other.EndIndex, mco);
+        }
+
+        public IEnumerable<Pair<Int32>> OverlapIndexes(MonotoneChain<TCoordinate> other)
+        {
+            return computeOverlapIndexes(_start, _end, other, other._start, other._end);
         }
     }
 }

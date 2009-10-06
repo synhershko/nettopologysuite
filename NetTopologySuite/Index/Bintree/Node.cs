@@ -1,175 +1,138 @@
-using GisSharpBlog.NetTopologySuite.Utilities;
+using System;
+using GeoAPI.DataStructures;
+using GeoAPI.Diagnostics;
+using GeoAPI.Indexing;
 
 namespace GisSharpBlog.NetTopologySuite.Index.Bintree
 {
     /// <summary>
-    /// A node of a <c>Bintree</c>.
+    /// A node of a <see cref="BinTree{TCoordinates}"/>.
     /// </summary>
-    public class Node : NodeBase
+    public class Node<TBoundable> : BaseBinNode<TBoundable>
+        where TBoundable : IBoundable<Interval>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemInterval"></param>
-        /// <returns></returns>
-        public static Node CreateNode(Interval itemInterval)
-        {
-            Key key = new Key(itemInterval);
-        
-            Node node = new Node(key.Interval, key.Level);
-            return node;
-        }
+        //private readonly Interval _interval;
+        private readonly Double _center;
+        //private readonly Int32 _level;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="addInterval"></param>
-        /// <returns></returns>
-        public static Node CreateExpanded(Node node, Interval addInterval)
+        protected internal Node(Interval bounds, Int32 level)
+            : base(bounds, level)
         {
-            Interval expandInt = new Interval(addInterval);
-            if (node != null) expandInt.ExpandToInclude(node.interval);
-            Node largerNode = CreateNode(expandInt);
-            if (node != null) largerNode.Insert(node);
-            return largerNode;
-        }
+            //_interval = interval;
+            //_level = level;
+            _center = (bounds.Min + bounds.Max) / 2;
 
-        private Interval interval;
-        private double centre;
-        private int level;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="interval"></param>
-        /// <param name="level"></param>
-        public Node(Interval interval, int level)
-        {
-            this.interval = interval;
-            this.level = level;
-            centre = (interval.Min + interval.Max) / 2;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public  Interval Interval
-        {
-            get
+            if (Double.IsNaN(_center))
             {
-                return interval;
+                throw new ArgumentException("Invalid interval: ", bounds.ToString());
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="itemInterval"></param>
-        /// <returns></returns>
-        protected override bool IsSearchMatch(Interval itemInterval)
+        public static Node<TBoundable> CreateNode(Interval itemInterval)
         {
-            return itemInterval.Overlaps(interval);
+            BinTreeKey key = new BinTreeKey(itemInterval);
+
+            Node<TBoundable> node = new Node<TBoundable>(key.Bounds, key.Level);
+            return node;
+        }
+
+        public static Node<TBoundable> CreateExpanded(Node<TBoundable> node, Interval addInterval)
+        {
+            Interval expanded = new Interval(addInterval);
+
+            if (node != null)
+            {
+                expanded = expanded.ExpandToInclude(node.Bounds);
+            }
+
+            Node<TBoundable> largerNode = CreateNode(expanded);
+
+            if (node != null)
+            {
+                largerNode.Insert(node);
+            }
+
+            return largerNode;
+        }
+
+        //public Interval Interval
+        //{
+        //    get { return _interval; }
+        //}
+
+        protected override Boolean IsSearchMatch(Interval itemInterval)
+        {
+            return itemInterval.Overlaps(Bounds);
         }
 
         /// <summary>
         /// Returns the subnode containing the envelope.
-        /// Creates the node if
-        /// it does not already exist.
+        /// Creates the node if it does not already exist.
         /// </summary>
-        /// <param name="searchInterval"></param>
-        public  Node GetNode(Interval searchInterval)
+        public Node<TBoundable> GetNode(Interval searchInterval)
         {
-            int subnodeIndex = GetSubnodeIndex(searchInterval, centre);
-            // if index is -1 searchEnv is not contained in a subnode
-            if (subnodeIndex != -1) 
+            Int32 subnodeIndex = GetSubNodeIndex(searchInterval, _center);
+
+            // if index is -1 searchInterval is not contained in a subnode
+            if (subnodeIndex == -1)
             {
-                // create the node if it does not exist
-                Node node = GetSubnode(subnodeIndex);
-                // recursively search the found/created node
-                return node.GetNode(searchInterval);
+                return this;
             }
-            else return this;            
+
+            // create the node if it does not exist
+            Node<TBoundable> node = GetSubNode(subnodeIndex, true);
+
+            // recursively search the found/created node
+            return node.GetNode(searchInterval);
         }
 
         /// <summary>
         /// Returns the smallest existing
         /// node containing the envelope.
         /// </summary>
-        /// <param name="searchInterval"></param>
-        public  NodeBase Find(Interval searchInterval)
+        public BaseBinNode<TBoundable> Find(Interval searchInterval)
         {
-            int subnodeIndex = GetSubnodeIndex(searchInterval, centre);
-            if (subnodeIndex == -1)
-                return this;
-            if (subnode[subnodeIndex] != null) 
+            Node<TBoundable> subNode = GetSubNode(searchInterval, _center, false);
+
+            if (subNode != null)
             {
                 // query lies in subnode, so search it
-                Node node = subnode[subnodeIndex];
-                return node.Find(searchInterval);
+                return subNode.Find(searchInterval);
             }
-            // no existing subnode, so return this one anyway
+
+            // no existing subnode, so return this one
             return this;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        public  void Insert(Node node)
+        protected void Insert(Node<TBoundable> node)
         {
-            Assert.IsTrue(interval == null || interval.Contains(node.Interval));
-            int index = GetSubnodeIndex(node.interval, centre);
-            if (node.level == level - 1) 
-                subnode[index] = node;            
-            else 
+            Assert.IsTrue(Bounds.Contains(node.Bounds));
+            Int32 subnodeIndex = GetSubNodeIndex(node.Bounds, _center);
+
+            if (!BoundsSet || node.Level == Level - 1)
+            {
+                SetSubNode(subnodeIndex, node);
+            }
+            else
             {
                 // the node is not a direct child, so make a new child node to contain it
                 // and recursively insert the node
-                Node childNode = CreateSubnode(index);
+                Node<TBoundable> childNode = CreateSubNode(subnodeIndex);
                 childNode.Insert(node);
-                subnode[index] = childNode;
+                SetSubNode(subnodeIndex, childNode);
             }
         }
 
-        /// <summary>
-        /// Get the subnode for the index.
-        /// If it doesn't exist, create it.
-        /// </summary>
-        private Node GetSubnode(int index)
+        public override Boolean Intersects(Interval bounds)
         {
-            if (subnode[index] == null)             
-                subnode[index] = CreateSubnode(index);            
-            return subnode[index];
+            return Bounds.Intersects(bounds);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        private Node CreateSubnode(int index)
-        {   
-            // create a new subnode in the appropriate interval
-            double min = 0.0;
-            double max = 0.0;
-
-            switch (index) 
-            {
-                case 0:
-                    min = interval.Min;
-                    max = centre;
-                    break;
-                case 1:
-                    min = centre;
-                    max = interval.Max;
-                    break;
-                default:
-			        break;
-            }
-            Interval subInt = new Interval(min, max);
-            Node node = new Node(subInt, level - 1);
-            return node;
+        protected override Interval ComputeBounds()
+        {
+            Interval bounds = SubNode1 == null ? Interval.Zero : SubNode1.Bounds;
+            bounds = SubNode2 == null ? bounds : bounds.ExpandToInclude(SubNode2.Bounds);
+            return bounds;
         }
     }
 }

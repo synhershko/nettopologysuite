@@ -1,74 +1,80 @@
 using System;
 using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GeoAPI.IO.WellKnownText;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
+using NetTopologySuite.Coordinates;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.Technique
 {
-	/// <summary> 
+    /// <summary> 
     /// Shows a technique for identifying the location of self-intersections
-	/// in a non-simple LineString.
-	/// </summary>		
-	public class LineStringSelfIntersections
-	{		
-		[STAThread]
-		public static void main(string[] args)
-		{
-			WKTReader rdr = new WKTReader();
-			
-			ILineString line1 = (ILineString) rdr.Read("LINESTRING (0 0, 10 10, 20 20)");
-			ShowSelfIntersections(line1);			
-            ILineString line2 = (ILineString) rdr.Read("LINESTRING (0 40, 60 40, 60 0, 20 0, 20 60)");
-			ShowSelfIntersections(line2);
-		}
-		
-		public static void  ShowSelfIntersections(ILineString line)
-		{
-			Console.WriteLine("Line: " + line);
-			Console.WriteLine("Self Intersections: " + LineStringSelfIntersectionsOp(line));
-		}
-		
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="line"></param>
-        /// <returns></returns>
-		public static IGeometry LineStringSelfIntersectionsOp(ILineString line)
-		{
-			IGeometry lineEndPts = GetEndPoints(line);
+    /// in a non-simple LineString.
+    /// </summary>		
+    public class LineStringSelfIntersections
+    {
+        [STAThread]
+        public static void main(String[] args)
+        {
+            GeometryFactory<BufferedCoordinate> geoFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory());
+
+            WktReader<BufferedCoordinate> rdr
+                = new WktReader<BufferedCoordinate>(geoFactory, null);
+
+            ILineString line1 = (ILineString) rdr.Read("LINESTRING (0 0, 10 10, 20 20)");
+            ShowSelfIntersections(line1);
+            ILineString line2 =
+                (ILineString) rdr.Read("LINESTRING (0 40, 60 40, 60 0, 20 0, 20 60)");
+            ShowSelfIntersections(line2);
+        }
+
+        public static void ShowSelfIntersections(ILineString line)
+        {
+            Console.WriteLine("Line: " + line);
+            Console.WriteLine("Self Intersections: " + LineStringSelfIntersectionsOp(line));
+        }
+
+        public static IGeometry LineStringSelfIntersectionsOp(ILineString line)
+        {
+            IGeometry lineEndPts = GetEndPoints(line);
             IGeometry nodedLine = line.Union(lineEndPts);
-			IGeometry nodedEndPts = GetEndPoints(nodedLine);
+            IGeometry nodedEndPts = GetEndPoints(nodedLine);
             IGeometry selfIntersections = nodedEndPts.Difference(lineEndPts);
-			return selfIntersections;
-		}
-		
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        /// <returns></returns>
+            return selfIntersections;
+        }
+
         public static IGeometry GetEndPoints(IGeometry g)
-		{
-			List<ICoordinate> endPtList = new List<ICoordinate>();
-			if (g is ILineString)
-			{
-				ILineString line = (ILineString) g;
-                endPtList.Add(line.GetCoordinateN(0));
-                endPtList.Add(line.GetCoordinateN(line.NumPoints - 1));
-			}
-			else if (g is IMultiLineString)
-			{
-				IMultiLineString mls = (IMultiLineString) g;
-				for (int i = 0; i < mls.NumGeometries; i++)
-				{
-					ILineString line = (ILineString) mls.GetGeometryN(i);
-                    endPtList.Add(line.GetCoordinateN(0));
-                    endPtList.Add(line.GetCoordinateN(line.NumPoints - 1));
-				}
-			}
-			ICoordinate[] endPts = endPtList.ToArray();
-			return GeometryFactory.Default.CreateMultiPoint(endPts);
-		}
-	}
+        {
+            List<ICoordinate> endPtList = new List<ICoordinate>();
+
+            if (g is ILineString)
+            {
+                ILineString line = (ILineString) g;
+                endPtList.Add(line.Coordinates.First);
+                endPtList.Add(line.Coordinates.Last);
+            }
+            else if (g is IMultiLineString)
+            {
+                IMultiLineString mls = (IMultiLineString) g;
+
+                for (Int32 i = 0; i < mls.Count; i++)
+                {
+                    ILineString line = mls[i];
+                    endPtList.Add(line.Coordinates.First);
+                    endPtList.Add(line.Coordinates.Last);
+                }
+            }
+
+            ICoordinate[] endPts = endPtList.ToArray();
+
+            IGeometryFactory<BufferedCoordinate> geoFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory());
+
+            return geoFactory.CreateMultiPoint(endPts);
+        }
+    }
 }

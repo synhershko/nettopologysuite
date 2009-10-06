@@ -1,124 +1,145 @@
 using System;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
 {
-    /// <summary>
-    /// Snaps the vertices and segments of a LineString to a set of target snap vertices.
+    /**
+     * Snaps the vertices and segments of a {@link LineString} to a set of target snap vertices.
+     * A snapping distance tolerance is used to control where snapping is performed.
+     *
+     * @author Martin Davis
+     * @version 1.7
+     */
+
+    ///<summary>
+    /// Snaps the vertices and segments of a {@link LineString} to a set of target snap vertices.
     /// A snapping distance tolerance is used to control where snapping is performed.
-    /// </summary>
-    public class LineStringSnapper
+    /// 
+    /// author Martin Davis
+    /// version 1.7
+    ///</summary>
+    ///<typeparam name="TCoordinate"></typeparam>
+    public class LineStringSnapper<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        private double snapTolerance = 0.0;
+        private readonly Double _snapTolerance = 0.0;
 
-        private ICoordinate[] srcPts;
-        private LineSegment seg = new LineSegment(); // for reuse during snapping
-        private bool isClosed = false;
+        private readonly ICoordinateSequence<TCoordinate> _srcPts;
+        private LineSegment<TCoordinate> _seg;
+        private readonly Boolean _isClosed = false;
 
-        /// <summary>
-        /// Creates a new snapper using the points in the given {@link LineString}
-        /// as target snap points.
-        /// </summary>
-        /// <param name="line"></param>
-        /// <param name="snapTolerance"></param>
-        public LineStringSnapper(ILineString line, double snapTolerance) : 
-            this(line.Coordinates, snapTolerance) { }
-
-        /// <summary>
-        /// Creates a new snapper using the given points
-        /// as target snap points.
-        /// </summary>
-        /// <param name="srcPts"></param>
-        /// <param name="snapTolerance"></param>
-        public LineStringSnapper(ICoordinate[] srcPts, double snapTolerance)
+        ///<summary>
+        /// Creates a new snapper using the points in the given <see cref="ILineString{TCoordinate}"/>
+        ///</summary>
+        ///<param name="srcLline">a LineString to snap</param>
+        ///<param name="snapTolerance">the snap tolerance to use</param>
+        public LineStringSnapper(ILineString<TCoordinate> srcLline, Double snapTolerance)
+            : this(srcLline.Coordinates, snapTolerance)
         {
-            this.srcPts = srcPts;
-            isClosed = srcPts[0].Equals2D(srcPts[srcPts.Length - 1]);
-            this.snapTolerance = snapTolerance;
         }
 
-        /// <summary>
-        /// Snaps the vertices and segments of the source LineString 
-        /// to the given set of target snap points.
-        /// </summary>
-        /// <param name="snapPts"></param>
-        /// <returns></returns>
-        public ICoordinate[] SnapTo(ICoordinate[] snapPts)
+        ///<summary>
+        /// Creates a new snapper using the given points as source points to be snapped.
+        ///</summary>
+        ///<param name="srcPts">the points to snap</param>
+        ///<param name="snapTolerance">the snap tolerance to use</param>
+        public LineStringSnapper(ICoordinateSequence<TCoordinate> srcPts, Double snapTolerance)
         {
-            CoordinateList coordList = new CoordinateList(srcPts);
-            SnapVertices(coordList, snapPts);
+            _srcPts = srcPts;
+            _isClosed = srcPts.First.Equals(srcPts.Last);
+            _snapTolerance = snapTolerance;
+        }
+
+        ///<summary>
+        /// Snaps the vertices and segments of the source LineString to the given set of target snap points.
+        ///</summary>
+        ///<param name="snapPts">the vertices to snap to</param>
+        ///<returns>the snapped points</returns>
+        public ICoordinateSequence<TCoordinate> SnapTo(ICoordinateSequence<TCoordinate> snapPts)
+        {
+            CoordinateList<TCoordinate> coordList = new CoordinateList<TCoordinate>(_srcPts);;
+
+            SnapVertices(ref coordList, snapPts);
             SnapSegments(coordList, snapPts);
-            ICoordinate[] newPts = coordList.ToCoordinateArray();
-            return newPts;
+
+            return snapPts.CoordinateSequenceFactory.Create(coordList);
         }
 
-        /// <summary>
-        /// Snap source vertices to vertices in the target.
-        /// </summary>
-        /// <param name="srcCoords"></param>
-        /// <param name="snapPts"></param>
-        private void SnapVertices(CoordinateList srcCoords, ICoordinate[] snapPts)
+        /**
+         * Snap source vertices to vertices in the target.
+         * 
+         * @param srcCoords the points to snap
+         * @param snapPts the points to snap to
+         */
+        private void SnapVertices(ref CoordinateList<TCoordinate> srcCoords, ICoordinateSequence<TCoordinate> snapPts)
         {
+            CoordinateList<TCoordinate>  retVal = srcCoords.Clone(); 
             // try snapping vertices
             // assume src list has a closing point (is a ring)
-            for (int i = 0; i < srcCoords.Count - 1; i++)
+            Int32 index = 0;
+            foreach (TCoordinate srcPt in srcCoords)
             {
-                ICoordinate srcPt = srcCoords[i];
-                ICoordinate snapVert = FindSnapForVertex(srcPt, snapPts);
-                if (snapVert != null)
+                TCoordinate snapVert = FindSnapForVertex(srcPt, snapPts);
+                Boolean snapPt;
+                if( typeof(TCoordinate).IsValueType)
+                    snapPt = snapVert.Equals(default(TCoordinate));
+                else
+                    snapPt = snapVert == null;
+                if (!snapPt)
                 {
                     // update src with snap pt
-                    srcCoords[i] = new Coordinate(snapVert);
+                    retVal[index] = snapVert;
                     // keep final closing point in synch (rings only)
-                    if (i == 0 && isClosed)
-                        srcCoords[srcCoords.Count - 1] = new Coordinate(snapVert);
+                    if (index == 0 && _isClosed)
+                        retVal[srcCoords.Count - 1] = snapVert;
                 }
+                index++;
             }
+            srcCoords = retVal;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pt"></param>
-        /// <param name="snapPts"></param>
-        /// <returns></returns>
-        private ICoordinate FindSnapForVertex(ICoordinate pt, ICoordinate[] snapPts)
+        private TCoordinate FindSnapForVertex(TCoordinate pt, ICoordinateSequence<TCoordinate> snapPts)
         {
-            foreach (ICoordinate coord in snapPts)
+            foreach (TCoordinate snapPt in snapPts)
             {
-                // if point is already equal to a src pt, don't snap
-                if (pt.Equals2D(coord))
-                    return null;
-                if (pt.Distance(coord) < snapTolerance)
-                    return coord;
+                if (pt.Equals(snapPt))
+                    return default(TCoordinate);
+                if (pt.Distance(snapPt) < _snapTolerance)
+                    return snapPt;
             }
-            return null;
+            return default(TCoordinate);
         }
 
-        /// <summary>
-        /// Snap segments of the source to nearby snap vertices.
-        /// Source segments are "cracked" at a snap vertex, and further
-        /// snapping takes place on the modified list of segments.
-        /// For each distinct snap vertex, at most one source segment
-        /// is snapped to.  This prevents "cracking" multiple segments 
-        /// at the same point, which would almost certainly cause the result to be invalid.
-        /// </summary>
-        /// <param name="srcCoords"></param>
-        /// <param name="snapPts"></param>
-        private void SnapSegments(CoordinateList srcCoords, ICoordinate[] snapPts)
+        /**
+         * Snap segments of the source to nearby snap vertices.
+         * Source segments are "cracked" at a snap vertex, and further
+         * snapping takes place on the modified list of segments.
+         * For each distinct snap vertex, at most one source segment
+         * is snapped to.  This prevents "cracking" multiple segments 
+         * at the same point, which would almost certainly cause the result to be invalid.
+         * 
+         * @param srcCoords
+         * @param snapPts
+         */
+        private void SnapSegments(CoordinateList<TCoordinate> srcCoords, ICoordinateSequence<TCoordinate> snapPts)
         {
-            int distinctPtCount = snapPts.Length;
+            Int32 distinctPtCount = snapPts.Count;
 
             // check for duplicate snap pts.  
             // Need to do this better - need to check all points for dups (using a Set?)
-            if (snapPts[0].Equals2D(snapPts[snapPts.Length - 1]))
-                distinctPtCount = snapPts.Length - 1;
+            if (snapPts.First.Equals(snapPts.Last))
+                distinctPtCount--;
 
-            for (int i = 0; i < distinctPtCount; i++)
+            Int32 count = 0;
+            foreach (TCoordinate snapPt in snapPts)
             {
-                ICoordinate snapPt = snapPts[i];
-                int index = FindSegmentIndexToSnap(snapPt, srcCoords);
+                Int32 index = FindSegmentIndexToSnap(snapPt, srcCoords);
                 /**
                  * If a segment to snap to was found, "crack" it at the snap pt.
                  * The new pt is inserted immediately into the src segment list,
@@ -126,43 +147,49 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
                  * Duplicate points are not added.
                  */
                 if (index >= 0)
-                    srcCoords.Add(index + 1, new Coordinate(snapPt), false);
+                {
+                    srcCoords.Insert(index + 1, snapPt.Clone(), false);
+                }
+                count++;
+                if (count >= distinctPtCount)
+                    break;
             }
         }
 
-        /// <summary>
-        /// Finds a src segment which snaps to (is close to) the given snap point
-        /// Only one segment is determined - this is to prevent
-        /// snapping to multiple segments, which would almost certainly cause invalid geometry
-        /// to be created.
-        /// (The heuristic approach of snapping is really only appropriate when
-        /// snap pts snap to a unique spot on the src geometry)
-        /// </summary>
-        /// <param name="snapPt"></param>
-        /// <param name="srcCoords"></param>
-        /// <returns>-1 if no segment snaps.</returns>
-        private int FindSegmentIndexToSnap(ICoordinate snapPt, CoordinateList srcCoords)
-        {
-            double minDist = Double.MaxValue;
-            int snapIndex = -1;
-            for (int i = 0; i < srcCoords.Count - 1; i++)
-            {
-                seg.P0 = srcCoords[i];
-                seg.P1 = srcCoords[i + 1];
 
-                /**
-                 * If the snap pt is already in the src list, don't snap
-                 */
-                if (seg.P0.Equals2D(snapPt) || seg.P1.Equals2D(snapPt))
+        /**
+         * Finds a src segment which snaps to (is close to) the given snap point
+         * Only one segment is determined - this is to prevent
+         * snapping to multiple segments, which would almost certainly cause invalid geometry
+         * to be created.
+         * (The heuristic approach of snapping is really only appropriate when
+         * snap pts snap to a unique spot on the src geometry.)
+         *
+         * @param snapPt the point to snap to
+         * @param srcCoords the source segment coordinates
+         * @return the index of the snapped segment
+         * @return -1 if no segment snaps
+         */
+        private int FindSegmentIndexToSnap(TCoordinate snapPt, CoordinateList<TCoordinate> srcCoords)
+        {
+            Double minDist = Double.MaxValue;
+            Int32 snapIndex = -1, index = 0;
+
+            foreach (Pair<TCoordinate> pair in Slice.GetOverlappingPairs(srcCoords))
+            {
+                if (pair.First.Equals(snapPt) || pair.Second.Equals(snapPt))
                     return -1;
 
-                double dist = seg.Distance(snapPt);
-                if (dist < snapTolerance && dist < minDist)
+                _seg = new LineSegment<TCoordinate>(pair);
+                Double dist = _seg.Distance(snapPt);
+                if ( dist < _snapTolerance && dist < minDist )
                 {
                     minDist = dist;
-                    snapIndex = i;
+                    snapIndex = index;
                 }
+                index++;
             }
+
             return snapIndex;
         }
     }

@@ -1,102 +1,102 @@
+#region Namespace Imports
+
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using GeoAPI.Geometries;
+using NetTopologySuite.Coordinates;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
-namespace Open.Topology.TestRunner
+#endregion
+
+namespace GisSharpBlog.NetTopologySuite
 {
-    #region Test Event Definitions
-
-    public class XmlTestEventArgs : EventArgs
+    public class XmlTestEventArgs<TCoordinate> : EventArgs
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private int m_nIndex      = -1;
-        private bool m_bSuccess   = false;
-        private XmlTest m_objTest = null;
+        private readonly Int32 m_nIndex = -1;
+        private readonly Boolean m_bSuccess;
+        private readonly XmlTest<TCoordinate> m_objTest;
 
-        public XmlTestEventArgs(int index, bool success, XmlTest testItem) : base()
+        public XmlTestEventArgs(Int32 index, Boolean success, XmlTest<TCoordinate> testItem)
         {
-            m_nIndex   = index;
+            m_nIndex = index;
             m_bSuccess = success;
-            m_objTest  = testItem;
+            m_objTest = testItem;
         }
 
-        public int Index 
+        public Int32 Index
         {
-            get
-            {
-                return m_nIndex;
-            }
+            get { return m_nIndex; }
         }
 
-        public bool Success
+        public Boolean Success
         {
-            get
-            {
-                return m_bSuccess;
-            }
+            get { return m_bSuccess; }
         }
 
-        public XmlTest Test
+        public XmlTest<TCoordinate> Test
         {
-            get
-            {
-                return m_objTest;
-            }
+            get { return m_objTest; }
         }
     }
 
-    public delegate void XmlTextEventHandler(object sender, XmlTestEventArgs args);
+    public delegate void XmlTextEventHandler<TCoordinate>(object sender, XmlTestEventArgs<TCoordinate> args)
+            where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+;
 
-    #endregion
-
-    #region XmlTestType Enumeration
-               
     public enum XmlTestType
     {
-        None                    = 0,
-        Area                    = 1,
-        Boundary                = 2,
-        BoundaryDimension       = 3,
-        Buffer                  = 4,
-        Centroid                = 5,
-        Contains                = 6,
-        ConvexHull              = 7,
-        Crosses                 = 8,
-        Difference              = 9,
-        Dimension               = 10,
-        Disjoint                = 11,
-        Distance                = 12,
-        Envelope                = 13,
-        Equals                  = 14,
-        InteriorPoint           = 15,
-        Intersection            = 16,
-        Intersects              = 17,
-        IsEmpty                 = 18,
-        IsSimple                = 19,
-        IsValid                 = 20,
-        IsWithinDistance        = 21,
-        Length                  = 22,
-        NumPoints               = 23,
-        Overlaps                = 24,
-        Relate                  = 25,
-        SRID                    = 26,
-        SymmetricDifference     = 27,
-        Touches                 = 28,
-        Union                   = 29,
-        Within                  = 30,
-        Covers                  = 31,
-        CoveredBy               = 32,
+        None = 0,
+        Area = 1,
+        Boundary = 2,
+        BoundaryDimension = 3,
+        Buffer = 4,
+        Centroid = 5,
+        Contains = 6,
+        ConvexHull = 7,
+        Crosses = 8,
+        Difference = 9,
+        Dimension = 10,
+        Disjoint = 11,
+        Distance = 12,
+        Envelope = 13,
+        Equals = 14,
+        InteriorPoint = 15,
+        Intersection = 16,
+        Intersects = 17,
+        IsEmpty = 18,
+        IsSimple = 19,
+        IsValid = 20,
+        IsWithinDistance = 21,
+        Length = 22,
+        NumPoints = 23,
+        Overlaps = 24,
+        Relate = 25,
+        SRID = 26,
+        SymmetricDifference = 27,
+        Touches = 28,
+        Union = 29,
+        Within = 30,
+        Covers = 31,
+        CoveredBy = 32,
     }
- 
-    #endregion
 
-	/// <summary>
-	/// Summary description for XmlTest.
-	/// </summary>
-	public class XmlTest
-	{
-        private static NumberFormatInfo nfi = null;
+    /// <summary>
+    /// Summary description for XmlTest.
+    /// </summary>
+    public class XmlTest<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
+        private static NumberFormatInfo nfi;
 
         protected static IFormatProvider GetNumberFormatInfo()
         {
@@ -110,204 +110,170 @@ namespace Open.Topology.TestRunner
 
         #region Private Members
 
-        private static int m_nCount        = 1;
+        private static Int32 m_nCount = 1;
 
-        private bool    m_bIsDefaultTarget = true;
-        
-        private Exception m_objException   = null;
+        private Int32 m_nIndex;
+        private Boolean m_bIsDefaultTarget = true;
 
-        private bool      m_bSuccess       = false;
-        private object    m_objResult      = null;
+        private Exception m_objException;
 
-        private IGeometry  m_objGeometryA   = null;
-        private IGeometry  m_objGeometryB   = null;
+        private Boolean m_bSuccess;
+        private object m_objResult;
 
-        private object    m_objArgument1   = null;
-        private object    m_objArgument2   = null;
+        private IGeometry<TCoordinate> m_objGeometryA;
+        private IGeometry<TCoordinate> m_objGeometryB;
+
+        private object m_objArgument1;
+        private object m_objArgument2;
+
+        private object m_objGeneratedResult = null;
 
         private XmlTestType m_enumTestType = XmlTestType.None;
 
-        private string    m_strDescription = null;
+        private String m_strDescription;
 
-        private double    m_dTolerance     = Double.Epsilon;
+        private readonly Double m_dTolerance = Double.Epsilon;
 
         #endregion
 
         #region Constructors and Destructor
-		
-        public XmlTest(string description, bool bIsDefaultTarget, double tolerance)
-		{
+
+        public XmlTest(Int32 index, String description, Boolean bIsDefaultTarget, Double tolerance)
+        {
+            m_nIndex = index;
             if (description != null && description.Length != 0)
             {
                 m_strDescription = description;
             }
             else
             {
-                m_strDescription = "Untitled" + m_nCount.ToString();
+                m_strDescription = "Untitled" + m_nCount;
 
                 ++m_nCount;
             }
 
             m_bIsDefaultTarget = bIsDefaultTarget;
-            m_dTolerance       = tolerance;
-		}
+            m_dTolerance = tolerance;
+        }
 
         #endregion
 
         #region Public Properties
 
-        public string Description
+        public String Description
         {
-            get
-            {
-                return m_strDescription;
-            }
+            get { return m_strDescription; }
 
-            set
-            {
-                m_strDescription = value;
-            }
+            set { m_strDescription = value; }
         }
 
         public Exception Thrown
         {
-            get
-            {
-                return m_objException;
-            }
+            get { return m_objException; }
 
-            set
-            {
-                m_objException = value;
-            }
+            set { m_objException = value; }
         }
 
-        public bool Success
+        public Boolean Success
         {
-            get
-            {
-                return m_bSuccess;
-            }
+            get { return m_bSuccess; }
         }
 
-        public IGeometry A
+        public IGeometry<TCoordinate> A
         {
-            get
-            {
-                return m_objGeometryA;
-            }
+            get { return m_objGeometryA; }
 
-            set 
-            {
-                m_objGeometryA = value;
-            }
+            set { m_objGeometryA = value; }
         }
 
-        public IGeometry B
+        public IGeometry<TCoordinate> B
         {
-            get
-            {
-                return m_objGeometryB;
-            }
+            get { return m_objGeometryB; }
 
-            set 
-            {
-                m_objGeometryB = value;
-            }
+            set { m_objGeometryB = value; }
         }
 
         public XmlTestType TestType
         {
-            get
-            {
-                return m_enumTestType;
-            }
+            get { return m_enumTestType; }
 
-            set
-            {
-                m_enumTestType = value;
-            }
+            set { m_enumTestType = value; }
         }
 
         public object Result
         {
-            get
-            {
-                return m_objResult;
-            }
+            get { return m_objResult; }
 
-            set
-            {
-                m_objResult = value;
-            }
+            set { m_objResult = value; }
+        }
+
+        public object GeneratedResult
+        {
+            get { return m_objGeneratedResult; }
+
+            set { m_objGeneratedResult = value; }
         }
 
         public object Argument1
         {
-            get
-            {
-                return m_objArgument1;
-            }
+            get { return m_objArgument1; }
 
-            set
-            {
-                m_objArgument1 = value;
-            }
+            set { m_objArgument1 = value; }
         }
 
         public object Argument2
         {
-            get
-            {
-                return m_objArgument2;
-            }
+            get { return m_objArgument2; }
 
-            set
-            {
-                m_objArgument2 = value;
-            }
+            set { m_objArgument2 = value; }
         }
 
-		public bool IsDefaultTarget
-		{
-            get
-            {
-                return m_bIsDefaultTarget;
-            }
+        public Boolean IsDefaultTarget
+        {
+            get { return m_bIsDefaultTarget; }
 
-            set
-            {
-				m_bIsDefaultTarget = value;
-            }
-		}
+            set { m_bIsDefaultTarget = value; }
+        }
 
         #endregion
 
         #region Public Methods
-        
-        public bool Run()
+
+        public Boolean Run()
         {
             try
             {
-                m_bSuccess = this.RunTest();
+                m_bSuccess = RunTest();
                 if (!m_bSuccess)
                 {
                     // DEBUG ERRORS: retry to launch the test and analyze...                                       
                     Console.WriteLine();
-                    Console.WriteLine("Retry failed test: " + Description);
-                    Console.WriteLine(Argument1);
-                    Console.WriteLine(Argument2);                    
-                    Console.WriteLine(A);
-                    Console.WriteLine(B);                    
+                    Console.WriteLine(string.Format("Retry failed test {0}: {1}", m_nIndex, Description));
+                    Console.WriteLine(string.Format("Argument 1: {0}", Argument1));
+                    Console.WriteLine(string.Format("Argument 2: {0}", Argument2));
+                    Console.WriteLine(string.Format("A: {0}", A));
+                    Console.WriteLine(string.Format("B: {0}", B));
                     Console.WriteLine("Test type: " + TestType);
-                    m_bSuccess = RunTest();                    
-                    Console.WriteLine(String.Format("Result expected is {0}, but was {1}", true, m_bSuccess));
+                    if (m_objResult != null)
+                        Console.WriteLine(string.Format("Expected result: {0}", m_objResult));
+                    if (m_objGeneratedResult != null)
+                        Console.WriteLine(string.Format("Generated result: {0}", m_objGeneratedResult));
+
+                    m_bSuccess = RunTest();
+                    Console.WriteLine(String.Format("Result expected is {0}, but was {1}",
+                                                    true,
+                                                    m_bSuccess));
+                    if (m_objResult != null)
+                        Console.WriteLine(string.Format("Expected result: {0}", m_objResult));
+                    if (m_objGeneratedResult != null)
+                        Console.WriteLine(string.Format("Generated result: {0}", m_objGeneratedResult));
+
                     Console.WriteLine();
                 }
                 return m_bSuccess;
             }
             catch (Exception ex)
-            {                
+            {
                 m_objException = ex;
                 Debug.WriteLine(ex.Message);
                 Debug.WriteLine(ex.StackTrace);
@@ -320,9 +286,9 @@ namespace Open.Topology.TestRunner
 
         #region Protected Methods
 
-	    public virtual bool RunTest()
+        public virtual Boolean RunTest()
         {
-            switch (m_enumTestType) 
+            switch (m_enumTestType)
             {
                 case XmlTestType.Area:
                     return TestArea();
@@ -427,87 +393,81 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestArea()
+        protected virtual Boolean TestArea()
         {
-            double dAreaResult = (double)m_objResult;
+            Double dAreaResult = (Double) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                double dArea = m_objGeometryA.Area;
-
+                Double dArea = (m_objGeometryA as ISurface).Area;
+                m_objGeneratedResult = dArea;
                 return Math.Abs(dArea - dAreaResult) <= m_dTolerance;
             }
-            else if (m_objGeometryB != null)
-            {
-                double dArea = m_objGeometryB.Area;
 
+            if (m_objGeometryB != null)
+            {
+                Double dArea = (m_objGeometryB as ISurface).Area;
+                m_objGeneratedResult = dArea;
                 return Math.Abs(dArea - dAreaResult) <= m_dTolerance;
             }
 
             return false;
         }
 
-        protected virtual bool TestBoundary()          
+        protected virtual Boolean TestBoundary()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry) m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry boundary = (Geometry) m_objGeometryA.Boundary;
+                Geometry<TCoordinate> boundary =
+                    (Geometry<TCoordinate>) m_objGeometryA.Boundary;
+
+                m_objGeneratedResult = boundary;
                 if (boundary != null)
                 {
-                    if (boundary.IsEmpty && geoResult.IsEmpty)
-                    {
-                        return true;
-                    }
-
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, boundary);
-                    }
-                    else
-                    {
-                        return boundary.Equals(geoResult);
-                    }
+                    return boundary.IsEmpty && geoResult.IsEmpty ||
+                           (geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                ? CompareGeometries(geoResult, boundary)
+                                : boundary.Equals(geoResult));
                 }
             }
             else if (m_objGeometryB != null)
             {
-                Geometry boundary = (Geometry) m_objGeometryB.Boundary;
+                Geometry<TCoordinate> boundary =
+                    (Geometry<TCoordinate>) m_objGeometryB.Boundary;
+
+                m_objGeneratedResult = boundary;
                 if (boundary != null)
                 {
-                    if (boundary.IsEmpty && geoResult.IsEmpty)
-                    {
-                        return true;
-                    }
-
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, boundary);
-                    }
-                    else
-                    {
-                        return boundary.Equals(geoResult);
-                    }
-               }
+                    return boundary.IsEmpty && geoResult.IsEmpty ||
+                           (geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                ? CompareGeometries(geoResult, boundary)
+                                : boundary.Equals(geoResult));
+                }
             }
 
             return false;
         }
 
-        protected virtual bool TestBoundaryDimension() 
+        protected virtual Boolean TestBoundaryDimension()
         {
-            int nResult = (int)m_objResult;
+            Int32 nResult = (Int32) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                double dArea = m_objGeometryA.Area;
+                Double dArea = (m_objGeometryA as ISurface).Area;
+                m_objGeneratedResult = dArea;
 
                 return Math.Abs(dArea - nResult) <= m_dTolerance;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                double dArea = m_objGeometryB.Area;
+                Double dArea = (m_objGeometryB as ISurface).Area;
+                m_objGeneratedResult = dArea;
 
                 return Math.Abs(dArea - nResult) <= m_dTolerance;
             }
@@ -515,60 +475,55 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestBuffer()            
+        protected virtual Boolean TestBuffer()
         {
-            Geometry geoResult = (Geometry)m_objResult;
-            double dArg        = Double.Parse((string)m_objArgument2, GetNumberFormatInfo());
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+            Double dArg = Double.Parse((String) m_objArgument2, GetNumberFormatInfo());
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry buffer = (Geometry) m_objGeometryA.Buffer(dArg);
+                Geometry<TCoordinate> buffer =
+                    (Geometry<TCoordinate>) m_objGeometryA.Buffer(dArg);
+                m_objGeneratedResult = buffer;
+
                 if (buffer != null)
                 {
-                    if (buffer.IsEmpty && geoResult.IsEmpty)
-                    {
-                        return true;
-                    }
-
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, buffer);
-                   }
-
-                    return buffer.Equals(geoResult);
+                    return buffer.IsEmpty && geoResult.IsEmpty ||
+                           (geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                ? CompareGeometries(geoResult, buffer)
+                                : buffer.Equals(geoResult));
                 }
             }
             else if (m_objGeometryB != null)
             {
-                Geometry buffer = (Geometry) m_objGeometryB.Buffer(dArg);
+                Geometry<TCoordinate> buffer =
+                    (Geometry<TCoordinate>) m_objGeometryB.Buffer(dArg);
+                m_objGeneratedResult = buffer;
+
                 if (buffer != null)
                 {
-                    if (buffer.IsEmpty && geoResult.IsEmpty)
-                    {
-                        return true;
-                    }
-
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, buffer);
-                    }
-
-                    return buffer.Equals(geoResult);
+                    return buffer.IsEmpty && geoResult.IsEmpty ||
+                           (geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                ? CompareGeometries(geoResult, buffer)
+                                : buffer.Equals(geoResult));
                 }
             }
 
             return false;
         }
 
-        protected virtual bool TestCentroid()          
+        protected virtual Boolean TestCentroid()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry centroid = (Geometry) m_objGeometryA.Centroid;
+                Geometry<TCoordinate> centroid =
+                    (Geometry<TCoordinate>) m_objGeometryA.Centroid;
+                m_objGeneratedResult = centroid;
+
                 if (centroid != null)
                 {
                     if (centroid.IsEmpty && geoResult.IsEmpty)
@@ -576,17 +531,16 @@ namespace Open.Topology.TestRunner
                         return true;
                     }
 
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, centroid);
-                    }
-
-                    return centroid.Equals(geoResult);
+                    return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                               ? CompareGeometries(geoResult, centroid)
+                               : centroid.Equals(geoResult);
                 }
             }
             else if (m_objGeometryB != null)
             {
-                Geometry centroid = (Geometry) m_objGeometryB.Centroid;
+                Geometry<TCoordinate> centroid =
+                    (Geometry<TCoordinate>) m_objGeometryB.Centroid;
+                m_objGeneratedResult = centroid;
                 if (centroid != null)
                 {
                     if (centroid.IsEmpty && geoResult.IsEmpty)
@@ -594,66 +548,63 @@ namespace Open.Topology.TestRunner
                         return true;
                     }
 
-                    if (geoResult.GetType().Name == "GeometryCollection")
-                    {
-                        return CompareGeometries(geoResult, centroid);
-                    }
-
-                    return centroid.Equals(geoResult);
+                    return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                               ? CompareGeometries(geoResult, centroid)
+                               : centroid.Equals(geoResult);
                 }
             }
 
             return false;
         }
 
-        protected virtual bool TestContains()          
+        protected virtual Boolean TestContains()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Contains(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Contains((Geometry)m_objArgument1) == bResult;
-                }
+
+                m_objGeneratedResult = m_objArgument1 == null
+                                           ? m_objGeometryA.Contains(m_objGeometryB) == bResult
+                                           : m_objGeometryA.Contains((Geometry<TCoordinate>) m_objArgument1);
+                return (Boolean)m_objGeneratedResult == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Contains(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Contains((Geometry)m_objArgument1) == bResult;
-                }
+                m_objGeneratedResult = m_objArgument1 == null
+                           ? m_objGeometryB.Contains(m_objGeometryA) == bResult
+                           : m_objGeometryB.Contains((Geometry<TCoordinate>) m_objArgument1);
+                return (Boolean)m_objGeneratedResult == bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestConvexHull()        
+        protected virtual Boolean TestConvexHull()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry convexhall = (Geometry) m_objGeometryA.ConvexHull();
-                if (convexhall != null)
+                Geometry<TCoordinate> convexHull =
+                    (Geometry<TCoordinate>) m_objGeometryA.ConvexHull();
+                m_objGeneratedResult = convexHull;
+                if (convexHull != null)
                 {
-                    if (convexhall.IsEmpty && geoResult.IsEmpty)
+                    if (convexHull.IsEmpty && geoResult.IsEmpty)
+                    {
                         return true;
-    
-                    bool bResult = CompareGeometries(geoResult, convexhall);  
+                    }
+
+                    Boolean bResult = CompareGeometries(geoResult, convexHull);
+
                     if (!bResult)
                     {
                         Console.WriteLine(m_objGeometryA.ToString());
-                        Console.WriteLine(convexhall.ToString());
+                        Console.WriteLine(convexHull.ToString());
 
                         Console.WriteLine(geoResult.ToString());
                     }
@@ -663,58 +614,60 @@ namespace Open.Topology.TestRunner
             }
             else if (m_objGeometryB != null)
             {
-                Geometry convexhall = (Geometry) m_objGeometryB.ConvexHull();
-                if (convexhall != null)
+                Geometry<TCoordinate> convexHull =
+                    (Geometry<TCoordinate>) m_objGeometryB.ConvexHull();
+                m_objGeneratedResult = convexHull;
+                if (convexHull != null)
                 {
-                    if (convexhall.IsEmpty && geoResult.IsEmpty)
+                    if (convexHull.IsEmpty && geoResult.IsEmpty)
+                    {
                         return true;
-                    
-                    return CompareGeometries(geoResult, convexhall);
+                    }
+
+                    return CompareGeometries(geoResult, convexHull);
                 }
             }
 
             return false;
         }
 
-        protected virtual bool TestCrosses()           
+        protected virtual Boolean TestCrosses()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Crosses(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Crosses((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Crosses(m_objGeometryB) == bResult
+                           : m_objGeometryA.Crosses((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Crosses(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Crosses((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Crosses(m_objGeometryA) == bResult
+                           : m_objGeometryB.Crosses((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestDifference()        
+        protected virtual Boolean TestDifference()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry difference = (Geometry) m_objGeometryA.Difference(m_objGeometryB);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>) m_objGeometryA.Difference(m_objGeometryB);
+
+                    m_objGeneratedResult = difference;
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -722,19 +675,18 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry difference = (Geometry) m_objGeometryA.Difference((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryA.Difference((Geometry<TCoordinate>) m_objArgument1);
+
+                    m_objGeneratedResult = difference;
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -742,14 +694,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
             }
@@ -757,7 +704,10 @@ namespace Open.Topology.TestRunner
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry difference = (Geometry) m_objGeometryB.Difference(m_objGeometryA);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>) m_objGeometryB.Difference(m_objGeometryA);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -765,19 +715,18 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry difference = (Geometry) m_objGeometryB.Difference((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryB.Difference((Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -785,14 +734,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
             }
@@ -800,82 +744,74 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestDimension()         
+        protected virtual Boolean TestDimension()
         {
-            int nResult = (int)m_objResult;
+            Int32 nResult = (Int32) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                int nDim = (int) m_objGeometryA.Dimension;
+                Int32 nDim = (Int32) m_objGeometryA.Dimension;
 
-                return Math.Abs(nDim - nResult) <= (int)m_dTolerance;
+                return Math.Abs(nDim - nResult) <= (Int32) m_dTolerance;
             }
-            else if (m_objGeometryB != null)
-            {
-                int nDim = (int)m_objGeometryB.Dimension;
 
-                return Math.Abs(nDim - nResult) <= (int)m_dTolerance;
+            if (m_objGeometryB != null)
+            {
+                Int32 nDim = (Int32) m_objGeometryB.Dimension;
+
+                return Math.Abs(nDim - nResult) <= (Int32) m_dTolerance;
             }
 
             return false;
         }
 
-        protected virtual bool TestDisjoint()          
+        protected virtual Boolean TestDisjoint()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Disjoint(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Disjoint((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Disjoint(m_objGeometryB) == bResult
+                           : m_objGeometryA.Disjoint((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Disjoint(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Disjoint((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Disjoint(m_objGeometryA) == bResult
+                           : m_objGeometryB.Disjoint((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestDistance()          
+        protected virtual Boolean TestDistance()
         {
-            double dResult = (double)m_objResult;
+            Double dResult = (Double) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                double dDistance = 0;
-                if (m_objArgument1 == null)
-                {
-                    dDistance = m_objGeometryA.Distance(m_objGeometryB);
-                }
-                else
-                {
-                    dDistance = m_objGeometryA.Distance((Geometry)m_objArgument1);
-                }
+                Double dDistance = 0;
+
+                dDistance = m_objArgument1 == null
+                                ? m_objGeometryA.Distance(m_objGeometryB)
+                                : m_objGeometryA.Distance(
+                                      (Geometry<TCoordinate>) m_objArgument1);
 
                 return Math.Abs(dDistance - dResult) <= m_dTolerance;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                double dDistance = 0;
-                if (m_objArgument1 == null)
-                {
-                    dDistance = m_objGeometryB.Distance(m_objGeometryA);
-                }
-                else
-                {
-                    dDistance = m_objGeometryB.Distance((Geometry)m_objArgument1);
-                }
+                Double dDistance = 0;
+
+                dDistance = m_objArgument1 == null
+                                ? m_objGeometryB.Distance(m_objGeometryA)
+                                : m_objGeometryB.Distance(
+                                      (Geometry<TCoordinate>) m_objArgument1);
 
                 return Math.Abs(dDistance - dResult) <= m_dTolerance;
             }
@@ -883,66 +819,73 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestEnvelope()          
+        protected virtual Boolean TestEnvelope()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry envelope = (Geometry) m_objGeometryA.Envelope;
-                if (envelope != null)
-                    return envelope.Equals(geoResult);
-            }
-            else if (m_objGeometryB != null)
-            {
-                Geometry envelope = (Geometry) m_objGeometryB.Envelope;
-                if (envelope != null)
-                    return envelope.Equals(geoResult);
-            }
+                Geometry<TCoordinate> envelope =
+                    (Geometry<TCoordinate>) m_objGeometryA.Envelope;
+                m_objGeneratedResult = envelope;
 
-            return false;
-        }
-
-        protected virtual bool TestEquals()             
-        {
-            bool bResult = (bool)m_objResult;
-            if (m_bIsDefaultTarget && m_objGeometryA != null)
-            {
-                if (m_objArgument1 == null)
+                if (envelope != null)
                 {
-                    return m_objGeometryA.Equals(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Equals((Geometry)m_objArgument1) == bResult;
+                    return envelope.Equals(geoResult);
                 }
             }
             else if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
+                Geometry<TCoordinate> envelope =
+                    (Geometry<TCoordinate>) m_objGeometryB.Envelope;
+                m_objGeneratedResult = envelope;
+
+                if (envelope != null)
                 {
-                    return m_objGeometryB.Equals(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Equals((Geometry)m_objArgument1) == bResult;
+                    return envelope.Equals(geoResult);
                 }
             }
 
             return false;
         }
 
-        protected virtual bool TestInteriorPoint()
+        protected virtual Boolean TestEquals()
         {
-            Trace.Assert(m_objResult != null, "The result object cannot be null");
-
-            Geometry geoResult = (Geometry) m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                Geometry interiorpoint = (Geometry) m_objGeometryA.InteriorPoint;
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Equals(m_objGeometryB) == bResult
+                           : m_objGeometryA.Equals((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
+            }
+
+            if (m_objGeometryB != null)
+            {
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Equals(m_objGeometryA) == bResult
+                           : m_objGeometryB.Equals((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
+            }
+
+            return false;
+        }
+
+        protected virtual Boolean TestInteriorPoint()
+        {
+            Trace.Assert(m_objResult != null, "The result object cannot be null");
+
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+
+            if (m_bIsDefaultTarget && m_objGeometryA != null)
+            {
+                Geometry<TCoordinate> interiorpoint =
+                    (Geometry<TCoordinate>) m_objGeometryA.PointOnSurface;
+
+                m_objGeneratedResult = interiorpoint;
                 if (interiorpoint != null)
                 {
                     if (interiorpoint.IsEmpty && geoResult.IsEmpty)
@@ -955,7 +898,10 @@ namespace Open.Topology.TestRunner
             }
             else if (m_objGeometryB != null)
             {
-                Geometry interiorpoint = (Geometry) m_objGeometryB.InteriorPoint;
+                Geometry<TCoordinate> interiorpoint =
+                    (Geometry<TCoordinate>) (m_objGeometryB as ISurface).PointOnSurface;
+                m_objGeneratedResult = interiorpoint;
+
                 if (interiorpoint != null)
                 {
                     if (interiorpoint.IsEmpty && geoResult.IsEmpty)
@@ -970,37 +916,51 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestIntersection()
+        protected virtual Boolean TestIntersection()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)                
+                if (m_objArgument1 == null)
                 {
-                    Geometry intersection = (Geometry) m_objGeometryA.Intersection(m_objGeometryB);                    
+                    Geometry<TCoordinate> intersection =
+                        (Geometry<TCoordinate>) m_objGeometryA.Intersection(m_objGeometryB);
+                    m_objGeneratedResult = intersection;
+
                     if (intersection != null)
                     {
                         if (intersection.IsEmpty && geoResult.IsEmpty)
+                        {
                             return true;
+                        }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                             return CompareGeometries(geoResult, intersection);
-                        else return intersection.Equals(geoResult);
+                        return geoResult.GetType() ==
+                               typeof (GeometryCollection<TCoordinate>)
+                                   ? CompareGeometries(geoResult, intersection)
+                                   : intersection.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry intersection = (Geometry) m_objGeometryA.Intersection((Geometry) m_objArgument1);
+                    Geometry<TCoordinate> intersection =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryA.Intersection((Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = intersection;
+
                     if (intersection != null)
                     {
                         if (intersection.IsEmpty && geoResult.IsEmpty)
+                        {
                             return true;
+                        }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                             return CompareGeometries(geoResult, intersection);
-                        else return intersection.Equals(geoResult);
+                        return geoResult.GetType() ==
+                               typeof (GeometryCollection<TCoordinate>)
+                                   ? CompareGeometries(geoResult, intersection)
+                                   : intersection.Equals(geoResult);
                     }
                 }
             }
@@ -1008,28 +968,41 @@ namespace Open.Topology.TestRunner
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry intersection = (Geometry) m_objGeometryB.Intersection(m_objGeometryA);
+                    Geometry<TCoordinate> intersection =
+                        (Geometry<TCoordinate>) m_objGeometryB.Intersection(m_objGeometryA);
+
+                    m_objGeneratedResult = intersection;
                     if (intersection != null)
                     {
                         if (intersection.IsEmpty && geoResult.IsEmpty)
+                        {
                             return true;
+                        }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                             return CompareGeometries(geoResult, intersection);
-                        else return intersection.Equals(geoResult);
+                        return geoResult.GetType() ==
+                               typeof (GeometryCollection<TCoordinate>)
+                                   ? CompareGeometries(geoResult, intersection)
+                                   : intersection.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry intersection = (Geometry) m_objGeometryB.Intersection((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> intersection =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryB.Intersection((Geometry<TCoordinate>) m_objArgument1);
+
+                    m_objGeneratedResult = intersection;
                     if (intersection != null)
                     {
                         if (intersection.IsEmpty && geoResult.IsEmpty)
+                        {
                             return true;
+                        }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                             return CompareGeometries(geoResult, intersection);
-                        else return intersection.Equals(geoResult);
+                        return geoResult.GetType() ==
+                               typeof (GeometryCollection<TCoordinate>)
+                                   ? CompareGeometries(geoResult, intersection)
+                                   : intersection.Equals(geoResult);
                     }
                 }
             }
@@ -1037,47 +1010,43 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestIntersects()        
+        protected virtual Boolean TestIntersects()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Intersects(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Intersects((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Intersects(m_objGeometryB) == bResult
+                           : m_objGeometryA.Intersects(
+                                 (Geometry<TCoordinate>) m_objArgument1) == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Intersects(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Intersects((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Intersects(m_objGeometryA) == bResult
+                           : m_objGeometryB.Intersects(
+                                 (Geometry<TCoordinate>) m_objArgument1) == bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestIsEmpty()           
+        protected virtual Boolean TestIsEmpty()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                bool bState = m_objGeometryA.IsEmpty;
+                Boolean bState = m_objGeometryA.IsEmpty;
 
                 return bState == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                bool bState = m_objGeometryB.IsEmpty;
+                Boolean bState = m_objGeometryB.IsEmpty;
 
                 return bState == bResult;
             }
@@ -1085,36 +1054,20 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestIsSimple()          
+        protected virtual Boolean TestIsSimple()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                bool bState = m_objGeometryA.IsSimple;
-
-                return bState == bResult;
-            }
-            else if (m_objGeometryB != null)
-            {
-                bool bState = m_objGeometryB.IsSimple;
+                Boolean bState = m_objGeometryA.IsSimple;
 
                 return bState == bResult;
             }
 
-            return false;
-        }
-
-        protected virtual bool TestIsValid()           
-        {
-            bool bResult = (bool)m_objResult;
-            if (m_bIsDefaultTarget && m_objGeometryA != null)
+            if (m_objGeometryB != null)
             {
-                bool bState = m_objGeometryA.IsValid;
-                return bState == bResult;
-            }
-            else if (m_objGeometryB != null)
-            {
-                bool bState = m_objGeometryB.IsValid;
+                Boolean bState = m_objGeometryB.IsSimple;
 
                 return bState == bResult;
             }
@@ -1122,51 +1075,66 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestIsWithinDistance()
+        protected virtual Boolean TestIsValid()
         {
-            bool bResult = (bool)m_objResult;
-            double dArg = Double.Parse((string)m_objArgument2, GetNumberFormatInfo());
+            Boolean bResult = (Boolean) m_objResult;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.IsWithinDistance(m_objGeometryB, dArg) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.IsWithinDistance((Geometry)m_objArgument1, 
-                        dArg) == bResult;
-                }
+                Boolean bState = m_objGeometryA.IsValid;
+                return bState == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.IsWithinDistance(m_objGeometryA, dArg) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.IsWithinDistance((Geometry)m_objArgument1, 
-                        dArg) == bResult;
-                }
+                Boolean bState = m_objGeometryB.IsValid;
+
+                return bState == bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestLength()            
+        protected virtual Boolean TestIsWithinDistance()
         {
-            double dLengthResult = (double)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+            Double dArg = Double.Parse((String) m_objArgument2, GetNumberFormatInfo());
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                double dLength = m_objGeometryA.Area;
+                return m_objArgument1 == null
+                           ? m_objGeometryA.IsWithinDistance(m_objGeometryB, dArg) == bResult
+                           : m_objGeometryA.IsWithinDistance(
+                                 (Geometry<TCoordinate>) m_objArgument1,
+                                 dArg) == bResult;
+            }
+
+            if (m_objGeometryB != null)
+            {
+                return m_objArgument1 == null
+                           ? m_objGeometryB.IsWithinDistance(m_objGeometryA, dArg) == bResult
+                           : m_objGeometryB.IsWithinDistance(
+                                 (Geometry<TCoordinate>) m_objArgument1,
+                                 dArg) == bResult;
+            }
+
+            return false;
+        }
+
+        protected virtual Boolean TestLength()
+        {
+            Double dLengthResult = (Double) m_objResult;
+
+            if (m_bIsDefaultTarget && m_objGeometryA != null)
+            {
+                Double dLength = (m_objGeometryA as ISurface).Area;
 
                 return Math.Abs(dLength - dLengthResult) <= m_dTolerance;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                double dLength = m_objGeometryB.Area;
+                Double dLength = (m_objGeometryB as ISurface).Area;
 
                 return Math.Abs(dLength - dLengthResult) <= m_dTolerance;
             }
@@ -1174,72 +1142,70 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestNumPoints()
+        protected virtual Boolean TestNumPoints()
         {
-            int nResult = (int)m_objResult;
+            Int32 nResult = (Int32) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                int nPoints = m_objGeometryA.NumPoints;
+                Int32 nPoints = m_objGeometryA.PointCount;
 
-                return Math.Abs(nPoints - nResult) <= (int)m_dTolerance;
+                return Math.Abs(nPoints - nResult) <= (Int32) m_dTolerance;
             }
-            else if (m_objGeometryB != null)
-            {
-                int nPoints = m_objGeometryB.NumPoints;
 
-                return Math.Abs(nPoints - nResult) <= (int)m_dTolerance;
+            if (m_objGeometryB != null)
+            {
+                Int32 nPoints = m_objGeometryB.PointCount;
+
+                return Math.Abs(nPoints - nResult) <= (Int32) m_dTolerance;
             }
 
             return false;
         }
 
-        protected virtual bool TestOverlaps()          
+        protected virtual Boolean TestOverlaps()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Overlaps(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Overlaps((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Overlaps(m_objGeometryB) == bResult
+                           : m_objGeometryA.Overlaps((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Overlaps(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Overlaps((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Overlaps(m_objGeometryA) == bResult
+                           : m_objGeometryB.Overlaps((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestRelate()            
+        protected virtual Boolean TestRelate()
         {
-            bool bResult = (bool)m_objResult;
-            string arg   = (string)m_objArgument2;
+            Boolean bResult = (Boolean) m_objResult;
+            String arg = (String) m_objArgument2;
 
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
                 IntersectionMatrix matrix = m_objGeometryA.Relate(m_objGeometryB);
 
-                string strMatrix = matrix.ToString();
-
+                String strMatrix = matrix.ToString();
+                m_objGeneratedResult = strMatrix;
                 return (strMatrix == arg) == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
                 IntersectionMatrix matrix = m_objGeometryB.Relate(m_objGeometryA);
 
-                string strMatrix = matrix.ToString();
+                String strMatrix = matrix.ToString();
+                m_objGeneratedResult = strMatrix;
 
                 return (strMatrix == arg) == bResult;
             }
@@ -1247,35 +1213,43 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestSRID()              
+        protected virtual Boolean TestSRID()
         {
-            int nResult = (int)m_objResult;
+            Int32 nResult = (Int32) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                int nSRID = m_objGeometryA.SRID;
+                String nSRID = m_objGeometryA.Srid;
 
-                return Math.Abs(nSRID - nResult) <= (int)m_dTolerance;
+                //return Math.Abs(nSRID - nResult) <= (Int32) m_dTolerance;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                int nSRID = m_objGeometryB.SRID;
+                String nSRID = m_objGeometryB.Srid;
 
-                return Math.Abs(nSRID - nResult) <= (int)m_dTolerance;
+                //return Math.Abs(nSRID - nResult) <= (Int32) m_dTolerance;
             }
 
+            throw new NotImplementedException();
             return false;
         }
 
-        protected virtual bool TestSymDifference()
+        protected virtual Boolean TestSymDifference()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry difference = (Geometry) m_objGeometryA.SymmetricDifference(m_objGeometryB);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryA.SymmetricDifference(m_objGeometryB);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -1283,19 +1257,19 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry difference = (Geometry) m_objGeometryA.SymmetricDifference((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryA.SymmetricDifference(
+                            (Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -1303,14 +1277,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
             }
@@ -1318,7 +1287,11 @@ namespace Open.Topology.TestRunner
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry difference = (Geometry) m_objGeometryB.SymmetricDifference(m_objGeometryA);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryB.SymmetricDifference(m_objGeometryA);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -1326,19 +1299,19 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry difference = (Geometry) m_objGeometryB.SymmetricDifference((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> difference =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryB.SymmetricDifference(
+                            (Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = difference;
+
                     if (difference != null)
                     {
                         if (difference.IsEmpty && geoResult.IsEmpty)
@@ -1346,14 +1319,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, difference);
-                        }
-                        else
-                        {
-                            return difference.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, difference)
+                                   : difference.Equals(geoResult);
                     }
                 }
             }
@@ -1361,45 +1329,43 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestTouches()           
+        protected virtual Boolean TestTouches()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Touches(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Touches((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Touches(m_objGeometryB) == bResult
+                           : m_objGeometryA.Touches((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Touches(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Touches((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Touches(m_objGeometryA) == bResult
+                           : m_objGeometryB.Touches((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestUnion()             
+        protected virtual Boolean TestUnion()
         {
             Trace.Assert(m_objResult != null, "The result object cannot be null");
 
-            Geometry geoResult = (Geometry)m_objResult;            
+            Geometry<TCoordinate> geoResult = (Geometry<TCoordinate>) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry union = (Geometry) m_objGeometryA.Union(m_objGeometryB);
+                    Geometry<TCoordinate> union =
+                        (Geometry<TCoordinate>) m_objGeometryA.Union(m_objGeometryB);
+                    m_objGeneratedResult = union;
+
                     if (union != null)
                     {
                         if (union.IsEmpty && geoResult.IsEmpty)
@@ -1407,19 +1373,18 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, union);
-                        }
-                        else
-                        {
-                            return union.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, union)
+                                   : union.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry union = (Geometry) m_objGeometryA.Union((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> union =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryA.Union((Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = union;
+
                     if (union != null)
                     {
                         if (union.IsEmpty && geoResult.IsEmpty)
@@ -1427,14 +1392,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, union);
-                        }
-                        else
-                        {
-                            return union.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, union)
+                                   : union.Equals(geoResult);
                     }
                 }
             }
@@ -1442,7 +1402,10 @@ namespace Open.Topology.TestRunner
             {
                 if (m_objArgument1 == null)
                 {
-                    Geometry union = (Geometry) m_objGeometryB.Union(m_objGeometryA);
+                    Geometry<TCoordinate> union =
+                        (Geometry<TCoordinate>) m_objGeometryB.Union(m_objGeometryA);
+                    m_objGeneratedResult = union;
+
                     if (union != null)
                     {
                         if (union.IsEmpty && geoResult.IsEmpty)
@@ -1450,19 +1413,18 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, union);
-                        }
-                        else
-                        {
-                            return union.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, union)
+                                   : union.Equals(geoResult);
                     }
                 }
                 else
                 {
-                    Geometry union = (Geometry) m_objGeometryB.Union((Geometry)m_objArgument1);
+                    Geometry<TCoordinate> union =
+                        (Geometry<TCoordinate>)
+                        m_objGeometryB.Union((Geometry<TCoordinate>) m_objArgument1);
+                    m_objGeneratedResult = union;
+
                     if (union != null)
                     {
                         if (union.IsEmpty && geoResult.IsEmpty)
@@ -1470,14 +1432,9 @@ namespace Open.Topology.TestRunner
                             return true;
                         }
 
-                        if (geoResult.GetType().Name == "GeometryCollection")
-                        {
-                            return CompareGeometries(geoResult, union);
-                        }
-                        else
-                        {
-                            return union.Equals(geoResult);
-                        }
+                        return geoResult.GetType().Name.StartsWith("GeometryCollection")
+                                   ? CompareGeometries(geoResult, union)
+                                   : union.Equals(geoResult);
                     }
                 }
             }
@@ -1485,68 +1442,70 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected virtual bool TestWithin()            
+        protected virtual Boolean TestWithin()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryA.Within(m_objGeometryB) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryA.Within((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Within(m_objGeometryB) == bResult
+                           : m_objGeometryA.Within((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                {
-                    return m_objGeometryB.Within(m_objGeometryA) == bResult;
-                }
-                else
-                {
-                    return m_objGeometryB.Within((Geometry)m_objArgument1) == bResult;
-                }
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Within(m_objGeometryA) == bResult
+                           : m_objGeometryB.Within((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestCovers()
+        protected virtual Boolean TestCovers()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                     return m_objGeometryA.Covers(m_objGeometryB) == bResult;
-                else return m_objGeometryA.Covers((Geometry)m_objArgument1) == bResult;                
+                return m_objArgument1 == null
+                           ? m_objGeometryA.Covers(m_objGeometryB) == bResult
+                           : m_objGeometryA.Covers((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                     return m_objGeometryB.Covers(m_objGeometryA) == bResult;
-                else return m_objGeometryB.Covers((Geometry)m_objArgument1) == bResult;
+                return m_objArgument1 == null
+                           ? m_objGeometryB.Covers(m_objGeometryA) == bResult
+                           : m_objGeometryB.Covers((Geometry<TCoordinate>) m_objArgument1) ==
+                             bResult;
             }
 
             return false;
         }
 
-        protected virtual bool TestCoveredBy()
+        protected virtual Boolean TestCoveredBy()
         {
-            bool bResult = (bool)m_objResult;
+            Boolean bResult = (Boolean) m_objResult;
+
             if (m_bIsDefaultTarget && m_objGeometryA != null)
             {
-                if (m_objArgument1 == null)
-                     return m_objGeometryA.CoveredBy(m_objGeometryB) == bResult;
-                else return m_objGeometryA.CoveredBy((Geometry)m_objArgument1) == bResult;
+                return m_objArgument1 == null
+                           ? m_objGeometryA.CoveredBy(m_objGeometryB) == bResult
+                           : m_objGeometryA.CoveredBy(
+                                 (Geometry<TCoordinate>) m_objArgument1) == bResult;
             }
-            else if (m_objGeometryB != null)
+
+            if (m_objGeometryB != null)
             {
-                if (m_objArgument1 == null)
-                     return m_objGeometryB.CoveredBy(m_objGeometryA) == bResult;
-                else return m_objGeometryB.CoveredBy((Geometry)m_objArgument1) == bResult;
+                return m_objArgument1 == null
+                           ? m_objGeometryB.CoveredBy(m_objGeometryA) == bResult
+                           : m_objGeometryB.CoveredBy(
+                                 (Geometry<TCoordinate>) m_objArgument1) == bResult;
             }
 
             return false;
@@ -1556,22 +1515,23 @@ namespace Open.Topology.TestRunner
 
         #region Private Members
 
-        private bool CompareGeometries(Geometry a, Geometry b)
+        private Boolean CompareGeometries(Geometry<TCoordinate> a,
+                                          Geometry<TCoordinate> b)
         {
             if (a != null && b != null && a.GetType().Name == b.GetType().Name)
             {
-                Geometry aClone = (Geometry)a.Clone();
-                Geometry bClone = (Geometry)b.Clone();
+                Geometry<TCoordinate> aClone = (Geometry<TCoordinate>) a.Clone();
+                Geometry<TCoordinate> bClone = (Geometry<TCoordinate>) b.Clone();
 
                 aClone.Normalize();
                 bClone.Normalize();
 
-                return aClone.EqualsExact(bClone, m_dTolerance);
+                return aClone.Equals(bClone, new Tolerance(m_dTolerance));
             }
 
             return false;
         }
 
         #endregion
-	}
+    }
 }

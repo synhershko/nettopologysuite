@@ -4,7 +4,7 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
     /// Implements an algorithm to compute the
-    /// sign of a 2x2 determinant for double precision values robustly.
+    /// sign of a 2x2 determinant for Double precision values robustly.
     /// It is a direct translation of code developed by Olivier Devillers.
     /// 
     /// The original code carries the following copyright notice:
@@ -20,30 +20,22 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
     /// *************************************************************************
     /// </summary>
     public class RobustDeterminant
-    {     
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="x1"></param>
-        /// <param name="y1"></param>
-        /// <param name="x2"></param>
-        /// <param name="y2"></param>
+    {
         /// <returns>
         /// returns -1 if the determinant is negative,
         /// returns  1 if the determinant is positive,
         /// retunrs  0 if the determinant is null.
         /// </returns>
-        public static int SignOfDet2x2(double x1, double y1, double x2, double y2)
+        public static Int32 SignOfDet2x2(Double x1, Double y1, Double x2, Double y2)
         {
             // returns -1 if the determinant is negative,
             // returns  1 if the determinant is positive,
             // returns  0 if the determinant is null.
 
-            int sign;
-            double swap;
-            double k;
-            long count = 0;
-            
+            Int32 sign;
+            Double swap;
+            Double k;
+            Int64 count = 0;
 
             sign = 1;
 
@@ -177,7 +169,6 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
                         y1 = -y1;
                         x2 = -x2;
                         y2 = -y2;
-                        ;
                     }
                     else
                     {
@@ -202,11 +193,7 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
             {
                 if (0.0 < x2)
                 {
-                    if (x1 <= x2)
-                    {
-                        ;
-                    }
-                    else
+                    if (x1 > x2)
                     {
                         return sign;
                     }
@@ -229,7 +216,6 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
                         sign = -sign;
                         x1 = -x1;
                         x2 = -x2;
-                        ;
                     }
                     else
                     {
@@ -244,9 +230,9 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
             while (true)
             {
                 count = count + 1;
-                k = Math.Floor(x2 / x1);
-                x2 = x2 - k * x1;
-                y2 = y2 - k * y1;
+                k = Math.Floor(x2/x1);
+                x2 = x2 - k*x1;
+                y2 = y2 - k*y1;
 
                 /*
                  *  testing if R (new U2) is in U1 rectangle
@@ -302,9 +288,9 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
                 /*
                  *  exchange 1 and 2 role.
                  */
-                k = Math.Floor(x1 / x2);
-                x1 = x1 - k * x2;
-                y1 = y1 - k * y2;
+                k = Math.Floor(x1/x2);
+                x1 = x1 - k*x2;
+                y1 = y1 - k*y2;
 
                 /*
                  *  testing if R (new U1) is in U2 rectangle
@@ -357,7 +343,6 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
                     return -sign;
                 }
             }
-
         }
     }
 }

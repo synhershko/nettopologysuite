@@ -1,24 +1,52 @@
 using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GeoAPI.IO.WellKnownText;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
+using NetTopologySuite.Coordinates;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests
 {
     public class BaseSamples
     {
-        protected IGeometryFactory Factory { get; private set; }
+        private static readonly BufferedCoordinateFactory _coordFactory =
+            new BufferedCoordinateFactory();
 
-        protected WKTReader Reader { get; private set; }
+        private readonly IGeometryFactory<BufferedCoordinate> _factory;
 
-        protected BaseSamples() : this(new GeometryFactory(), new WKTReader()) { }
+        private readonly IWktGeometryReader<BufferedCoordinate> _reader;
 
-        protected BaseSamples(IGeometryFactory factory) : this(factory, new WKTReader(factory)) { }
-
-        protected BaseSamples(IGeometryFactory factory, WKTReader reader)
+        protected BaseSamples()
+            : this(new GeometryFactory<BufferedCoordinate>(
+                       new BufferedCoordinateSequenceFactory(_coordFactory)))
         {
-            Factory = factory;
-            Reader = reader;
+        }
+
+        protected BaseSamples(IGeometryFactory<BufferedCoordinate> factory)
+            : this(factory, new WktReader<BufferedCoordinate>(factory, null))
+        {
+        }
+
+        protected BaseSamples(IGeometryFactory<BufferedCoordinate> factory,
+                              IWktGeometryReader<BufferedCoordinate> reader)
+        {
+            _factory = factory;
+            _reader = reader;
+        }
+
+        protected static ICoordinateFactory<BufferedCoordinate> CoordFactory
+        {
+            get { return _coordFactory; }
+        }
+
+        protected IGeometryFactory<BufferedCoordinate> GeoFactory
+        {
+            get { return _factory; }
+        }
+
+        protected IWktGeometryReader<BufferedCoordinate> Reader
+        {
+            get { return _reader; }
         }
 
         protected void Write(object o)
@@ -26,11 +54,13 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests
             Console.WriteLine(o.ToString());
         }
 
-        protected void Write(string s)
+        protected void Write(String s)
         {
             Console.WriteLine(s);
         }
 
-        public virtual void Start() { }
+        public virtual void Start()
+        {
+        }
     }
 }

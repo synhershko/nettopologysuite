@@ -1,11 +1,13 @@
 using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
     /// <summary>
-    /// Simplifies a <c>Geometry</c> using the standard Douglas-Peucker algorithm.
+    /// Simplifies an <see cref="IGeometry{TCoordinate}"/> using the standard Douglas-Peucker algorithm.
     /// Ensures that any polygonal geometries returned are valid.
     /// Simple lines are not guaranteed to remain simple after simplification.
     /// Note that in general D-P does not preserve topology -
@@ -15,119 +17,73 @@ namespace GisSharpBlog.NetTopologySuite.Simplify
     /// To simplify point while preserving topology use TopologySafeSimplifier.
     /// (However, using D-P is significantly faster).
     /// </summary>
-    public class DouglasPeuckerSimplifier
+    public class DouglasPeuckerSimplifier<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <param name="distanceTolerance"></param>
-        /// <returns></returns>
-        public static IGeometry Simplify(IGeometry geom, double distanceTolerance)
+        private readonly IGeometry<TCoordinate> _inputGeometry;
+        private Double distanceTolerance;
+
+        public DouglasPeuckerSimplifier(IGeometry<TCoordinate> inputGeom)
         {
-            DouglasPeuckerSimplifier tss = new DouglasPeuckerSimplifier(geom);
+            _inputGeometry = inputGeom;
+        }
+
+        public Double DistanceTolerance
+        {
+            get { return distanceTolerance; }
+            set { distanceTolerance = value; }
+        }
+
+        public static IGeometry<TCoordinate> Simplify(IGeometry<TCoordinate> geom, Double distanceTolerance)
+        {
+            DouglasPeuckerSimplifier<TCoordinate> tss = new DouglasPeuckerSimplifier<TCoordinate>(geom);
             tss.DistanceTolerance = distanceTolerance;
             return tss.GetResultGeometry();
         }
 
-        private IGeometry inputGeom;
-        private double distanceTolerance;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="inputGeom"></param>
-        public DouglasPeuckerSimplifier(IGeometry inputGeom)
+        public IGeometry<TCoordinate> GetResultGeometry()
         {
-            this.inputGeom = inputGeom;
+            return (new DPTransformer(this)).Transform(_inputGeometry);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double DistanceTolerance
-        {
-            get
-            {
-                return distanceTolerance; 
-            }
-            set
-            {
-                distanceTolerance = value; 
-            }
-        }
+        #region Nested type: DPTransformer
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public IGeometry GetResultGeometry()
+        private class DPTransformer : GeometryTransformer<TCoordinate>
         {
-            return (new DPTransformer(this)).Transform(inputGeom);
-        }
+            private DouglasPeuckerSimplifier<TCoordinate> container = null;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private class DPTransformer : GeometryTransformer
-        {
-            private DouglasPeuckerSimplifier container = null;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public DPTransformer(DouglasPeuckerSimplifier container)
+            public DPTransformer(DouglasPeuckerSimplifier<TCoordinate> container)
             {
                 this.container = container;
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="coords"></param>
-            /// <param name="parent"></param>
-            /// <returns></returns>
-            protected override ICoordinateSequence TransformCoordinates(ICoordinateSequence coords, IGeometry parent)
+            protected override ICoordinateSequence<TCoordinate> TransformCoordinates(
+                ICoordinateSequence<TCoordinate> coords, IGeometry<TCoordinate> parent)
             {
-                ICoordinate[] inputPts = coords.ToCoordinateArray();
-                ICoordinate[] newPts = DouglasPeuckerLineSimplifier.Simplify(inputPts, container.DistanceTolerance);
-                return factory.CoordinateSequenceFactory.Create(newPts);
+                return DouglasPeuckerLineSimplifier<TCoordinate>.Simplify(
+                    coords, container.DistanceTolerance);
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="geom"></param>
-            /// <param name="parent"></param>
-            /// <returns></returns>
-            protected override IGeometry TransformPolygon(IPolygon geom, IGeometry parent)
+            protected override IGeometry<TCoordinate> TransformPolygon(IPolygon<TCoordinate> geom,
+                                                                       IGeometry<TCoordinate> parent)
             {
-                IGeometry roughGeom = base.TransformPolygon(geom, parent);
+                IGeometry<TCoordinate> roughGeom = base.TransformPolygon(geom, parent);
+
                 // don't try and correct if the parent is going to do this
-                if (parent is IMultiPolygon) 
-                    return roughGeom;            
-                return CreateValidArea(roughGeom);
+                if (parent is IMultiPolygon<TCoordinate>)
+                {
+                    return roughGeom;
+                }
+
+                return createValidArea(roughGeom);
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="geom"></param>
-            /// <param name="parent"></param>
-            /// <returns></returns>
-            protected override IGeometry TransformMultiPolygon(IMultiPolygon geom, IGeometry parent)
+            protected override IGeometry<TCoordinate> TransformMultiPolygon(IMultiPolygon<TCoordinate> geom,
+                                                                            IGeometry<TCoordinate> parent)
             {
-                IGeometry roughGeom = base.TransformMultiPolygon(geom, parent);
-                return CreateValidArea(roughGeom);
-            }
-
-            protected override IGeometry TransformLinearRing(ILinearRing geom, IGeometry parent)
-            {
-                Boolean removeDegenerateRings = parent is IPolygon;
-                IGeometry simpleResult = base.TransformLinearRing(geom, parent);
-
-                return removeDegenerateRings && !(simpleResult is ILinearRing) ? null : simpleResult;
+                IGeometry<TCoordinate> roughGeom = base.TransformMultiPolygon(geom, parent);
+                return createValidArea(roughGeom);
             }
 
             /// <summary>
@@ -142,10 +98,18 @@ namespace GisSharpBlog.NetTopologySuite.Simplify
             /// </summary>
             /// <param name="roughAreaGeom">An area point possibly containing self-intersections.</param>
             /// <returns>A valid area point.</returns>
-            private IGeometry CreateValidArea(IGeometry roughAreaGeom)
+            private static IGeometry<TCoordinate> createValidArea(IGeometry<TCoordinate> roughAreaGeom)
             {
-                return roughAreaGeom.Buffer(0.0);
+                if (roughAreaGeom is ISpatialOperator<TCoordinate>)
+                {
+                    ISpatialOperator<TCoordinate> area = roughAreaGeom as ISpatialOperator<TCoordinate>;
+                    return area.Buffer(0.0);
+                }
+
+                return null;
             }
         }
+
+        #endregion
     }
 }

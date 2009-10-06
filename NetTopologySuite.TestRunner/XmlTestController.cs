@@ -1,74 +1,88 @@
 using System;
 using System.Collections.Specialized;
 using System.IO;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
-namespace Open.Topology.TestRunner
+namespace GisSharpBlog.NetTopologySuite
 {
-	/// <summary>
-	/// Summary description for XmlTestController.
-	/// </summary>
-	public class XmlTestController
-	{
-        private StringCollection m_listFileNames = null;
+    public class XmlTestController<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
+        private StringCollection _fileNames;
 
-        private XmlTestDocument  m_objCurrentDoc = null;
+        private readonly XmlTestDocument<TCoordinate> _currentDoc;
 
-		public XmlTestController()
-		{
-            m_listFileNames = new StringCollection();
-            m_objCurrentDoc = new XmlTestDocument();
-		}
+        public XmlTestController()
+        {
+            _fileNames = new StringCollection();
+            _currentDoc = new XmlTestDocument<TCoordinate>();
+        }
 
         public StringCollection FileNames
         {
-            get
-            {
-                return m_listFileNames;
-            }
+            get { return _fileNames; }
         }
 
         public void ResetFiles()
         {
-            if (m_listFileNames != null)
-                m_listFileNames.Clear();            
-       }
+            if (_fileNames != null)
+            {
+                _fileNames.Clear();
+            }
+        }
 
         public void Reset()
         {
-            if (m_objCurrentDoc != null)
-                m_objCurrentDoc.ResetTests();
-            
+            if (_currentDoc != null)
+            {
+                _currentDoc.ResetTests();
+            }
+
             ResetFiles();
         }
 
-        public bool RunFile(int index)
+        public Boolean RunFile(Int32 index, XmlTestDocument<TCoordinate>.CreateCoordinateFactory createCoordinateFactory, XmlTestDocument<TCoordinate>.CreateCoordinateSequenceFactory createCoordinateSequenceFactory)
         {
-            if (m_listFileNames != null && m_listFileNames.Count > 0)
+            if (_fileNames != null && _fileNames.Count > 0)
             {
-                if (index >= 0 && index < m_listFileNames.Count)
+                if (index >= 0 && index < _fileNames.Count)
                 {
-                    string fileName = m_listFileNames[index];
-                    if (m_objCurrentDoc != null && m_objCurrentDoc.LoadFile(fileName))
+                    String fileName = _fileNames[index];
+
+                    if (_currentDoc != null && _currentDoc.LoadFile(fileName, createCoordinateFactory, createCoordinateSequenceFactory))
                     {
-                        XmlTestCollection listTests = m_objCurrentDoc.CurrentTests;
+                        XmlTestCollection<TCoordinate> listTests = _currentDoc.CurrentTests;
+
                         if (listTests != null && listTests.Count > 0)
-                            return listTests.RunTests();                        
+                        {
+                            return listTests.RunTests();
+                        }
                     }
                 }
-            }    
+            }
+
             return false;
         }
 
-        public bool GetFiles(string directory)
+        public Boolean GetFiles(String directory)
         {
-            if (m_listFileNames == null)
-                m_listFileNames = new StringCollection();
-            
+            if (_fileNames == null)
+            {
+                _fileNames = new StringCollection();
+            }
+
             try
             {
-                string[] dirs = Directory.GetFiles(directory, "*.xml");
-                foreach (string dir in dirs) 
-                    m_listFileNames.Add(dir);                
+                String[] dirs = Directory.GetFiles(directory, "*.xml");
+
+                foreach (String dir in dirs)
+                {
+                    _fileNames.Add(dir);
+                }
+
                 return true;
             }
             catch (Exception ex)
@@ -79,12 +93,17 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        public XmlTestCollection Load(string filePath)
+        public XmlTestCollection<TCoordinate> Load(String filePath, XmlTestDocument<TCoordinate>.CreateCoordinateFactory createCoordinateFactory, XmlTestDocument<TCoordinate>.CreateCoordinateSequenceFactory createCoordinateSequenceFactory)
         {
-            if (m_objCurrentDoc != null)
-                if (m_objCurrentDoc.LoadFile(filePath))
-                    return m_objCurrentDoc.CurrentTests;
-             return null;
+            if (_currentDoc != null)
+            {
+                if (_currentDoc.LoadFile(filePath, createCoordinateFactory, createCoordinateSequenceFactory))
+                {
+                    return _currentDoc.CurrentTests;
+                }
+            }
+
+            return null;
         }
-	}
+    }
 }

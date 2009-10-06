@@ -1,7 +1,10 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
@@ -11,157 +14,231 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
     /// whether the point lies on the boundary or not.
     /// Note that instances of this class are not reentrant.
     /// </summary>
-    public class PointLocator
+    public class PointLocator<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private bool isIn;            // true if the point lies in or on any Geometry element
-        private int numBoundaries;    // the number of sub-elements whose boundaries the point lies in
+        // true if the point lies in or on any Geometry element
+        private readonly IBoundaryNodeRule _boundaryRule;
+        private Int32 _boundaryCount;
+        private Boolean _isIn;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PointLocator"/> class.
-        /// </summary>
-        public PointLocator() { }
+        public PointLocator() : this(new Mod2BoundaryNodeRule())
+        {
+        }
+
+        public PointLocator(IBoundaryNodeRule boundaryRule)
+        {
+            if (boundaryRule == null)
+            {
+                throw new ArgumentNullException("boundaryRule");
+            }
+
+            _boundaryRule = boundaryRule;
+        }
 
         /// <summary> 
         /// Convenience method to test a point for intersection with a Geometry
         /// </summary>
         /// <param name="p">The coordinate to test.</param>
         /// <param name="geom">The Geometry to test.</param>
-        /// <returns><c>true</c> if the point is in the interior or boundary of the Geometry.</returns>
-        public bool Intersects(ICoordinate p, IGeometry geom)
+        /// <returns><see langword="true"/> if the point is in the interior or boundary of the Geometry.</returns>
+        public Boolean Intersects(TCoordinate p, IGeometry<TCoordinate> geom)
         {
             return Locate(p, geom) != Locations.Exterior;
         }
 
         /// <summary> 
-        /// Computes the topological relationship ({Location}) of a single point to a Geometry.
+        /// Computes the topological relationship (<see cref="Locations"/>) of a single point to a Geometry.
         /// It handles both single-element and multi-element Geometries.
         /// The algorithm for multi-part Geometries takes into account the boundaryDetermination rule.
         /// </summary>
         /// <returns>The Location of the point relative to the input Geometry.</returns>
-        public Locations Locate(ICoordinate p, IGeometry geom)
+        public Locations Locate(TCoordinate p, IGeometry<TCoordinate> geom)
         {
             if (geom.IsEmpty)
+            {
                 return Locations.Exterior;
-            if (geom is ILineString) 
-                return Locate(p, (ILineString) geom);                        
-            else if (geom is IPolygon) 
-                return Locate(p, (IPolygon) geom);
-        
-            isIn = false;
-            numBoundaries = 0;
-            ComputeLocation(p, geom);
-            if(GeometryGraph.IsInBoundary(numBoundaries))
+            }
+
+            if (geom is ILineString<TCoordinate>)
+            {
+                return locate(p, geom as ILineString<TCoordinate>);
+            }
+
+            if (geom is IPolygon<TCoordinate>)
+            {
+                return locate(p, geom as IPolygon<TCoordinate>);
+            }
+
+            _isIn = false;
+            _boundaryCount = 0;
+
+            computeLocation(p, geom);
+
+            if (_boundaryRule.IsInBoundary(_boundaryCount))
+            {
                 return Locations.Boundary;
-            if(numBoundaries > 0 || isIn)
+            }
+
+            if (_boundaryCount > 0 || _isIn)
+            {
                 return Locations.Interior;
+            }
+
             return Locations.Exterior;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="geom"></param>
-        private void ComputeLocation(ICoordinate p, IGeometry geom)
+        private void computeLocation(TCoordinate p, IGeometry<TCoordinate> geom)
         {
-            if (geom is ILineString) 
-                UpdateLocationInfo(Locate(p, (ILineString) geom));                                  
-            else if(geom is Polygon) 
-                UpdateLocationInfo(Locate(p, (IPolygon) geom));            
-            else if(geom is IMultiLineString) 
+            if (geom is ILineString<TCoordinate>)
             {
-                IMultiLineString ml = (IMultiLineString) geom;
-                foreach (ILineString l in ml.Geometries)                     
-                    UpdateLocationInfo(Locate(p, l));                
+                updateLocationInfo(locate(p, geom as ILineString<TCoordinate>));
             }
-            else if(geom is IMultiPolygon)
+            else if (geom is IPolygon<TCoordinate>)
             {
-                IMultiPolygon mpoly = (IMultiPolygon) geom;
-                foreach (IPolygon poly in mpoly.Geometries) 
-                    UpdateLocationInfo(Locate(p, poly));
+                updateLocationInfo(locate(p, geom as IPolygon<TCoordinate>));
             }
-            else if (geom is IGeometryCollection) 
+            else if (geom is IMultiLineString<TCoordinate>)
             {
-                IEnumerator geomi = new GeometryCollectionEnumerator((IGeometryCollection) geom);
-                while(geomi.MoveNext()) 
+                IMultiLineString<TCoordinate> ml = geom as IMultiLineString<TCoordinate>;
+
+                foreach (ILineString<TCoordinate> l in (ml as IEnumerable<ILineString<TCoordinate>>))
                 {
-                    IGeometry g2 = (IGeometry) geomi.Current;
-                    if (g2 != geom)
-                        ComputeLocation(p, g2);
+                    updateLocationInfo(Locate(p, l));
+                }
+            }
+            else if (geom is IMultiPolygon<TCoordinate>)
+            {
+                IMultiPolygon<TCoordinate> mpoly = geom as IMultiPolygon<TCoordinate>;
+
+                foreach (IPolygon<TCoordinate> poly in mpoly)
+                {
+                    updateLocationInfo(locate(p, poly));
+                }
+            }
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> collection = geom as IGeometryCollection<TCoordinate>;
+
+                IEnumerator<IGeometry<TCoordinate>> geomi
+                    = new GeometryCollectionEnumerator<TCoordinate>(collection);
+
+                while (geomi.MoveNext())
+                {
+                    IGeometry<TCoordinate> computeGeometry = geomi.Current;
+
+                    if (computeGeometry != geom)
+                    {
+                        computeLocation(p, computeGeometry);
+                    }
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="loc"></param>
-        private void UpdateLocationInfo(Locations loc)
+        private void updateLocationInfo(Locations loc)
         {
-            if(loc == Locations.Interior) 
-                isIn = true;
-            if(loc == Locations.Boundary) 
-                numBoundaries++;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="l"></param>
-        /// <returns></returns>
-        private Locations Locate(ICoordinate p, ILineString l)
-        {
-            ICoordinate[] pt = l.Coordinates;
-            if(!l.IsClosed)
-                if(p.Equals(pt[0]) || p.Equals(pt[pt.Length - 1]))
-                    return Locations.Boundary;                            
-            if (CGAlgorithms.IsOnLine(p, pt))
-                return Locations.Interior;
-            return Locations.Exterior;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="ring"></param>
-        /// <returns></returns>
-        private Locations LocateInPolygonRing(ICoordinate p, ILinearRing ring)
-        {
-            // can this test be folded into IsPointInRing?
-            if (CGAlgorithms.IsOnLine(p, ring.Coordinates))
-                return Locations.Boundary;
-            if (CGAlgorithms.IsPointInRing(p, ring.Coordinates))
-                return Locations.Interior;
-            return Locations.Exterior;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="poly"></param>
-        /// <returns></returns>
-        private Locations Locate(ICoordinate p, IPolygon poly)
-        {
-            if (poly.IsEmpty) 
-                return Locations.Exterior;
-            ILinearRing shell = poly.Shell;
-            Locations shellLoc = LocateInPolygonRing(p, shell);
-            if (shellLoc == Locations.Exterior) 
-                return Locations.Exterior;
-            if (shellLoc == Locations.Boundary) 
-                return Locations.Boundary;
-            // now test if the point lies in or on the holes
-            foreach (ILinearRing hole in poly.InteriorRings)
+            switch (loc)
             {
-                Locations holeLoc = LocateInPolygonRing(p, hole);
-                if (holeLoc == Locations.Interior) 
-                    return Locations.Exterior;
-                if (holeLoc == Locations.Boundary) 
-                    return Locations.Boundary;
+                case Locations.Boundary:
+                    _boundaryCount++;
+                    break;
+                case Locations.Interior:
+                    _isIn = true;
+                    break;
             }
+        }
+
+        private Locations locate(TCoordinate p, ILineString<TCoordinate> l)
+        {
+            ICoordinateSequence<TCoordinate> line = l.Coordinates;
+
+            if (!l.IsClosed)
+            {
+                TCoordinate start = line.First;
+                TCoordinate end = line.Last;
+
+                if (p.Equals(start) || p.Equals(end))
+                {
+                    return Locations.Boundary;
+                }
+            }
+
+            IGeometryFactory<TCoordinate> geoFactory = l.Factory;
+
+            if (geoFactory == null)
+            {
+                throw new InvalidOperationException(
+                    "ILineString instance doesn't have a IGeometryFactory");
+            }
+
+            if (CGAlgorithms<TCoordinate>.IsOnLine(p, line, geoFactory))
+            {
+                return Locations.Interior;
+            }
+
+            return Locations.Exterior;
+        }
+
+        private Locations locateInPolygonRing(TCoordinate p, ILinearRing<TCoordinate> ring)
+        {
+            if (ring.Factory == null)
+            {
+                throw new InvalidOperationException(
+                    "ILinearRing instance doesn't have a IGeometryFactory");
+            }
+
+            // can this test be folded into IsPointInRing?
+            if (CGAlgorithms<TCoordinate>.IsOnLine(p, ring.Coordinates, ring.Factory))
+            {
+                return Locations.Boundary;
+            }
+
+            if (CGAlgorithms<TCoordinate>.IsPointInRing(p, ring.Coordinates))
+            {
+                return Locations.Interior;
+            }
+
+            return Locations.Exterior;
+        }
+
+        private Locations locate(TCoordinate p, IPolygon<TCoordinate> poly)
+        {
+            if (poly.IsEmpty)
+            {
+                return Locations.Exterior;
+            }
+
+            ILinearRing<TCoordinate> shell = poly.ExteriorRing as ILinearRing<TCoordinate>;
+            Debug.Assert(shell != null);
+            Locations shellLoc = locateInPolygonRing(p, shell);
+
+            if (shellLoc == Locations.Exterior)
+            {
+                return Locations.Exterior;
+            }
+
+            if (shellLoc == Locations.Boundary)
+            {
+                return Locations.Boundary;
+            }
+
+            // now test if the point lies in or on the holes
+            foreach (ILinearRing<TCoordinate> hole in poly.InteriorRings)
+            {
+                Locations holeLoc = locateInPolygonRing(p, hole);
+
+                if (holeLoc == Locations.Interior)
+                {
+                    return Locations.Exterior;
+                }
+
+                if (holeLoc == Locations.Boundary)
+                {
+                    return Locations.Boundary;
+                }
+            }
+
             return Locations.Interior;
         }
     }

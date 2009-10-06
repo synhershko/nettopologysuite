@@ -1,143 +1,134 @@
 using System;
-using System.IO;
-using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Geometries;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary> 
-    /// An EdgeIntersection represents a point on an
-    /// edge which intersects with another edge.
+    /// An <see cref="EdgeIntersection{TCoordinate}"/> represents a point on an
+    /// edge which intersects with another edge by using an index into the 
+    /// <see cref="Edge{TCoordinate}.Coordinates"/>
+    /// </summary>
+    /// <remarks>
+    /// <para>
     /// The intersection may either be a single point, or a line segment
     /// (in which case this point is the start of the line segment)
     /// The label attached to this intersection point applies to
     /// the edge from this point forwards, until the next
     /// intersection or the end of the edge.
+    /// </para>
     /// The intersection point must be precise.
-    /// </summary>
-    public class EdgeIntersection : IComparable
+    /// </remarks>
+    public struct EdgeIntersection<TCoordinate> : IComparable<EdgeIntersection<TCoordinate>>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private ICoordinate coordinate;   
+        private readonly TCoordinate _coordinate;
+        private readonly Double _distance;
+        private readonly Int32 _segmentIndex;
+
+        /// <summary>
+        /// Creates a new <see cref="EdgeIntersection{TCoordinate}"/>
+        /// described by the given <paramref name="coordinate"/>, 
+        /// <paramref name="segmentIndex"/> of a line segment, and 
+        /// <paramref name="distance"/> along the segment.
+        /// </summary>
+        /// <param name="coordinate">Coordinate of the intersection.</param>
+        /// <param name="segmentIndex">
+        /// Index of the line segment which the edge represents.
+        /// </param>
+        /// <param name="distance">
+        /// Distance along the segment where the intersection is located.
+        /// </param>
+        public EdgeIntersection(TCoordinate coordinate, Int32 segmentIndex,
+                                Double distance)
+        {
+            _coordinate = coordinate;
+            _segmentIndex = segmentIndex;
+            _distance = distance;
+        }
 
         /// <summary>
         /// The point of intersection.
         /// </summary>
-        public ICoordinate Coordinate
+        public TCoordinate Coordinate
         {
-            get
-            {
-                return coordinate; 
-            }
-            set
-            {
-                coordinate = value; 
-            }
+            get { return _coordinate; }
         }
-
-        private int segmentIndex;  
 
         /// <summary>
         /// The index of the containing line segment in the parent edge.
         /// </summary>
-        public int SegmentIndex
+        public Int32 SegmentIndex
         {
-            get 
-            {
-                return segmentIndex; 
-            }
-            set
-            {
-                segmentIndex = value; 
-            }
+            get { return _segmentIndex; }
         }
-
-        private double dist;       
 
         /// <summary>
         /// The edge distance of this point along the containing line segment.
         /// </summary>
-        public double Distance
+        public Double Distance
         {
-            get
-            {
-                return dist; 
-            }
-            set
-            {
-                dist = value; 
-            }
+            get { return _distance; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="coord"></param>
-        /// <param name="segmentIndex"></param>
-        /// <param name="dist"></param>
-        public EdgeIntersection(ICoordinate coord, int segmentIndex, double dist) 
-        {
-            this.coordinate = new Coordinate(coord);
-            this.segmentIndex = segmentIndex;
-            this.dist = dist;
-        }
+        #region IComparable<EdgeIntersection<TCoordinate>> Members
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public int CompareTo(object obj)
+        public Int32 CompareTo(EdgeIntersection<TCoordinate> other)
         {
-            EdgeIntersection other = (EdgeIntersection) obj;
             return Compare(other.SegmentIndex, other.Distance);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="segmentIndex"></param>
-        /// <param name="dist"></param>
+        #endregion
+
+        public override String ToString()
+        {
+            return Coordinate +
+                   " seg # = " + SegmentIndex +
+                   " dist = " + Distance;
+        }
+
+        public override Int32 GetHashCode()
+        {
+            return _coordinate.GetHashCode() ^
+                   _distance.GetHashCode() ^
+                   _segmentIndex.GetHashCode();
+        }
+
         /// <returns>
         /// -1 this EdgeIntersection is located before the argument location,
         /// 0 this EdgeIntersection is at the argument location,
         /// 1 this EdgeIntersection is located after the argument location.
         /// </returns>
-        public int Compare(int segmentIndex, double dist)
+        public Int32 Compare(Int32 segmentIndex, Double distance)
         {
-            if (this.SegmentIndex < segmentIndex) 
+            if (SegmentIndex < segmentIndex)
+            {
                 return -1;
-            if (this.SegmentIndex > segmentIndex) 
+            }
+
+            if (SegmentIndex > segmentIndex)
+            {
                 return 1;
-            if (this.Distance < dist) 
+            }
+
+            if (Distance < distance)
+            {
                 return -1;
-            if (this.Distance > dist) 
-                return 1;
-            return 0;
+            }
+
+            return Distance > distance ? 1 : 0;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="maxSegmentIndex"></param>
-        /// <returns></returns>
-        public bool IsEndPoint(int maxSegmentIndex)
+        public Boolean IsEndPoint(Int32 maxSegmentIndex)
         {
-            if (SegmentIndex == 0 && Distance == 0.0) 
+            if (SegmentIndex == 0 && Distance == 0.0)
+            {
                 return true;
-            if (SegmentIndex == maxSegmentIndex) 
-                return true;
-            return false;
-        }
+            }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
-        public void Write(StreamWriter outstream)
-        {
-            outstream.Write(Coordinate);
-            outstream.Write(" seg # = " + SegmentIndex);
-            outstream.WriteLine(" dist = " + Distance);
+            return SegmentIndex == maxSegmentIndex;
         }
     }
 }

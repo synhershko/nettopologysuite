@@ -1,93 +1,81 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay
 {
     /// <summary>
-    /// Constructs <c>Point</c>s from the nodes of an overlay graph.
+    /// Constructs <see cref="IPoint{TCoordinate}"/>s from the 
+    /// nodes of an overlay graph.
     /// </summary>
-    public class PointBuilder
+    public class PointBuilder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private OverlayOp op;
-        private IGeometryFactory geometryFactory;
-        private PointLocator ptLocator;
+        private readonly IGeometryFactory<TCoordinate> _geometryFactory;
+        private readonly OverlayOp<TCoordinate> _op;
+        //private PointLocator<TCoordinate> _ptLocator;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="op"></param>
-        /// <param name="geometryFactory"></param>
-        /// <param name="ptLocator"></param>
-        public PointBuilder(OverlayOp op, IGeometryFactory geometryFactory, PointLocator ptLocator)
+        // [codekaizen 2008-01-06] parameter 'ptLocator' isn't used in JTS source PointBuilder.java rev. 1.16
+        public PointBuilder(OverlayOp<TCoordinate> op, IGeometryFactory<TCoordinate> geometryFactory)
         {
-            this.op = op;
-            this.geometryFactory = geometryFactory;
-            this.ptLocator = ptLocator;
+            _op = op;
+            _geometryFactory = geometryFactory;
+            //_ptLocator = ptLocator;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="opCode"></param>
         /// <returns>
-        /// A list of the Points in the result of the specified overlay operation.
+        /// A list of the <see cref="IPoint{TCoordinate}"/>s in the result 
+        /// of the specified overlay operation.
         /// </returns>
-        public IList Build(SpatialFunction opCode)
+        public IEnumerable<IPoint<TCoordinate>> Build(SpatialFunctions opCode)
         {
-            IList nodeList = CollectNodes(opCode);
-            IList resultPointList = SimplifyPoints(nodeList);
+            // in JTS 1.7, there is a function 'extractNonCoveredResultNodes'
+            // which is used instead
+            IEnumerable<Node<TCoordinate>> nodeList = collectNodes(opCode);
+            IEnumerable<IPoint<TCoordinate>> resultPointList = simplifyPoints(nodeList);
             return resultPointList;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="opCode"></param>
-        /// <returns></returns>
-        private IList CollectNodes(SpatialFunction opCode)
+        private IEnumerable<Node<TCoordinate>> collectNodes(SpatialFunctions opCode)
         {
-            IList resultNodeList = new ArrayList();
             // add nodes from edge intersections which have not already been included in the result
-            IEnumerator nodeit = op.Graph.Nodes.GetEnumerator();
-            while (nodeit.MoveNext()) 
+            foreach (Node<TCoordinate> node in _op.Graph.Nodes)
             {
-                Node n = (Node) nodeit.Current;
-                if (!n.IsInResult)
+                if (!node.IsInResult)
                 {
-                    Label label = n.Label;
-                    if (OverlayOp.IsResultOfOp(label, opCode))                    
-                        resultNodeList.Add(n);                    
+                    Debug.Assert(node.Label.HasValue);
+                    Label label = node.Label.Value;
+
+                    if (OverlayOp<TCoordinate>.IsResultOfOp(label, opCode))
+                    {
+                        yield return node;
+                    }
                 }
             }
-            return resultNodeList;
         }
 
-        /// <summary>
-        /// This method simplifies the resultant Geometry by finding and eliminating
-        /// "covered" points.
-        /// A point is covered if it is contained in another element Geometry
-        /// with higher dimension (e.g. a point might be contained in a polygon,
-        /// in which case the point can be eliminated from the resultant).
-        /// </summary>
-        /// <param name="resultNodeList"></param>
-        /// <returns></returns>
-        private IList SimplifyPoints(IList resultNodeList)
+        // This method simplifies the resultant Geometry by finding and eliminating
+        // "covered" points.
+        // A point is covered if it is contained in another element Geometry
+        // with higher dimension (e.g. a point might be contained in a polygon,
+        // in which case the point can be eliminated from the resultant).
+        private IEnumerable<IPoint<TCoordinate>> simplifyPoints(IEnumerable<Node<TCoordinate>> resultNodeList)
         {
-            IList nonCoveredPointList = new ArrayList();
-            IEnumerator it = resultNodeList.GetEnumerator();
-            while (it.MoveNext()) 
+            foreach (Node<TCoordinate> node in resultNodeList)
             {
-                Node n = (Node)it.Current;
-                ICoordinate coord = n.Coordinate;
-                if (!op.IsCoveredByLA(coord))
+                TCoordinate coord = node.Coordinate;
+
+                if (!_op.IsCoveredByLineOrArea(coord))
                 {
-                    IPoint pt = geometryFactory.CreatePoint(coord);
-                    nonCoveredPointList.Add(pt);
+                    IPoint<TCoordinate> pt = _geometryFactory.CreatePoint(coord);
+                    yield return pt;
                 }
             }
-            return nonCoveredPointList;
         }
     }
 }

@@ -1,47 +1,103 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Diagnostics;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Planargraph;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Linemerge
 {
     /// <summary>
-    /// Sews together a set of fully noded LineStrings. Sewing stops at nodes of degree 1
+    /// Merges a set of fully noded LineStrings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Merging stops at nodes of degree 1
     /// or 3 or more -- the exception is an isolated loop, which only has degree-2 nodes,
     /// in which case a node is simply chosen as a starting point. The direction of each
     /// merged LineString will be that of the majority of the LineStrings from which it
     /// was derived.
+    /// </para>
+    /// <para>
     /// Any dimension of Geometry is handled -- the constituent linework is extracted to 
     /// form the edges. The edges must be correctly noded; that is, they must only meet
     /// at their endpoints.  The LineMerger will still run on incorrectly noded input
     /// but will not form polygons from incorrected noded edges.
-    /// </summary>
-    public class LineMerger 
+    /// </para>
+    /// </remarks>
+    public class LineMerger<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        private class AnonymousGeometryComponentFilterImpl : IGeometryComponentFilter
-        {
-            private LineMerger container = null;
+        /*
+         * [codekaizen 2008-01-14]  removed during translation of visitor patterns
+         *                          to enumeration / query patterns.
+         */
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public AnonymousGeometryComponentFilterImpl(LineMerger container)
+        //private class AnonymousGeometryComponentFilterImpl : IGeometryComponentFilter<TCoordinate>
+        //{
+        //    private readonly LineMerger<TCoordinate> _container = null;
+
+        //    public AnonymousGeometryComponentFilterImpl(LineMerger<TCoordinate> container)
+        //    {
+        //        _container = container;
+        //    }
+
+        //    public void Filter(IGeometry<TCoordinate> component)
+        //    {
+        //        if (component is ILineString<TCoordinate>)
+        //        {
+        //            _container.add((ILineString<TCoordinate>)component);
+        //        }
+        //    }
+        //}
+
+        private readonly LineMergeGraph<TCoordinate> _graph = new LineMergeGraph<TCoordinate>();
+        private readonly List<EdgeString<TCoordinate>> edgeStrings = new List<EdgeString<TCoordinate>>();
+        private IGeometryFactory<TCoordinate> _factory;
+        private List<ILineString<TCoordinate>> mergedLineStrings = new List<ILineString<TCoordinate>>();
+
+        /// <summary>
+        /// Gets the <see cref="ILineString{TCoordinate}"/>s built by the merging process.
+        /// </summary>
+        public IEnumerable<ILineString<TCoordinate>> MergedLineStrings
+        {
+            get
             {
-                this.container = container;
+                merge();
+                return mergedLineStrings;
+            }
+        }
+
+        /// <summary>
+        /// Adds a Geometry to be processed. May be called multiple times.
+        /// Any dimension of Geometry may be added; the constituent linework will be
+        /// extracted.
+        /// </summary>
+        public void Add(IGeometry<TCoordinate> geometry)
+        {
+            if (geometry == null)
+            {
+                throw new ArgumentNullException("geometry");
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="component"></param>
-            public void Filter(IGeometry component)
+            if (geometry is IHasGeometryComponents<TCoordinate>)
             {
-                if (component is ILineString)
-                    container.Add((ILineString) component);
+                IHasGeometryComponents<TCoordinate> container
+                    = geometry as IHasGeometryComponents<TCoordinate>;
+
+                foreach (ILineString<TCoordinate> s in container.Components)
+                {
+                    if (s != null)
+                    {
+                        addLine(s);
+                    }
+                }
+            }
+            else if (geometry is ILineString<TCoordinate>)
+            {
+                addLine(geometry as ILineString<TCoordinate>);
             }
         }
 
@@ -50,156 +106,102 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Linemerge
         /// Any dimension of Geometry may be added; the constituent linework will be
         /// extracted.
         /// </summary>
-        /// <param name="geometries"></param>
-        public void Add(IList geometries) 
+        public void Add(IEnumerable<IGeometry<TCoordinate>> geometries)
         {
-            IEnumerator i = geometries.GetEnumerator();
-            while (i.MoveNext())
+            foreach (IGeometry<TCoordinate> geometry in geometries)
             {
-                IGeometry geometry = (IGeometry) i.Current;
                 Add(geometry);
             }
         }
 
-        private LineMergeGraph graph = new LineMergeGraph();
-        private IList mergedLineStrings = null;
-        private IList edgeStrings = null;
-        private IGeometryFactory factory = null;
-
-        /// <summary>
-        /// Adds a Geometry to be processed. May be called multiple times.
-        /// Any dimension of Geometry may be added; the constituent linework will be
-        /// extracted.
-        /// </summary>
-        /// <param name="geometry"></param>
-        public void Add(IGeometry geometry)
-        {            
-            geometry.Apply(new AnonymousGeometryComponentFilterImpl(this));
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="lineString"></param>
-        private void Add(ILineString lineString) 
+        private void addLine(ILineString<TCoordinate> lineString)
         {
-            if (factory == null) 
-                this.factory = lineString.Factory;            
-            graph.AddEdge(lineString);
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        private void Merge() 
-        {
-            if (mergedLineStrings != null) 
-                return; 
-            edgeStrings = new ArrayList();
-            BuildEdgeStringsForObviousStartNodes();
-            BuildEdgeStringsForIsolatedLoops();
-            mergedLineStrings = new ArrayList();    
-            for (IEnumerator i = edgeStrings.GetEnumerator(); i.MoveNext(); ) 
+            if (_factory == null)
             {
-                EdgeString edgeString = (EdgeString) i.Current;
+                _factory = lineString.Factory;
+            }
+
+            _graph.AddEdge(lineString);
+        }
+
+        private void merge()
+        {
+            if (mergedLineStrings != null)
+            {
+                return;
+            }
+
+            buildEdgeStringsForObviousStartNodes();
+            buildEdgeStringsForIsolatedLoops();
+            mergedLineStrings = new List<ILineString<TCoordinate>>();
+
+            foreach (EdgeString<TCoordinate> edgeString in edgeStrings)
+            {
                 mergedLineStrings.Add(edgeString.ToLineString());
-            }    
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildEdgeStringsForObviousStartNodes() 
+        private void buildEdgeStringsForObviousStartNodes()
         {
-            BuildEdgeStringsForNonDegree2Nodes();
+            buildEdgeStringsForNonDegree2Nodes();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildEdgeStringsForIsolatedLoops() 
+        private void buildEdgeStringsForIsolatedLoops()
         {
-            BuildEdgeStringsForUnprocessedNodes();
-        }  
+            buildEdgeStringsForUnprocessedNodes();
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildEdgeStringsForUnprocessedNodes() 
+        private void buildEdgeStringsForUnprocessedNodes()
         {
-            IEnumerator i = graph.Nodes.GetEnumerator();
-            while (i.MoveNext())
+            foreach (Node<TCoordinate> node in _graph.Nodes)
             {
-                Node node = (Node) i.Current;
-                if (!node.IsMarked) 
-                { 
+                if (!node.IsMarked)
+                {
                     Assert.IsTrue(node.Degree == 2);
-                    BuildEdgeStringsStartingAt(node);
-                    node.Marked = true;
-                }
-            }
-        }  
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildEdgeStringsForNonDegree2Nodes() 
-        {
-            IEnumerator i = graph.Nodes.GetEnumerator();
-            while (i.MoveNext()) 
-            {
-                Node node = (Node) i.Current;
-                if (node.Degree != 2) 
-                { 
-                    BuildEdgeStringsStartingAt(node);
+                    buildEdgeStringsStartingAt(node);
                     node.Marked = true;
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="node"></param>
-        private void BuildEdgeStringsStartingAt(Node node) 
+        private void buildEdgeStringsForNonDegree2Nodes()
         {
-            IEnumerator i = node.OutEdges.GetEnumerator();
-            while (i.MoveNext()) 
+            foreach (Node<TCoordinate> node in _graph.Nodes)
             {
-                LineMergeDirectedEdge directedEdge = (LineMergeDirectedEdge) i.Current;
+                if (node.Degree != 2)
+                {
+                    buildEdgeStringsStartingAt(node);
+                    node.Marked = true;
+                }
+            }
+        }
+
+        private void buildEdgeStringsStartingAt(Node<TCoordinate> node)
+        {
+            foreach (LineMergeDirectedEdge<TCoordinate> directedEdge in node.OutEdges)
+            {
                 if (directedEdge.Edge.IsMarked)
+                {
                     continue;
-                edgeStrings.Add(BuildEdgeStringStartingWith(directedEdge));
+                }
+
+                edgeStrings.Add(buildEdgeStringStartingWith(directedEdge));
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="start"></param>
-        /// <returns></returns>
-        private EdgeString BuildEdgeStringStartingWith(LineMergeDirectedEdge start) 
-        {    
-            EdgeString edgeString = new EdgeString(factory);
-            LineMergeDirectedEdge current = start;
-            do 
+        private EdgeString<TCoordinate> buildEdgeStringStartingWith(LineMergeDirectedEdge<TCoordinate> start)
+        {
+            EdgeString<TCoordinate> edgeString = new EdgeString<TCoordinate>(_factory);
+            LineMergeDirectedEdge<TCoordinate> current = start;
+
+            do
             {
                 edgeString.Add(current);
                 current.Edge.Marked = true;
-                current = current.Next;      
-            }
-            while (current != null && current != start);
-            return edgeString;
-        }
+                current = current.Next;
+            } while (current != null && current != start);
 
-        /// <summary>
-        /// Returns the LineStrings built by the merging process.
-        /// </summary>
-        /// <returns></returns>
-        public IList GetMergedLineStrings() 
-        {
-            Merge();
-            return mergedLineStrings;
+            return edgeString;
         }
     }
 }

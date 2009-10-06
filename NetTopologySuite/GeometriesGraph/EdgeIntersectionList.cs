@@ -1,79 +1,126 @@
+#define C5
+//#define goletas
+using System;
 using System.Collections;
-using System.IO;
+using System.Collections.Generic;
+#if C5
+using C5;
+#endif
+#if goletas
+using Goletas.Collections;
+#endif
+using System.Text;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Geometries;
-using Wintellect.PowerCollections;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary>
-    /// A list of edge intersections along an Edge.
+    /// A list of edge intersections along an <see cref="Edge{TCoordinate}"/>.
     /// </summary>
-    public class EdgeIntersectionList
+    public class EdgeIntersectionList<TCoordinate> : IEnumerable<EdgeIntersection<TCoordinate>>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        // a list of EdgeIntersections      
-        private readonly IDictionary nodeMap = new OrderedDictionary<EdgeIntersection, object>();
-        private readonly Edge edge;  // the parent edge
+        // a map of EdgeIntersections      
+        private readonly Edge<TCoordinate> _edge; // the parent edge
+        private readonly IGeometryFactory<TCoordinate> _geoFactory;
+
+#if C5
+        private readonly TreeDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>> _nodeMap =
+            new TreeDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>>();
+#else
+#if goletas
+        private readonly Goletas.Collections.SortedDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>> _nodeMap =
+            new Goletas.Collections.SortedDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>>();
+
+#else
+        private readonly SortedDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>> _nodeMap
+            = new SortedDictionary<EdgeIntersection<TCoordinate>, EdgeIntersection<TCoordinate>>();
+#endif
+#endif
+        /// <summary>
+        /// Creates a new <see cref="EdgeIntersectionList{TCoordinate}"/>.
+        /// </summary>
+        /// <param name="geoFactory">
+        /// An <see cref="IGeometryFactory{TCoordinate}"/> instance.
+        /// </param>
+        /// <param name="edge">
+        /// The containing <see cref="Edge{TCoordinate}"/>.
+        /// </param>
+        public EdgeIntersectionList(IGeometryFactory<TCoordinate> geoFactory,
+                                    Edge<TCoordinate> edge)
+        {
+            if (geoFactory == null) throw new ArgumentNullException("geoFactory");
+            if (edge == null) throw new ArgumentNullException("edge");
+
+            _geoFactory = geoFactory;
+            _edge = edge;
+        }
 
         /// <summary>
-        /// 
+        /// Gets the number of <see cref="EdgeIntersection{TCoordinate}"/>s
+        /// in the list.
         /// </summary>
-        /// <param name="edge"></param>
-        public EdgeIntersectionList(Edge edge)
+        public Int32 Count
         {
-            this.edge = edge;
+            get { return _nodeMap.Count; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public int Count
-        {
-            get
-            {
-                return nodeMap.Count;
-            }
-        }
-
-        /// <summary> 
-        /// Adds an intersection into the list, if it isn't already there.
-        /// The input segmentIndex and dist are expected to be normalized.
-        /// </summary>
-        /// <param name="intPt"></param>
-        /// <param name="segmentIndex"></param>
-        /// <param name="dist"></param>
-        /// <returns>The EdgeIntersection found or added.</returns>
-        public EdgeIntersection Add(ICoordinate intPt, int segmentIndex, double dist)
-        {
-            EdgeIntersection eiNew = new EdgeIntersection(intPt, segmentIndex, dist);
-            EdgeIntersection ei = (EdgeIntersection) nodeMap[eiNew];
-            if (ei != null) 
-                return ei;            
-            nodeMap[eiNew] = eiNew;
-            return eiNew;
-        }
+        #region IEnumerable<EdgeIntersection<TCoordinate>> Members
 
         /// <summary> 
         /// Returns an iterator of EdgeIntersections.
         /// </summary>
-        public IEnumerator GetEnumerator() 
-        { 
-            return nodeMap.Values.GetEnumerator(); 
-        }
-            
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pt"></param>
-        /// <returns></returns>
-        public bool IsIntersection(ICoordinate pt)
+        public IEnumerator<EdgeIntersection<TCoordinate>> GetEnumerator()
         {
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            return _nodeMap.Values.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        public override String ToString()
+        {
+            StringBuilder buffer = new StringBuilder(32);
+
+            buffer.Append("Intersections: ");
+
+            foreach (EdgeIntersection<TCoordinate> intersection in this)
             {
-                EdgeIntersection ei = (EdgeIntersection) it.Current;
-                if (ei.Coordinate.Equals(pt))
-                    return true;
+                buffer.Append(intersection);
             }
+
+            return buffer.ToString();
+        }
+
+        /// <summary>
+        /// Searches all of the contained <see cref="EdgeIntersection{TCoordinate}"/>
+        /// entries to find if an itersection exists at <paramref name="point"/>.
+        /// </summary>
+        /// <param name="point">The coordinate to search for an intersection at.</param>
+        /// <returns>
+        /// <see langword="true"/> if the <see cref="EdgeIntersectionList{TCoordinate}"/>
+        /// contains an <see cref="EdgeIntersection{TCoordinate}"/> at 
+        /// <paramref name="point"/>.
+        /// </returns>
+        public Boolean IsIntersection(TCoordinate point)
+        {
+            // TODO: consider a map or tree to speed this up
+            foreach (EdgeIntersection<TCoordinate> intersection in this)
+            {
+                if (intersection.Coordinate.Equals(point))
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -82,32 +129,31 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// </summary>
         public void AddEndpoints()
         {
-            int maxSegIndex = edge.Points.Length - 1;
-            Add(edge.Points[0], 0, 0.0);
-            Add(edge.Points[maxSegIndex], maxSegIndex, 0.0);
+            Add(_edge.Coordinates.First, 0, 0.0);
+            Add(_edge.Coordinates.Last, _edge.Coordinates.LastIndex, 0.0);
         }
 
         /// <summary> 
-        /// Creates new edges for all the edges that the intersections in this
-        /// list split the parent edge into.
-        /// Adds the edges to the input list (this is so a single list
-        /// can be used to accumulate all split edges for a Geometry).
+        /// Generates and returns new edges for all the 
+        /// edges that the intersections in this list split the parent edge into.
         /// </summary>
-        /// <param name="edgeList"></param>
-        public void AddSplitEdges(IList edgeList)
+        public IEnumerable<Edge<TCoordinate>> GetSplitEdges()
         {
-            // ensure that the list has entries for the first and last point of the edge
+            // ensure that the list has entries for the first and last 
+            // point of the edge
             AddEndpoints();
 
-            IEnumerator it = GetEnumerator();
+            IEnumerator<EdgeIntersection<TCoordinate>> it = GetEnumerator();
             it.MoveNext();
+
             // there should always be at least two entries in the list
-            EdgeIntersection eiPrev = (EdgeIntersection) it.Current;
-            while (it.MoveNext()) 
+            EdgeIntersection<TCoordinate> eiPrev = it.Current;
+
+            while (it.MoveNext())
             {
-                EdgeIntersection ei = (EdgeIntersection) it.Current;
-                Edge newEdge = CreateSplitEdge(eiPrev, ei);
-                edgeList.Add(newEdge);
+                EdgeIntersection<TCoordinate> ei = it.Current;
+                Edge<TCoordinate> newEdge = CreateSplitEdge(eiPrev, ei);
+                yield return newEdge;
 
                 eiPrev = ei;
             }
@@ -118,43 +164,76 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// (and including) the two intersections.
         /// The label for the new edge is the same as the label for the parent edge.
         /// </summary>
-        /// <param name="ei0"></param>
-        /// <param name="ei1"></param>
-        public Edge CreateSplitEdge(EdgeIntersection ei0, EdgeIntersection ei1)
-        {        
-            int npts = ei1.SegmentIndex - ei0.SegmentIndex + 2;
-            ICoordinate lastSegStartPt = edge.Points[ei1.SegmentIndex];
-            // if the last intersection point is not equal to the its segment start pt,
-            // add it to the points list as well.
-            // (This check is needed because the distance metric is not totally reliable!)
-            // The check for point equality is 2D only - Z values are ignored
-            bool useIntPt1 = ei1.Distance > 0.0 || ! ei1.Coordinate.Equals2D(lastSegStartPt);
-            if (! useIntPt1) 
-                npts--;
+        public Edge<TCoordinate> CreateSplitEdge(EdgeIntersection<TCoordinate> ei0,
+                                                 EdgeIntersection<TCoordinate> ei1)
+        {
+            ICoordinateSequence<TCoordinate> pts;
 
-            ICoordinate[] pts = new ICoordinate[npts];
-            int ipt = 0;
-            pts[ipt++] = new Coordinate(ei0.Coordinate);
-            for (int i = ei0.SegmentIndex + 1; i <= ei1.SegmentIndex; i++) 
-                pts[ipt++] = edge.Points[i];
+            if (ei0.SegmentIndex == ei1.SegmentIndex)
+            {
+                ICoordinateSequenceFactory<TCoordinate> seqFactory
+                    = _edge.Coordinates.CoordinateSequenceFactory;
 
-            if (useIntPt1) 
-                pts[ipt] = ei1.Coordinate;
-            return new Edge(pts, new Label(edge.Label));
+                pts = seqFactory.Create(ei0.Coordinate, ei1.Coordinate);
+            }
+            else
+            {
+                // if the last intersection point is not equal to the its segment start pt,
+                // add it to the points list as well.
+                // (This check is needed because the distance metric is not totally reliable!)
+                // The check for point equality is 2D only - Z values are ignored
+                // 3D_UNSAFE
+                TCoordinate lastSegStartPt = _edge.Coordinates[ei1.SegmentIndex];
+                Boolean useIntersectionPt1 = ei1.Distance > 0.0 ||
+                                             !ei1.Coordinate.Equals(lastSegStartPt);
+
+                pts = useIntersectionPt1
+                          ? _edge.Coordinates.Splice(ei0.Coordinate,
+                                                     ei0.SegmentIndex + 1,
+                                                     ei1.SegmentIndex,
+                                                     ei1.Coordinate)
+                          : _edge.Coordinates.Splice(ei0.Coordinate,
+                                                     ei0.SegmentIndex + 1,
+                                                     ei1.SegmentIndex);
+            }
+
+            return new Edge<TCoordinate>(_geoFactory, pts, _edge.Label.Value);
+        }
+
+        /// <summary> 
+        /// Adds an intersection into the list, if it isn't already there.
+        /// The input segmentIndex and dist are expected to be normalized.
+        /// </summary>
+        /// <returns>
+        /// The <see cref="EdgeIntersection{TCoordinate}"/> found or added.
+        /// </returns>
+        public EdgeIntersection<TCoordinate> Add(TCoordinate intersection,
+                                                 Int32 segmentIndex,
+                                                 Double dist)
+        {
+            EdgeIntersection<TCoordinate> eiNew
+                = new EdgeIntersection<TCoordinate>(intersection, segmentIndex, dist);
+            EdgeIntersection<TCoordinate> ei;
+
+#if C5
+            if ( _nodeMap.Find(eiNew, out ei) )
+#else
+            if (_nodeMap.TryGetValue(eiNew, out ei))
+#endif
+            {
+                return ei;
+            }
+            _nodeMap.Add(eiNew, eiNew);
+            return eiNew;
         }
 
         /// <summary>
-        /// 
+        /// Clears the <see cref="EdgeIntersectionList{TCoordinate}"/> of all
+        /// <see cref="EdgeIntersection{TCoordinate}"/>s.
         /// </summary>
-        /// <param name="outstream"></param>
-        public void Write(StreamWriter outstream)
+        public void Clear()
         {
-            outstream.WriteLine("Intersections:");
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
-            {
-                EdgeIntersection ei = (EdgeIntersection)it.Current;
-                ei.Write(outstream);
-            }
+            _nodeMap.Clear();
         }
     }
 }

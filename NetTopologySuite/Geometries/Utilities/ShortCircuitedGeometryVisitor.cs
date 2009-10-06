@@ -1,4 +1,7 @@
+using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries.Utilities
 {
@@ -6,47 +9,44 @@ namespace GisSharpBlog.NetTopologySuite.Geometries.Utilities
     /// A visitor to Geometry elements which can
     /// be short-circuited by a given condition.
     /// </summary>
-    public abstract class ShortCircuitedGeometryVisitor
+    [Obsolete("The visitor pattern will be replaced by an enumeration / query pattern.")]
+    public abstract class ShortCircuitedGeometryVisitor<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private bool isDone = false;
+        private Boolean _isDone;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ShortCircuitedGeometryVisitor() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        public void ApplyTo(IGeometry geom) 
+        public void ApplyTo(IGeometry<TCoordinate> geom)
         {
-            for (int i = 0; i < geom.NumGeometries && ! isDone; i++) 
+            // Short-circuit any more comparisons if the visitor has been set
+            // to done.
+            if (_isDone)
             {
-                IGeometry element = geom.GetGeometryN(i);
-                if (!(element is IGeometryCollection)) 
+                return;
+            }
+
+            IGeometryCollection<TCoordinate> collection = geom as IGeometryCollection<TCoordinate>;
+
+            if (collection != null)
+            {
+                foreach (IGeometry<TCoordinate> component in collection)
                 {
-                    Visit(element);
-                    if (IsDone()) 
-                    {
-                        isDone = true;
-                        return;
-                    }
+                    ApplyTo(component);
                 }
-                else ApplyTo(element);
+            }
+            else
+            {
+                Visit(geom);
+
+                if (IsDone())
+                {
+                    _isDone = true;
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="element"></param>
-        protected abstract void Visit(IGeometry element);
+        protected abstract void Visit(IGeometry<TCoordinate> element);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected abstract bool IsDone();
+        protected abstract Boolean IsDone();
     }
 }

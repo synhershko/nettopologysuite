@@ -1,45 +1,35 @@
 using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
+
+#if DOTNET35
+using System.Linq;
+#endif
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary>
-    /// Specifies and implements various fundamental Computational Geometric algorithms.
-    /// The algorithms supplied in this class are robust for double-precision floating point.
+    /// Specifies and implements various fundamental computational geometric algorithms.
+    /// The algorithms supplied in this class are robust for Double-precision floating point.
     /// </summary>
-    public static class CGAlgorithms
-    {        
-        /// <summary> 
-        /// A value that indicates an orientation of clockwise, or a right turn.
-        /// </summary>
-        public const int Clockwise      = -1;
-        /// <summary> 
-        /// A value that indicates an orientation of clockwise, or a right turn.
-        /// </summary>
-        public const int Right         = Clockwise;
+    public static class CGAlgorithms<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
+    {
+        public static RobustLineIntersector<TCoordinate> CreateRobustLineIntersector(
+            IGeometryFactory<TCoordinate> geoFactory)
+        {
+            return new RobustLineIntersector<TCoordinate>(geoFactory);
+        }
 
-        /// <summary>
-        /// A value that indicates an orientation of counterclockwise, or a left turn.
-        /// </summary>
-        public const int CounterClockwise  = 1;
-        /// <summary>
-        /// A value that indicates an orientation of counterclockwise, or a left turn.
-        /// </summary>
-        public const int Left              = CounterClockwise;
-
-        /// <summary>
-        /// A value that indicates an orientation of collinear, or no turn (straight).
-        /// </summary>
-        public const int Collinear         = 0;
-        /// <summary>
-        /// A value that indicates an orientation of collinear, or no turn (straight).
-        /// </summary>
-        public const int Straight = Collinear;
-        
         /// <summary> 
-        /// Returns the index of the direction of the point <c>q</c>
-        /// relative to a vector specified by <c>p1-p2</c>.
+        /// Returns the index of the direction of the point <paramref name="q"/>
+        /// relative to a vector specified by 
+        /// <paramref name="p1"/><c>-</c><paramref name="p2"/>.
         /// </summary>
         /// <param name="p1">The origin point of the vector.</param>
         /// <param name="p2">The final point of the vector.</param>
@@ -49,17 +39,33 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// -1 if q is clockwise (right) from p1-p2,
         /// 0 if q is collinear with p1-p2.
         /// </returns>
-        public static int OrientationIndex(ICoordinate p1, ICoordinate p2, ICoordinate q) 
+        public static Int32 OrientationIndex(TCoordinate p1, TCoordinate p2, TCoordinate q)
         {
             // travelling along p1->p2, turn counter clockwise to get to q return 1,
             // travelling along p1->p2, turn clockwise to get to q return -1,
             // p1, p2 and q are colinear return 0.
-            double dx1 = p2.X - p1.X;
-            double dy1 = p2.Y - p1.Y;
-            double dx2 = q.X - p2.X;
-            double dy2 = q.Y - p2.Y;
+            Double dx1 = p2[Ordinates.X] - p1[Ordinates.X];
+            Double dy1 = p2[Ordinates.Y] - p1[Ordinates.Y];
+            Double dx2 = q[Ordinates.X] - p2[Ordinates.X];
+            Double dy2 = q[Ordinates.Y] - p2[Ordinates.Y];
+
+            // NOTE: Can this be moved down to NPack?
             return RobustDeterminant.SignOfDet2x2(dx1, dy1, dx2, dy2);
-        }        
+        }
+
+        ///<summary>
+        /// Determines whether a point lies in the interior, on the boundary, or in the exterior
+        /// of a ring. The ring may be oriented in either direction.
+        /// This method does <i>not</i> first check the point against the envelope
+        /// of the ring.
+        ///</summary>
+        ///<param name="p">point to check for ring inclusion</param>
+        ///<param name="ring">an array of coordinates representing the ring (which must have first point identical to last point)</param>
+        ///<returns>the <see cref="Locations"/> of p relative to the ring</returns>
+        public static Locations LocatePointInRing(TCoordinate p, IEnumerable<TCoordinate> ring)
+        {
+            return RayCrossingCounter<TCoordinate>.LocatePointInRing(p, ring);
+        }
 
         /// <summary> 
         /// Test whether a point lies inside a ring.
@@ -70,121 +76,143 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="p">Point to check for ring inclusion.</param>
         /// <param name="ring">Assumed to have first point identical to last point.</param>
-        /// <returns><c>true</c> if p is inside ring.</returns>
-        public static bool IsPointInRing(ICoordinate p, ICoordinate[] ring) 
+        /// <returns><see langword="true"/> if p is inside ring.</returns>
+        public static Boolean IsPointInRing(TCoordinate p, IEnumerable<TCoordinate> ring)
         {
-            if (p == null) 
-                throw new ArgumentNullException("p", "coordinate 'p' is null");
-            if (ring == null) 
-                throw new ArgumentNullException("ring", "ring 'ring' is null");
-
-            int crossings = 0;            
-            /*
-            *  For each segment l = (i-1, i), see if it crosses ray from test point in positive x direction.
-            */
-            for (int i = 1; i < ring.Length; i++) 
-            {
-                int i1 = i - 1;
-                ICoordinate p1 = ring[i];
-                ICoordinate p2 = ring[i1];                
-
-                if (((p1.Y > p.Y) && (p2.Y <= p.Y)) || ((p2.Y > p.Y) && (p1.Y <= p.Y))) 
-                {
-                    double x1 = p1.X - p.X;
-                    double y1 = p1.Y - p.Y;
-                    double x2 = p2.X - p.X;
-                    double y2 = p2.Y - p.Y;
-                    /*
-                    *  segment straddles x axis, so compute intersection.
-                    */
-                    double xInt = RobustDeterminant.SignOfDet2x2(x1, y1, x2, y2) / (y2 - y1);
-
-                    /*
-                    *  crosses ray if strictly positive intersection.
-                    */
-                    if (0.0 < xInt) 
-                        crossings++;
-                }
-            }
-
-            /*
-            *  p is inside if number of crossings is odd.
-            */
-            if ((crossings % 2) == 1) 
-                return true;            
-            else return false;
+            return LocatePointInRing(p, ring) != Locations.Exterior;
         }
 
         /// <summary> 
         /// Test whether a point lies on the line segments defined by a
         /// list of coordinates.
         /// </summary>
-        /// <param name="p"></param>
-        /// <param name="pt"></param>
         /// <returns> 
-        /// <c>true</c> true if
+        /// <see langword="true"/> true if
         /// the point is a vertex of the line or lies in the interior of a line
         /// segment in the linestring.
         /// </returns>
-        public static bool IsOnLine(ICoordinate p, ICoordinate[] pt) 
+        public static Boolean IsOnLine(TCoordinate p, IEnumerable<TCoordinate> line,
+                                       IGeometryFactory<TCoordinate> geoFactory)
         {
-            LineIntersector lineIntersector = new RobustLineIntersector();
-            for (int i = 1; i < pt.Length; i++) 
-            {
-                ICoordinate p0 = pt[i - 1];
-                ICoordinate p1 = pt[i];
-                lineIntersector.ComputeIntersection((Coordinate) p, (Coordinate) p0, (Coordinate) p1);
-                if (lineIntersector.HasIntersection) 
-                    return true;                
-            }
-            return false;
-        }
- 
-		/// <summary>
-        /// Computes whether a ring defined by an array of <see cref="Coordinate" />s is oriented counter-clockwise.
-        /// The list of points is assumed to have the first and last points equal.
-        /// This will handle coordinate lists which contain repeated points.
-        /// This algorithm is only guaranteed to work with valid rings.
-        /// If the ring is invalid (e.g. self-crosses or touches),
-        /// the computed result may not be correct.
-		/// </summary>>
-        /// <param name="ring"></param>
-        /// <returns></returns>
-        public static bool IsCCW(ICoordinate[] ring) 
-        {
-            // # of points without closing endpoint
-            int nPts = ring.Length - 1;
+            LineIntersector<TCoordinate> lineIntersector = CreateRobustLineIntersector(geoFactory);
 
-            // find highest point
-            ICoordinate hiPt = ring[0];
-            int hiIndex = 0;
-            for (int i = 1; i <= nPts; i++)
+            foreach (Pair<TCoordinate> segment in Slice.GetOverlappingPairs(line))
             {
-                ICoordinate p = ring[i];
-                if (p.Y > hiPt.Y)
+                Intersection<TCoordinate> intersection = lineIntersector.ComputeIntersection(p, segment);
+
+                if (intersection.HasIntersection)
                 {
-                    hiPt = p;
-                    hiIndex = i;
+                    return true;
                 }
             }
 
-            // find distinct point before highest point
-            int iPrev = hiIndex;
-            do
+            return false;
+        }
+
+        /// <summary>
+        /// Computes whether a ring defined by an array of <typeparamref name="TCoordinate"/>s 
+        /// is oriented counter-clockwise.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The list of points is assumed to have the first and last points equal.
+        /// This will handle coordinates which contain repeated points.
+        /// This algorithm is only guaranteed to work with valid rings.
+        /// If the ring is invalid (e.g. self-crosses or touches),
+        /// the computed result may not be correct.
+        /// </para>
+        /// <para>
+        /// In NTS v2.0, this method was modified to handle enumerations of coordinates
+        /// which allows clients to send it results of coordinate queries.
+        /// </para>
+        /// </remarks>
+        public static Boolean IsCCW(IEnumerable<TCoordinate> ring)
+        {
+            TCoordinate first = default(TCoordinate);
+            TCoordinate last = default(TCoordinate);
+            TCoordinate current = default(TCoordinate);
+            //TCoordinate next = default(TCoordinate);
+
+            TCoordinate beforeHighPoint = default(TCoordinate);
+            TCoordinate highPoint = default(TCoordinate);
+            TCoordinate afterHighPoint = default(TCoordinate);
+
+            Boolean firstIsSet = false;
+            Boolean needToSetNextPoint = false;
+
+            // find highest point and the points to either side
+            foreach (TCoordinate coordinate in ring)
             {
-                iPrev = iPrev - 1;
-                if (iPrev < 0) iPrev = nPts;
-            } 
-            while (ring[iPrev].Equals2D(hiPt) && iPrev != hiIndex);
+                TCoordinate previous = current;
+                current = coordinate;
 
-            // find distinct point after highest point
-            int iNext = hiIndex;
-            do
-                iNext = (iNext + 1) % nPts;
-            while (ring[iNext].Equals2D(hiPt) && iNext != hiIndex);
+                if (needToSetNextPoint && !current.Equals(highPoint))
+                {
+                    needToSetNextPoint = false;
+                    afterHighPoint = current;
+                }
 
-            ICoordinate prev = ring[iPrev];
-            ICoordinate next = ring[iNext];
+                if (!firstIsSet)
+                {
+                    firstIsSet = true;
+                    first = coordinate;
+                    highPoint = first;
+                    needToSetNextPoint = true;
+                }
+
+                if (current[Ordinates.Y] > highPoint[Ordinates.Y])
+                {
+                    beforeHighPoint = previous;
+                    highPoint = current;
+                    needToSetNextPoint = true;
+                }
+
+                last = coordinate;
+            }
+
+            // The high point was the last point, so wrap the next point
+            // in the ring around to the first point and search for the next
+            // unique point
+            if (needToSetNextPoint)
+            {
+                if (first.Equals(highPoint))
+                {
+                    foreach (TCoordinate coordinate in Enumerable.Skip(ring, 1))
+                    {
+                        if (!coordinate.Equals(highPoint))
+                        {
+                            afterHighPoint = coordinate;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    afterHighPoint = first;
+                }
+            }
+
+            // The high point was the first point, so wrap the previous
+            // point in the ring around to the last point and search for the next
+            // unique point
+            if (Coordinates<TCoordinate>.IsEmpty(beforeHighPoint))
+            {
+                if (last.Equals(highPoint))
+                {
+                    foreach (TCoordinate coordinate in Enumerable.Skip(Enumerable.Reverse(ring), 1))
+                    {
+                        if (!coordinate.Equals(highPoint))
+                        {
+                            beforeHighPoint = coordinate;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    beforeHighPoint = last;
+                }
+            }
 
             /*
              * This check catches cases where the ring contains an A-B-A configuration of points.
@@ -192,48 +220,51 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
              * (including the case where the input array has fewer than 4 elements),
              * or it contains coincident line segments.
              */
-            if (prev.Equals2D(hiPt) || next.Equals2D(hiPt) || prev.Equals2D(next))
+            if (beforeHighPoint.Equals(highPoint) ||
+                afterHighPoint.Equals(highPoint) ||
+                beforeHighPoint.Equals(afterHighPoint))
+            {
                 return false;
+            }
 
-            int disc = ComputeOrientation(prev, hiPt, next);
+            Int32 discriminant = OrientationIndex(beforeHighPoint, highPoint, afterHighPoint);
 
             /*
              *  If disc is exactly 0, lines are collinear.  There are two possible cases:
              *  (1) the lines lie along the x axis in opposite directions
              *  (2) the lines lie on top of one another
              *
-             *  (1) is handled by checking if next is left of prev ==> CCW
-             *  (2) will never happen if the ring is valid, so don't check for it
+             *  #1 is handled by checking if next is left of prev ==> CCW
+             *  #2 will never happen if the ring is valid, so don't check for it
              *  (Might want to assert this)
              */
-            bool isCCW = false;
-            if (disc == 0)            
-                // poly is CCW if prev x is right of next x
-                isCCW = (prev.X > next.X);            
-            else
-                // if area is positive, points are ordered CCW
-                isCCW = (disc > 0);
+
+            Boolean isCCW = discriminant == 0
+                                ? beforeHighPoint[Ordinates.X] > afterHighPoint[Ordinates.X]
+                                : discriminant > 0;
+
             return isCCW;
         }
 
         /// <summary>
         /// Computes the orientation of a point q to the directed line segment p1-p2.
+        /// </summary>
+        /// <remarks>
         /// The orientation of a point relative to a directed line segment indicates
         /// which way you turn to get to q after travelling from p1 to p2.
-        /// </summary>
-        /// <param name="p1"></param>
-        /// <param name="p2"></param>
-        /// <param name="q"></param>
+        /// </remarks>
         /// <returns> 
         /// 1 if q is counter-clockwise from p1-p2,
         /// -1 if q is clockwise from p1-p2,
         /// 0 if q is collinear with p1-p2-
         /// </returns>
-        public static int ComputeOrientation(ICoordinate p1, ICoordinate p2, ICoordinate q) 
+        public static Orientation ComputeOrientation(TCoordinate p1, TCoordinate p2, TCoordinate q)
         {
-            return OrientationIndex(p1, p2, q);
+            return (Orientation) OrientationIndex(p1, p2, q);
         }
 
+#warning Non-robust method
+        // NOTE: Can this be moved down to NPack?
         /// <summary> 
         /// Computes the distance from a point p to a line segment AB.
         /// Note: NON-ROBUST!
@@ -242,11 +273,17 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// <param name="A">One point of the line.</param>
         /// <param name="B">Another point of the line (must be different to A).</param>
         /// <returns> The distance from p to line segment AB.</returns>
-        public static double DistancePointLine(ICoordinate p, ICoordinate A, ICoordinate B)
+        public static Double DistancePointLine(TCoordinate p, TCoordinate A, TCoordinate B)
         {
             // if start == end, then use pt distance
-            if (A.Equals(B)) 
+            if (A.Equals(B))
+            {
                 return p.Distance(A);
+            }
+
+            // codekaizen:  Isn't this the standard v1 · v2 / norm(v2)^2 formula to project
+            //              a point to the vector space spanned by the line?
+            //              NPack should be able to handle it.
 
             // otherwise use comp.graphics.algorithms Frequently Asked Questions method
             /*(1)     	      AC dot AB
@@ -261,12 +298,21 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
 		                0<r<1 Point is interior to AB
 	        */
 
-            double r =  ( (p.X - A.X) * (B.X - A.X) + (p.Y - A.Y) * (B.Y - A.Y) )
-                        /
-                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
+            Double r = ((p[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X])
+                        + (p[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y]))
+                       /
+                       ((B[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X])
+                        + (B[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y]));
 
-            if (r <= 0.0) return p.Distance(A);
-            if (r >= 1.0) return p.Distance(B);
+            if (r <= 0.0)
+            {
+                return p.Distance(A);
+            }
+
+            if (r >= 1.0)
+            {
+                return p.Distance(B);
+            }
 
 
             /*(2)
@@ -277,13 +323,19 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
 		                Then the distance from C to Point = |s|*Curve.
 	        */
 
-            double s =  ( (A.Y - p.Y) * (B.X - A.X) - (A.X - p.X) * (B.Y - A.Y) )
-                        /
-                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
+            Double s = ((A[Ordinates.Y] - p[Ordinates.Y])*(B[Ordinates.X] - A[Ordinates.X]) -
+                        (A[Ordinates.X] - p[Ordinates.X])*(B[Ordinates.Y] - A[Ordinates.Y]))
+                       /
+                       ((B[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X]) +
+                        (B[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y]));
 
-            return Math.Abs(s) * Math.Sqrt(((B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y)));
+            return Math.Abs(s)*
+                   Math.Sqrt(
+                       (B[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X]) +
+                       (B[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y]));
         }
 
+        // NOTE: Can this be moved down to NPack?
         /// <summary> 
         /// Computes the perpendicular distance from a point p
         /// to the (infinite) line containing the points AB
@@ -292,7 +344,7 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// <param name="A">One point of the line.</param>
         /// <param name="B">Another point of the line (must be different to A).</param>
         /// <returns>The perpendicular distance from p to line AB.</returns>
-        public static double DistancePointLinePerpendicular(ICoordinate p, ICoordinate A, ICoordinate B)
+        public static Double DistancePointLinePerpendicular(TCoordinate p, TCoordinate A, TCoordinate B)
         {
             // use comp.graphics.algorithms Frequently Asked Questions method
             /*(2)
@@ -303,29 +355,45 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
                         Then the distance from C to Point = |s|*Curve.
             */
 
-            double s =  ( (A.Y - p.Y) * (B.X - A.X) - (A.X - p.X) * (B.Y - A.Y) )
-                        /
-                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
+            Double s = ((A[Ordinates.Y] - p[Ordinates.Y])*(B[Ordinates.X] - A[Ordinates.X]) -
+                        (A[Ordinates.X] - p[Ordinates.X])*(B[Ordinates.Y] - A[Ordinates.Y]))
+                       /
+                       ((B[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X]) +
+                        (B[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y]));
 
-            return Math.Abs(s) * Math.Sqrt(((B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y)));
+            return Math.Abs(s)*
+                   Math.Sqrt(((B[Ordinates.X] - A[Ordinates.X])*(B[Ordinates.X] - A[Ordinates.X]) +
+                              (B[Ordinates.Y] - A[Ordinates.Y])*(B[Ordinates.Y] - A[Ordinates.Y])));
         }
 
+        public static Double DistanceLineLine(Pair<TCoordinate> line0, Pair<TCoordinate> line1)
+        {
+            return DistanceLineLine(line0.First, line0.Second, line1.First, line1.Second);
+        }
+
+#warning Non-robust method
+        // NOTE: Can this be moved down to NPack?
         /// <summary> 
         /// Computes the distance from a line segment AB to a line segment CD.
         /// Note: NON-ROBUST!
         /// </summary>
-        /// <param name="A">A point of one line.</param>
-        /// <param name="B">The second point of the line (must be different to A).</param>
-        /// <param name="C">One point of the line.</param>
-        /// <param name="D">Another point of the line (must be different to A).</param>
+        /// <param name="a">A point of one line.</param>
+        /// <param name="b">The second point of the line (must be different to A).</param>
+        /// <param name="c">One point of the line.</param>
+        /// <param name="d">Another point of the line (must be different to A).</param>
         /// <returns>The distance from line segment AB to line segment CD.</returns>
-        public static double DistanceLineLine(ICoordinate A, ICoordinate B, ICoordinate C, ICoordinate D)
+        public static Double DistanceLineLine(TCoordinate a, TCoordinate b, TCoordinate c, TCoordinate d)
         {
             // check for zero-length segments
-            if (A.Equals(B))    
-                return DistancePointLine(A,C,D);
-            if (C.Equals(D))    
-                return DistancePointLine(D,A,B);
+            if (a.Equals(b))
+            {
+                return DistancePointLine(a, c, d);
+            }
+
+            if (c.Equals(d))
+            {
+                return DistancePointLine(d, a, b);
+            }
 
             // AB and CD are line segments
             /* from comp.graphics.algo
@@ -350,68 +418,87 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
 		            If the numerator in eqn 1 is also zero, AB & CD are collinear.
 
 	        */
-            double r_top = (A.Y - C.Y) * (D.X - C.X) - (A.X - C.X) * (D.Y - C.Y);
-            double r_bot = (B.X - A.X) * (D.Y - C.Y) - (B.Y - A.Y) * (D.X - C.X);
+            Double r_top = (a[Ordinates.Y] - c[Ordinates.Y])*(d[Ordinates.X] - c[Ordinates.X]) -
+                           (a[Ordinates.X] - c[Ordinates.X])*(d[Ordinates.Y] - c[Ordinates.Y]);
+            Double r_bot = (b[Ordinates.X] - a[Ordinates.X])*(d[Ordinates.Y] - c[Ordinates.Y]) -
+                           (b[Ordinates.Y] - a[Ordinates.Y])*(d[Ordinates.X] - c[Ordinates.X]);
 
-            double s_top = (A.Y - C.Y) * (B.X - A.X) - (A.X - C.X) * (B.Y - A.Y);
-            double s_bot = (B.X - A.X) * (D.Y - C.Y) - (B.Y - A.Y) * (D.X - C.X);
+            Double s_top = (a[Ordinates.Y] - c[Ordinates.Y])*(b[Ordinates.X] - a[Ordinates.X]) -
+                           (a[Ordinates.X] - c[Ordinates.X])*(b[Ordinates.Y] - a[Ordinates.Y]);
+            Double s_bot = (b[Ordinates.X] - a[Ordinates.X])*(d[Ordinates.Y] - c[Ordinates.Y]) -
+                           (b[Ordinates.Y] - a[Ordinates.Y])*(d[Ordinates.X] - c[Ordinates.X]);
 
-            if ((r_bot==0) || (s_bot == 0))             
-                return  Math.Min(DistancePointLine(A,C,D),
-	                    Math.Min(DistancePointLine(B,C,D),
-	                    Math.Min(DistancePointLine(C,A,B),
-	                    DistancePointLine(D,A,B) ) ) );
+            if ((r_bot == 0) || (s_bot == 0))
+            {
+                return Math.Min(DistancePointLine(a, c, d),
+                                Math.Min(DistancePointLine(b, c, d),
+                                         Math.Min(DistancePointLine(c, a, b),
+                                                  DistancePointLine(d, a, b))));
+            }
 
-            
-            double s = s_top/s_bot;
-            double r = r_top/r_bot;
 
-            if ((r < 0) || ( r > 1) || (s < 0) || (s > 1))	
+            Double s = s_top/s_bot;
+            Double r = r_top/r_bot;
+
+            if ((r < 0) || (r > 1) || (s < 0) || (s > 1))
+            {
                 //no intersection
-                return  Math.Min(DistancePointLine(A,C,D),
-	                    Math.Min(DistancePointLine(B,C,D),
-	                    Math.Min(DistancePointLine(C,A,B),
-	                    DistancePointLine(D,A,B) ) ) );
-            
+                return Math.Min(DistancePointLine(a, c, d),
+                                Math.Min(DistancePointLine(b, c, d),
+                                         Math.Min(DistancePointLine(c, a, b),
+                                                  DistancePointLine(d, a, b))));
+            }
+
             return 0.0; //intersection exists
         }
 
         /// <summary>
-        /// Returns the signed area for a ring.  The area is positive ifthe ring is oriented CW.
+        /// Returns the signed area for a ring.  The area is positive if
+        /// the ring is oriented CW.
         /// </summary>
-        /// <param name="ring"></param>
-        /// <returns></returns>
-        public static double SignedArea(ICoordinate[] ring)
+        public static Double SignedArea(IEnumerable<TCoordinate> ring)
         {
-            if (ring.Length < 3) 
-                return 0.0;
-
-            double sum = 0.0;
-            for (int i = 0; i < ring.Length - 1; i++) 
+            if (!Slice.CountGreaterThan(ring, 2))
             {
-                double bx = ring[i].X;
-                double by = ring[i].Y;
-                double cx = ring[i + 1].X;
-                double cy = ring[i + 1].Y;
-                sum += (bx + cx) * (cy - by);
+                return 0.0;
             }
-            return -sum  / 2.0;
+
+            Double sum = 0.0;
+
+            foreach (Pair<TCoordinate> pair in Slice.GetOverlappingPairs(ring))
+            {
+                TCoordinate p1 = pair.First;
+                TCoordinate p2 = pair.Second;
+
+                Double bx = p1[Ordinates.X];
+                Double by = p1[Ordinates.Y];
+                Double cx = p2[Ordinates.X];
+                Double cy = p2[Ordinates.Y];
+                sum += (bx + cx)*(cy - by);
+            }
+
+            return -sum/2.0;
         }
 
         /// <summary> 
         /// Computes the length of a linestring specified by a sequence of points.
         /// </summary>
-        /// <param name="pts">The points specifying the linestring.</param>
+        /// <param name="coordinates">The points specifying the linestring.</param>
         /// <returns>The length of the linestring.</returns>
-        public static double Length(ICoordinateSequence pts) 
+        public static Double Length(ICoordinateSequence<TCoordinate> coordinates)
         {
-            if (pts.Count < 1) 
+            if (coordinates.Count < 1)
+            {
                 return 0.0;
-            
-            double sum = 0.0;
-            for (int i = 1; i < pts.Count; i++) 
-                sum += pts.GetCoordinate(i).Distance(pts.GetCoordinate(i - 1));
-            
+            }
+
+            Double sum = 0.0;
+
+            for (Int32 i = 1; i < coordinates.Count; i++)
+            {
+                sum += coordinates[i].Distance(coordinates[i - 1]);
+            }
+
             return sum;
         }
     }

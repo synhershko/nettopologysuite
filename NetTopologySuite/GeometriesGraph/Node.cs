@@ -1,190 +1,199 @@
-using System.IO;
+using System;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary>
-    /// 
+    /// Represents a node in a <see cref="GeometryGraph{TCoordinate}"/>.
     /// </summary>
-    public class Node : GraphComponent
+    /// <typeparam name="TCoordinate">The type of coordinate.</typeparam>
+    public class Node<TCoordinate> : GraphComponent<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// Only non-null if this node is precise.
-        /// </summary>
-        protected ICoordinate coord = null;     
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        protected EdgeEndStar edges = null;
+        // Only valid if this node is precise.
+        private readonly TCoordinate _coord;
+        private readonly EdgeEndStar<TCoordinate> _edges;
 
         /// <summary>
-        /// 
+        /// Creates a new <see cref="Node{TCoordinate}"/> instance at the given
+        /// <typeparamref name="TCoordinate"/> and with an 
+        /// <see cref="EdgeEndStar{TCoordinate}"/> to maintain an ordered list of
+        /// incident edges.
         /// </summary>
-        /// <param name="coord"></param>
-        /// <param name="edges"></param>
-        public Node(ICoordinate coord, EdgeEndStar edges)
+        /// <param name="coord">The coordinate which the node models.</param>
+        /// <param name="edges">
+        /// An <see cref="EdgeEndStar{TCoordinate}"/> to maintain incident edges.
+        /// </param>
+        public Node(TCoordinate coord, EdgeEndStar<TCoordinate> edges)
         {
-            this.coord = coord;
-            this.edges = edges;
-            label = new Label(0, Locations.Null);
+            _coord = coord;
+            _edges = edges;
+            Label = new Label(0, Locations.None);
+        }
+
+        public override TCoordinate Coordinate
+        {
+            get { return _coord; }
         }
 
         /// <summary>
-        /// 
+        /// An <see cref="EdgeEndStar{TCoordinate}"/> used to keep an ordered
+        /// list of incident edges on the node.
         /// </summary>
-        public override ICoordinate Coordinate
+        public EdgeEndStar<TCoordinate> Edges
         {
-            get
-            {
-                return coord; 
-            }
+            get { return _edges; }
+        }
+
+        public override Boolean IsIsolated
+        {
+            get { return Label == null || Label.Value.GeometryCount == 1; }
         }
 
         /// <summary>
-        /// 
+        /// Basic nodes do not compute intersection matrixes.
         /// </summary>
-        public EdgeEndStar Edges
+        public override void ComputeIntersectionMatrix(IntersectionMatrix matrix)
         {
-            get
-            {
-                return edges; 
-            }
         }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsIsolated
-        {
-            get
-            {
-                return (label.GeometryCount == 1);
-            }
-        }
-
-        /// <summary>
-        /// Basic nodes do not compute IMs.
-        /// </summary>
-        /// <param name="im"></param>
-        public override void ComputeIM(IntersectionMatrix im) { }
 
         /// <summary> 
         /// Add the edge to the list of edges at this node.
         /// </summary>
-        /// <param name="e"></param>
-        public void Add(EdgeEnd e)
+        public void Add(EdgeEnd<TCoordinate> e)
         {
             // Assert: start pt of e is equal to node point
-            edges.Insert(e);
+            _edges.Insert(e);
             e.Node = this;
         }
 
         /// <summary>
-        /// 
+        /// Merges the given <see cref="Node{TCoordinate}"/>'s
+        /// <see cref="Node{TCoordinate}.Label"/> to this <see cref="Label"/>.
         /// </summary>
-        /// <param name="n"></param>
-        public void MergeLabel(Node n)
+        /// <seealso cref="MergeLabel(Label)"/>
+        public void MergeLabel(Node<TCoordinate> n)
         {
-            MergeLabel(n.Label);
+            if (n.Label != null)
+            {
+                MergeLabel(n.Label.Value);
+            }
         }
 
         /// <summary>
-        /// To merge labels for two nodes,
-        /// the merged location for each LabelElement is computed.
-        /// The location for the corresponding node LabelElement is set to the result,
-        /// as long as the location is non-null.
+        /// Merges the given <see cref="Label"/>'s locations to this node's label's
+        /// locations.
         /// </summary>
-        /// <param name="label2"></param>
-        public void MergeLabel(Label label2)
+        /// <remarks>
+        /// To merge labels for two nodes, the merged location for each 
+        /// <see cref="Label"/> is computed.
+        /// The location for the corresponding node <see cref="Label"/> 
+        /// is set to the result, as long as the location is non-null.
+        /// </remarks>
+        public void MergeLabel(Label other)
         {
-            for (int i = 0; i < 2; i++) 
+            for (Int32 i = 0; i < 2; i++)
             {
-                Locations loc = ComputeMergedLocation(label2, i);
-                Locations thisLoc = label.GetLocation(i);
-                if (thisLoc == Locations.Null) 
-                    label.SetLocation(i, loc);
+                Locations loc = ComputeMergedLocation(other, i);
+                Locations thisLoc = Label == null ? Locations.None : Label.Value[i].On;
+
+                if (thisLoc == Locations.None)
+                {
+                    Label = Label == null
+                                ? new Label(i, loc)
+                                : new Label(Label.Value, i, loc);
+                }
             }
         }
-        
+
         /// <summary>
-        /// 
+        /// Sets this node's <see cref="Label"/> for the given geometry
+        /// (at <paramref name="geometryIndex"/>) to the given location for the 
+        /// 'On' position.
         /// </summary>
-        /// <param name="argIndex"></param>
-        /// <param name="onLocation"></param>
-        public void SetLabel(int argIndex, Locations onLocation)
+        /// <param name="geometryIndex">
+        /// The <see cref="Geometry{TCoordinate}"/> to set the label location of.
+        /// </param>
+        /// <param name="onLocation">
+        /// The <see cref="Locations"/> value to set the 'On' position of the
+        /// given geometry to.
+        /// </param>
+        public void SetLabel(Int32 geometryIndex, Locations onLocation)
         {
-            if (label == null) 
-                 label = new Label(argIndex, onLocation);            
-            else label.SetLocation(argIndex, onLocation);
+            Label = Label == null
+                        ? new Label(geometryIndex, onLocation)
+                        : new Label(Label.Value, geometryIndex, onLocation);
         }
 
         /// <summary> 
-        /// Updates the label of a node to BOUNDARY,
-        /// obeying the mod-2 boundaryDetermination rule.
+        /// Updates the label of a node to <see cref="Locations.Boundary"/>,
+        /// obeying the mod-2 boundary determination rule.
         /// </summary>
-        /// <param name="argIndex"></param>
-        public void SetLabelBoundary(int argIndex)
+        /// <seealso cref="Mod2BoundaryNodeRule"/>
+        public void SetLabelBoundary(Int32 geometryIndex)
         {
+            Debug.Assert(Label.HasValue);
+
+            Label label = Label.Value;
+
             // determine the current location for the point (if any)
-            Locations loc = Locations.Null;
-            if (label != null)
-                loc = label.GetLocation(argIndex);
-            // flip the loc
-            Locations newLoc;
-            switch (loc)
-            {
-            case Locations.Boundary:
-                newLoc = Locations.Interior; 
-                break;
-            case Locations.Interior:
-                newLoc = Locations.Boundary; 
-                break;
-            default:
-                newLoc = Locations.Boundary; 
-                break;
-            }
-            label.SetLocation(argIndex, newLoc);
+            Locations loc = label[geometryIndex, Positions.On];
+
+            // flip the loc, which implements mod-2 (every other is non-bounary)
+            Locations newLoc = loc == Locations.Boundary
+                                   ? Locations.Interior
+                                   : Locations.Boundary;
+
+            Label = new Label(label, geometryIndex, newLoc);
         }
 
-        /// <summary> 
-        /// The location for a given eltIndex for a node will be one
-        /// of { Null, Interior, Boundary }.
+        /// <summary>
+        /// Merges the given <see cref="Label"/> with this 
+        /// <see cref="Node{TCoordinate}"/>'s label, choosing the greatest
+        /// <see cref="Locations"/> value.
+        /// </summary>
+        /// <remarks>
+        /// The location for a given <paramref name="elementIndex"/> for a node 
+        /// will be one of  { <see cref="Locations.None"/>, 
+        /// <see cref="Locations.Interior"/>, <see cref="Locations.Boundary"/> }.
         /// A node may be on both the boundary and the interior of a point;
         /// in this case, the rule is that the node is considered to be in the boundary.
         /// The merged location is the maximum of the two input values.
-        /// </summary>
-        /// <param name="label2"></param>
-        /// <param name="eltIndex"></param>
-        public Locations ComputeMergedLocation(Label label2, int eltIndex)
+        /// </remarks>
+        public Locations ComputeMergedLocation(Label otherLabel, Int32 elementIndex)
         {
-            Locations loc = Locations.Null;
-            loc = label.GetLocation(eltIndex);
-            if (!label2.IsNull(eltIndex)) 
+            Locations loc = Label == null
+                                ? Locations.None
+                                : Label.Value[elementIndex].On;
+
+            if (!otherLabel.IsNone(elementIndex))
             {
-                Locations nLoc = label2.GetLocation(eltIndex);
-                if (loc != Locations.Boundary) 
-                    loc = nLoc;
+                Locations otherLocationOn = otherLabel[elementIndex, Positions.On];
+
+                if (loc != Locations.Boundary)
+                {
+                    loc = otherLocationOn;
+                }
             }
+
             return loc;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
-        public void Write(TextWriter outstream)
+        public override String ToString()
         {
-            outstream.WriteLine("node " + coord + " lbl: " + label);
+            return Coordinate + "; " + Label + "; " + _edges;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString()
-        {
-            return coord + " " + edges;
-        }
+        //public void Write(StreamWriter outstream)
+        //{
+        //    outstream.WriteLine("node " + Coordinate + " lbl: " + Label);
+        //}
     }
 }

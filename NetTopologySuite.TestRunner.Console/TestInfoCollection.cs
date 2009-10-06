@@ -1,94 +1,92 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 
-namespace ConsoleTestRunner
+namespace GisSharpBlog.NetTopologySuite.Console
 {
-	/// <summary>
-	/// Summary description for TestInfoCollection.
-	/// </summary>
-    public class TestInfoCollection : CollectionBase  
+    /// <summary>
+    /// Summary description for TestInfoCollection.
+    /// </summary>
+    public class TestInfoCollection : List<TestInfo>
     {
         #region Constructors and Destructor
-        
-        public TestInfoCollection() : base()
-        {
-        }
 
         #endregion
 
-        #region Public Properties
-        
-        public TestInfo this[int index]  
-        {
-            get  
-            {
-                return ((TestInfo)List[index]);
-            }
-            set  
-            {
-                List[index] = value;
-            }
-        }
+        //#region Public Properties
 
-        #endregion
+        //public TestInfo this[Int32 index]
+        //{
+        //    get { return ((TestInfo) List[index]); }
+        //    set { List[index] = value; }
+        //}
 
-        #region Public Methods
-        
-        public int Add(TestInfo value)  
-        {
-            return (List.Add(value));
-        }
+        //#endregion
 
-        public int IndexOf(TestInfo value)  
-        {
-            return (List.IndexOf(value));
-        }
+        //#region Public Methods
 
-        public void Insert(int index, TestInfo value)  
-        {
-            List.Insert(index, value);
-        }
+        //public Int32 Add(TestInfo value)
+        //{
+        //    return (List.Add(value));
+        //}
 
-        public void Remove(TestInfo value)  
-        {
-            List.Remove(value);
-        }
+        //public Int32 IndexOf(TestInfo value)
+        //{
+        //    return (List.IndexOf(value));
+        //}
 
-        public bool Contains(TestInfo value)  
-        {
-            // If value is not of type TestInfo, this will return false.
-            return (List.Contains(value));
-        }
+        //public void Insert(Int32 index, TestInfo value)
+        //{
+        //    List.Insert(index, value);
+        //}
 
-        #endregion
+        //public void Remove(TestInfo value)
+        //{
+        //    List.Remove(value);
+        //}
 
-        #region Protected Overridable Methods
+        //public Boolean Contains(TestInfo value)
+        //{
+        //    // If value is not of type TestInfo, this will return false.
+        //    return (List.Contains(value));
+        //}
 
-        protected override void OnInsert(int index, Object value)  
-        {
-            if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
-                throw new ArgumentException("value must be of type TestInfo.", "value");
-        }
+        //#endregion
 
-        protected override void OnRemove(int index, Object value)  
-        {
-            if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
-                throw new ArgumentException("value must be of type TestInfo.", "value");
-        }
+        //#region Protected Overridable Methods
 
-        protected override void OnSet( int index, Object oldValue, Object newValue )  
-        {
-            if (newValue.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
-                throw new ArgumentException("newValue must be of type TestInfo.", "newValue");
-        }
+        //protected override void OnInsert(Int32 index, Object value)
+        //{
+        //    if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
+        //    {
+        //        throw new ArgumentException("value must be of type TestInfo.", "value");
+        //    }
+        //}
 
-        protected override void OnValidate(Object value)  
-        {
-            if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
-                throw new ArgumentException("value must be of type TestInfo.");
-        }
+        //protected override void OnRemove(Int32 index, Object value)
+        //{
+        //    if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
+        //    {
+        //        throw new ArgumentException("value must be of type TestInfo.", "value");
+        //    }
+        //}
 
-        #endregion
-   }
+        //protected override void OnSet(Int32 index, Object oldValue, Object newValue)
+        //{
+        //    if (newValue.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
+        //    {
+        //        throw new ArgumentException("newValue must be of type TestInfo.", "newValue");
+        //    }
+        //}
 
+        //protected override void OnValidate(Object value)
+        //{
+        //    if (value.GetType() != Type.GetType("ConsoleTestRunner.TestInfo"))
+        //    {
+        //        throw new ArgumentException("value must be of type TestInfo.");
+        //    }
+        //}
+
+        //#endregion
+    }
 }

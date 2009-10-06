@@ -1,62 +1,51 @@
-using GeoAPI.Geometries;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph.Index
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public class SweepLineSegment
+    public class SweepLineSegment<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private Edge edge;
-        private ICoordinate[] pts;
-        int ptIndex;
+        private readonly Edge<TCoordinate> _edge;
+        private readonly Int32 _ptIndex;
+        private readonly IEnumerable<TCoordinate> _pts;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="ptIndex"></param>
-        public SweepLineSegment(Edge edge, int ptIndex)
+        public SweepLineSegment(Edge<TCoordinate> edge, Int32 ptIndex)
         {
-            this.edge = edge;
-            this.ptIndex = ptIndex;
-            pts = edge.Coordinates;
+            _edge = edge;
+            _ptIndex = ptIndex;
+            _pts = edge.Coordinates;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double MinX
+        public Double MinX
         {
             get
             {
-                double x1 = pts[ptIndex].X;
-                double x2 = pts[ptIndex + 1].X;
+                Pair<TCoordinate> pair = Slice.GetPairAt(_pts, _ptIndex).Value;
+                Double x1 = pair.First[Ordinates.X];
+                Double x2 = pair.Second[Ordinates.X];
                 return x1 < x2 ? x1 : x2;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double MaxX
+        public Double MaxX
         {
             get
             {
-                double x1 = pts[ptIndex].X;
-                double x2 = pts[ptIndex + 1].X;
+                Pair<TCoordinate> pair = Slice.GetPairAt(_pts, _ptIndex).Value;
+                Double x1 = pair.First[Ordinates.X];
+                Double x2 = pair.Second[Ordinates.X];
                 return x1 > x2 ? x1 : x2;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ss"></param>
-        /// <param name="si"></param>
-        public void ComputeIntersections(SweepLineSegment ss, SegmentIntersector si)
+        public void ComputeIntersections(SweepLineSegment<TCoordinate> ss, SegmentIntersector<TCoordinate> si)
         {
-            si.AddIntersections(edge, ptIndex, ss.edge, ss.ptIndex);
+            si.AddIntersections(_edge, _ptIndex, ss._edge, ss._ptIndex);
         }
     }
 }

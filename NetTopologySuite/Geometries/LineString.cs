@@ -1,7 +1,12 @@
 using System;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
+using GeoAPI.Units;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Operation;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
@@ -9,93 +14,93 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// Basic implementation of <c>LineString</c>.
     /// </summary>  
     [Serializable]
-    public class LineString : Geometry, ILineString 
+    public class LineString<TCoordinate> : MultiCoordinateGeometry<TCoordinate>,
+                                           ILineString<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// Represents an empty <c>LineString</c>.
-        /// </summary>
-        public static readonly ILineString Empty = new GeometryFactory().CreateLineString(new ICoordinate[] { });
-
-        /// <summary>  
-        /// The points of this <c>LineString</c>.
-        /// </summary>
-        private ICoordinateSequence points;
+        ///// <summary>
+        ///// Represents an empty <c>LineString</c>.
+        ///// </summary>
+        //public static readonly ILineString Empty = new GeometryFactory<TCoordinate>().CreateLineString();
 
         /// <summary>
-        /// 
-        /// </summary>
-        public override ICoordinate[] Coordinates
-        {
-            get
-            {
-                return points.ToCoordinateArray();
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinateSequence CoordinateSequence
-        {
-            get
-            {
-                return points;
-            }
-        }
-
-        /// <summary>
-        /// 
+        /// Creates a new <see cref="LineString{TCoordinate}"/> instance from the 
+        /// given <paramref name="points"/>.
         /// </summary>
         /// <param name="points">
-        /// The points of the linestring, or <c>null</c>
+        /// The points of the linestring, or <see langword="null" />
         /// to create the empty point. Consecutive points may not be equal.
         /// </param>
-        /// <param name="factory"></param>
-        public LineString(ICoordinateSequence points, IGeometryFactory factory) : base(factory)
-        {            
-            if (points == null) 
-                points = factory.CoordinateSequenceFactory.Create(new ICoordinate[] { });
+        /// <param name="factory">
+        /// The <see cref="IGeometryFactory{TCoordinate}"/> instance used to generate
+        /// </param>
+        public LineString(ICoordinateSequence<TCoordinate> points, IGeometryFactory<TCoordinate> factory)
+            : base(factory)
+        {
+            if (points == null)
+            {
+                // 3D_UNSAFE
+                points = factory.CoordinateSequenceFactory.Create(CoordinateDimensions.Two);
+            }
+
             if (points.Count == 1)
+            {
                 throw new ArgumentException("point array must contain 0 or >1 elements", "points");
-            this.points = points;
+            }
+
+            CoordinatesInternal = points;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        public ICoordinate GetCoordinateN(int n) 
+        public TCoordinate this[Int32 index]
         {
-            return points.GetCoordinate(n);
+            get { return CoordinatesInternal[index]; }
+            set { CoordinatesInternal[index] = value; }
+        }
+
+        public Int32 Count
+        {
+            get { return CoordinatesInternal.Count; }
         }
 
         /// <summary>
-        /// 
+        /// Returns the value of the angle between the <see cref="StartPoint" />
+        /// and the <see cref="EndPoint" />.
         /// </summary>
-        public override ICoordinate Coordinate
+        public Degrees Angle
         {
             get
             {
-                if (IsEmpty) return null;
-                return points.GetCoordinate(0);
+                TCoordinate startPoint = CoordinatesInternal.First;
+                TCoordinate endPoint = CoordinatesInternal.Last;
+
+                Double startX = startPoint[Ordinates.X], startY = startPoint[Ordinates.Y];
+                Double endX = endPoint[Ordinates.X], endY = endPoint[Ordinates.Y];
+
+                Double deltaX = endPoint[Ordinates.X] - startPoint[Ordinates.X];
+                Double deltaY = endPoint[Ordinates.Y] - startPoint[Ordinates.Y];
+                Double length = Math.Sqrt(deltaX*deltaX + deltaY*deltaY);
+                Radians radians = (Radians) Math.Asin(Math.Abs(endY - startY)/length);
+                Degrees angle = (Degrees) radians;
+
+                if (((startX < endX) && (startY > endY)) ||
+                    ((startX > endX) && (startY < endY)))
+                {
+                    angle = (Degrees) 360 - angle;
+                }
+
+                return angle;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override Dimensions Dimension 
+        #region ILineString<TCoordinate> Members
+
+        public override Dimensions Dimension
         {
-            get
-            {
-                return Dimensions.Curve;
-            }
+            get { return Dimensions.Curve; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public override Dimensions BoundaryDimension
         {
             get
@@ -104,366 +109,332 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
                 {
                     return Dimensions.False;
                 }
+
                 return Dimensions.Point;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override bool IsEmpty 
+        public override Boolean IsEmpty
         {
-            get
-            {
-                return points.Count == 0;
-            }
+            get { return CoordinatesInternal.Count == 0; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override int NumPoints
+        public override Int32 PointCount
         {
-            get
-            {
-                return points.Count;
-            }
+            get { return CoordinatesInternal.Count; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        public IPoint GetPointN(int n) 
+        public IPoint<TCoordinate> GetPoint(Int32 index)
         {
-            return Factory.CreatePoint(points.GetCoordinate(n));
+            return Factory.CreatePoint(CoordinatesInternal[index]);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IPoint StartPoint 
+        public IPoint<TCoordinate> StartPoint
         {
             get
             {
                 if (IsEmpty)
+                {
                     return null;
-                return GetPointN(0);
+                }
+
+                return GetPoint(0);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IPoint EndPoint
+        public IPoint<TCoordinate> EndPoint
         {
             get
             {
                 if (IsEmpty)
+                {
                     return null;
-                return GetPointN(NumPoints - 1);
+                }
+
+                return GetPoint(PointCount - 1);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public virtual bool IsClosed
+        public virtual Boolean IsClosed
         {
             get
             {
                 if (IsEmpty)
+                {
                     return false;
-                return GetCoordinateN(0).Equals2D(GetCoordinateN(NumPoints - 1));
+                }
+
+                TCoordinate first = Slice.GetFirst(Coordinates);
+                TCoordinate last = Slice.GetLast(Coordinates);
+
+                return first.Equals(last);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsRing
+        public Boolean IsRing
         {
-            get
-            {
-                return IsClosed && IsSimple;
-            }
+            get { return IsClosed && IsSimple; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public override string GeometryType
+        public override OgcGeometryType GeometryType
         {
-            get
-            {
-                return "LineString";
-            }
+            get { return OgcGeometryType.LineString; }
         }
 
         /// <summary>  
         /// Returns the length of this <c>LineString</c>
         /// </summary>
         /// <returns>The length of the polygon.</returns>
-        public override double Length
+        public override Double Length
+        {
+            get { return CGAlgorithms<TCoordinate>.Length(CoordinatesInternal); }
+        }
+
+        public override Boolean IsSimple
+        {
+            get { return (new IsSimpleOp<TCoordinate>()).IsSimple(this); }
+        }
+
+        public override IGeometry<TCoordinate> Boundary
         {
             get
             {
-                return CGAlgorithms.Length(points);
+                return new BoundaryOp<TCoordinate>(this).GetBoundary();
+                //if (IsEmpty)
+                //{
+                //    return Factory.CreateGeometryCollection();
+                //}
+
+                //if (IsClosed)
+                //{
+                //    return Factory.CreateMultiPoint();
+                //}
+
+                //return Factory.CreateMultiPoint(StartPoint, EndPoint);
             }
         }
 
         /// <summary>
-        /// 
+        /// Creates an <see cref="ILineString{TCoordinate}" /> whose coordinates 
+        /// are in the reverse order of this objects.
         /// </summary>
-        public override bool IsSimple
+        /// <returns>
+        /// An <see cref="ILineString{TCoordinate}" /> with coordinates 
+        /// in the reverse order.
+        /// </returns>
+        public ILineString<TCoordinate> Reverse()
         {
-            get
+            ICoordinateSequence<TCoordinate> seq = CoordinatesInternal.Clone();
+            Debug.Assert(seq != null);
+            seq.Reverse();
+            return Factory.CreateLineString(seq);
+        }
+
+        public override Boolean Equals(IGeometry<TCoordinate> other, Tolerance tolerance)
+        {
+            if (!IsEquivalentClass(other))
             {
-                return (new IsSimpleOp()).IsSimple(this);
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override IGeometry Boundary
-        {
-            get
-            {
-                if (IsEmpty)
-                    return Factory.CreateGeometryCollection(null);
-                if (IsClosed)
-                    return Factory.CreateMultiPoint((ICoordinate[]) null);
-                return Factory.CreateMultiPoint(new IPoint[] { StartPoint, EndPoint });
-            }
-        }
-
-        /// <summary>
-        /// Creates a <see cref="LineString" /> whose coordinates are in the reverse order of this objects.
-        /// </summary>
-        /// <returns>A <see cref="LineString" /> with coordinates in the reverse order.</returns>
-        public ILineString Reverse()
-        {
-            ICoordinateSequence seq = (ICoordinateSequence) points.Clone();
-
-            // Personalized implementation using Array.Reverse: maybe it's faster?
-            ICoordinate[] array = seq.ToCoordinateArray();
-            Array.Reverse(array);
-            return Factory.CreateLineString(array);           
-        }
-
-        /// <summary>
-        /// Returns true if the given point is a vertex of this <c>LineString</c>.
-        /// </summary>
-        /// <param name="pt">The <c>Coordinate</c> to check.</param>
-        /// <returns><c>true</c> if <c>pt</c> is one of this <c>LineString</c>'s vertices.</returns>
-        public bool IsCoordinate(ICoordinate pt) 
-        {
-            for (int i = 0; i < points.Count; i++) 
-                if (points.GetCoordinate(i).Equals(pt))
-                    return true;                
-            return false;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override IEnvelope ComputeEnvelopeInternal() 
-        {
-            if (IsEmpty) 
-                return new Envelope();
-
-            //Convert to array, then access array directly, to avoid the function-call overhead
-            //of calling Getter millions of times. ToArray may be inefficient for
-            //non-BasicCoordinateSequence CoordinateSequences. [Jon Aquino]
-            ICoordinate[] coordinates = points.ToCoordinateArray();
-            double minx = coordinates[0].X;
-            double miny = coordinates[0].Y;
-            double maxx = coordinates[0].X;
-            double maxy = coordinates[0].Y;            
-            for (int i = 1; i < coordinates.Length; i++) 
-            {
-                minx = minx < coordinates[i].X ? minx : coordinates[i].X;
-                maxx = maxx > coordinates[i].X ? maxx : coordinates[i].X;
-                miny = miny < coordinates[i].Y ? miny : coordinates[i].Y;
-                maxy = maxy > coordinates[i].Y ? maxy : coordinates[i].Y;
-            }
-            return new Envelope(minx, maxx, miny, maxy);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public override bool EqualsExact(IGeometry other, double tolerance) 
-        {
-            if (!IsEquivalentClass(other)) 
                 return false;
+            }
 
-            ILineString otherLineString = (ILineString) other;
-            if (points.Count != otherLineString.NumPoints)
+            ILineString<TCoordinate> otherLineString = other as ILineString<TCoordinate>;
+
+            if (ReferenceEquals(otherLineString, null))
+            {
                 return false;
+            }
 
-            for (int i = 0; i < points.Count; i++)
-                if (!Equal(points.GetCoordinate(i), otherLineString.GetCoordinateN(i), tolerance))             
-                    return false;            
+            if (PointCount != otherLineString.PointCount)
+            {
+                return false;
+            }
+
+            for (Int32 i = 0; i < CoordinatesInternal.Count; i++)
+            {
+                if (!Equal(Coordinates[i], otherLineString.Coordinates[i], tolerance))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(ICoordinateFilter filter) 
-        {
-            for (int i = 0; i < points.Count; i++)
-                filter.Filter(points.GetCoordinate(i));
-        }
+        /*
+         * [codekaizen 2008-01-14] removed when replaced visitor patterns with
+         *                         enumeration / query patterns
+         */
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryFilter filter) 
-        {
-            filter.Filter(this);
-        }
+        //public override void Apply(ICoordinateFilter filter)
+        //{
+        //    for (Int32 i = 0; i < points.TotalItemCount; i++)
+        //    {
+        //        filter.Filter(points.GetCoordinate(i));
+        //    }
+        //}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="filter"></param>
-        public override void Apply(IGeometryComponentFilter filter) 
-        {
-            filter.Filter(this);
-        }
+        //public override void Apply(IGeometryFilter filter)
+        //{
+        //    filter.Filter(this);
+        //}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override object Clone()
+        //public override void Apply(IGeometryComponentFilter<TCoordinate> filter)
+        //{
+        //    filter.Filter(this);
+        //}
+
+        public override IGeometry<TCoordinate> Clone()
         {
-            LineString ls = (LineString) base.Clone();
-            ls.points = (ICoordinateSequence) points.Clone();
-            return ls;
+            return Factory.CreateLineString(Coordinates);
         }
 
         /// <summary> 
-        /// Normalizes a <c>LineString</c>.  A normalized linestring
-        /// has the first point which is not equal to it's reflected point
+        /// Normalizes a <see cref="LineString{TCoordinate}"/>.  
+        /// A normalized <see cref="LineString{TCoordinate}"/> 
+        /// has the first point which 
+        /// is not equal to it's reflected point
         /// less than the reflected point.
         /// </summary>
         public override void Normalize()
         {
-            for (int i = 0; i < points.Count / 2; i++) 
+            for (Int32 i = 0; i < CoordinatesInternal.Count/2; i++)
             {
-                int j = points.Count - 1 - i;
+                Int32 j = CoordinatesInternal.Count - 1 - i;
+
                 // skip equal points on both ends
-                if (!points.GetCoordinate(i).Equals(points.GetCoordinate(j))) 
+                if (!CoordinatesInternal[i].Equals(CoordinatesInternal[j]))
                 {
-                    if (points.GetCoordinate(i).CompareTo(points.GetCoordinate(j)) > 0) 
-                        CoordinateArrays.Reverse(Coordinates);                    
+                    if (CoordinatesInternal[i].CompareTo(CoordinatesInternal[j]) > 0)
+                    {
+                        Coordinates.Reverse();
+                    }
+
                     return;
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="o"></param>
-        /// <returns></returns>
-        protected internal override int CompareToSameClass(object o)
-        {
-            LineString line = (LineString) o;
-            // MD - optimized implementation
-            int i = 0;
-            int j = 0;
-            while (i < points.Count && j < line.points.Count) 
-            {
-                int comparison = points.GetCoordinate(i).CompareTo(line.points.GetCoordinate(j));
-                if (comparison != 0) 
-                    return comparison;                
-                i++;
-                j++;
-            }
-            if (i < points.Count) 
-                return 1;            
-            if (j < line.points.Count)
-                return -1;            
-            return 0;            
-        }
-
         /* BEGIN ADDED BY MPAUL42: monoGIS team */
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="T:LineString"/> class.
-        /// </summary>        
-        /// <remarks>
-        /// For create this <see cref="Geometry"/> is used a standard <see cref="GeometryFactory"/> 
-        /// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Floating"/>.
-        /// </remarks>
-        /// <param name="points">The coordinates used for create this <see cref="LineString" />.</param>
-        public LineString(ICoordinate[] points) : 
-            this(DefaultFactory.CoordinateSequenceFactory.Create(points), DefaultFactory) { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        public ICoordinate this[int n]
-        {
-            get
-            {
-                return points.GetCoordinate(n);
-            }
-            set
-            {
-                points.SetOrdinate(n, Ordinates.X, value.X);
-                points.SetOrdinate(n, Ordinates.Y, value.Y);
-                points.SetOrdinate(n, Ordinates.Z, value.Z);
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <value></value>
-        public int Count
-        {
-            get
-            {
-                return points.Count;
-            }
-        }
-
-        /// <summary>
-        /// Returns the value of the angle between the <see cref="StartPoint" />
-        /// and the <see cref="EndPoint" />.
-        /// </summary>
-        public double Angle
-        {
-            get
-            {       
-                double deltaX = EndPoint.X - StartPoint.X;
-                double deltaY = EndPoint.Y - StartPoint.Y;
-                double length = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-                double angleRAD = Math.Asin(Math.Abs(EndPoint.Y - StartPoint.Y) / length);
-                double angle = (angleRAD * 180) / Math.PI;
-
-                if ( ((StartPoint.X < EndPoint.X) && (StartPoint.Y > EndPoint.Y)) ||
-                     ((StartPoint.X > EndPoint.X) && (StartPoint.Y < EndPoint.Y)) )
-                        angle = 360 - angle;                
-                return angle;
-            }
-        }
+        ///// <summary>
+        ///// Initializes a new instance of the <see cref="LineString{TCoordinate}"/> class.
+        ///// </summary>        
+        ///// <remarks>
+        ///// For create this <see cref="Geometry{TCoordinate}"/> is used a standard <see cref="GeometryFactory{TCoordinate}"/> 
+        ///// with <see cref="PrecisionModel{TCoordinate}" /> <c> == </c> <see cref="PrecisionModelType.Floating"/>.
+        ///// </remarks>
+        ///// <param name="points">The coordinates used for create this <see cref="LineString{TCoordinate}" />.</param>
+        //public LineString(IEnumerable<TCoordinate> points) :
+        //    this(DefaultFactory.CoordinateSequenceFactory.Create(points), DefaultFactory) { }
 
         /* END ADDED BY MPAUL42: monoGIS team */
+
+        IPoint ILineString.GetPoint(Int32 index)
+        {
+            return GetPoint(index);
+        }
+
+        ILineString ILineString.Reverse()
+        {
+            return Reverse();
+        }
+
+        IPoint ICurve.StartPoint
+        {
+            get { return StartPoint; }
+        }
+
+        IPoint ICurve.EndPoint
+        {
+            get { return EndPoint; }
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Returns true if the given point is a vertex of this <see cref="LineString{TCoordinate}"/>.
+        /// </summary>
+        /// <param name="pt">The <c>Coordinate</c> to check.</param>
+        /// <returns><see langword="true"/> if <c>pt</c> is one of this <c>LineString</c>'s vertices.</returns>
+        public Boolean IsCoordinate(TCoordinate pt)
+        {
+            foreach (TCoordinate coordinate in CoordinatesInternal)
+            {
+                if (coordinate.Equals(pt))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        protected override Extents<TCoordinate> ComputeExtentsInternal()
+        {
+            if (IsEmpty)
+            {
+                return new Extents<TCoordinate>(Factory);
+            }
+
+            ICoordinateSequence<TCoordinate> coordinates = CoordinatesInternal;
+
+            Extents<TCoordinate> e = new Extents<TCoordinate>(Factory);
+
+            coordinates.ExpandExtents(e);
+
+            return e;
+        }
+
+        protected internal override Int32 CompareToSameClass(IGeometry<TCoordinate> other)
+        {
+            if (other == null)
+            {
+                return 1;
+            }
+
+            LineString<TCoordinate> line = other as LineString<TCoordinate>;
+
+            if (line == null)
+            {
+                throw new NotSupportedException(
+                    "Comparison to ILineString types other than LineString<TCoordinate> " +
+                    "not currently supported.");
+            }
+
+            return CoordinatesInternal.CompareTo(line.CoordinatesInternal);
+            //// MD - optimized implementation
+            //Int32 i = 0;
+            //Int32 j = 0;
+
+            //while (i < CoordinatesInternal.Count && j < line.CoordinatesInternal.Count)
+            //{
+            //    Int32 comparison = CoordinatesInternal[i].CompareTo(line.CoordinatesInternal[j]);
+
+            //    if (comparison != 0)
+            //    {
+            //        return comparison;
+            //    }
+
+            //    i++;
+            //    j++;
+            //}
+
+            //if (i < CoordinatesInternal.Count)
+            //{
+            //    return 1;
+            //}
+
+            //if (j < line.CoordinatesInternal.Count)
+            //{
+            //    return -1;
+            //}
+
+            //return 0;
+        }
+
+        protected override Boolean IsEquivalentClass(IGeometry other)
+        {
+            return other is ILineString<TCoordinate>;
+        }
     }
 }

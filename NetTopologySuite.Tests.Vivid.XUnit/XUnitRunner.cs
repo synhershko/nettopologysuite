@@ -1,6 +1,9 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using Open.Topology.TestRunner;
+using GeoAPI.DataStructures;
+using GisSharpBlog.NetTopologySuite;
 using Xunit;
 
 namespace NetTopologySuite.Tests.Vivid.XUnit
@@ -39,7 +42,14 @@ namespace NetTopologySuite.Tests.Vivid.XUnit
 
         private XmlTestCollection LoadTests()
         {
-            return controller.Load(Path.Combine(TestLocation, TestFile));
+            XmlTestCollection tests = controller.Load(Path.Combine(TestLocation, TestFile));
+            tests.TestEvent += tests_TestEvent;
+            return tests;
+        }
+
+        private void tests_TestEvent(object sender, XmlTestEventArgs args)
+        {
+            Assert.True(args.Success);
         }
 
         [Fact]
@@ -48,6 +58,13 @@ namespace NetTopologySuite.Tests.Vivid.XUnit
             if (Count > 20)
                 TestAll();
         }
+
+        [Fact]
+        public void Test0()
+        {
+            ExecuteTest(0);
+        }
+
 
         [Fact]
         public void Test1()
@@ -169,18 +186,93 @@ namespace NetTopologySuite.Tests.Vivid.XUnit
             ExecuteTest(20);
         }
 
+        //[Fact]
+        public void ManualTest()
+        {
+            int id = GetTestId();
+            {
+                if (id > -1)
+                    ExecuteTest(id);
+            }
+        }
+
+        private int GetTestId()
+        {
+            using (ArbitaryTestIdForm frm = new ArbitaryTestIdForm())
+            {
+                frm.ShowDialog();
+                return frm.TestId;
+            }
+        }
+
         private void ExecuteTest(int i)
         {
             if (i < Count)
-                Tests[i].RunTest();
+            {
+                Console.WriteLine(string.Format("Executing test {0}", i));
+                Tests.RunTest(i);
+            }
         }
 
         //some test files contain hundreds of tests..
 
         public void TestAll()
         {
+            List<ExceptionWrapper> exceptions = new List<ExceptionWrapper>();
+
+
             for (int i = 0; i < Count; i++)
-                ExecuteTest(i);
+            {
+                try
+                {
+                    ExecuteTest(i);
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(new ExceptionWrapper {Exception = ex, TestIndex = i});
+                }
+            }
+
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
+            }
         }
+    }
+
+    public class AggregateException : Exception
+    {
+        private readonly IList<ExceptionWrapper> _innerExceptions;
+
+        internal AggregateException(IList<ExceptionWrapper> exceptions)
+        {
+            _innerExceptions = exceptions;
+        }
+
+        public override string Message
+        {
+            get
+            {
+                return "\r\n" + string.Format("{0} Child tests failed \r\n", _innerExceptions.Count) +
+                       String.Join("\r\n==========================================\r\n",
+                                   Enumerable.ToArray(Processor.Select(_innerExceptions,
+                                                                       delegate(
+                                                                           ExceptionWrapper
+                                                                           o)
+                                                                           {
+                                                                               return
+                                                                                   string.Format(
+                                                                                       "Test Index : {0}\r\n{1}\r\n{2}",
+                                                                                       o.TestIndex, o.Exception.Message,
+                                                                                       o.Exception.StackTrace);
+                                                                           })));
+            }
+        }
+    }
+
+    internal struct ExceptionWrapper
+    {
+        public Exception Exception { get; set; }
+        public Int32 TestIndex { get; set; }
     }
 }

@@ -1,7 +1,10 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay
 {
@@ -11,50 +14,44 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Overlay
     /// new set of edges consisting of all the split edges created by
     /// noding the input edges together.
     /// </summary>
-    public class EdgeSetNoder
+    public class EdgeSetNoder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private LineIntersector li = null;
-        private IList inputEdges = new ArrayList();
+        private readonly List<Edge<TCoordinate>> _inputEdges = new List<Edge<TCoordinate>>();
+        private readonly LineIntersector<TCoordinate> _li;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="li"></param>
-        public EdgeSetNoder(LineIntersector li)
+        public EdgeSetNoder(LineIntersector<TCoordinate> li)
         {
-            this.li = li;
+            _li = li;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edges"></param>
-        public void AddEdges(IList edges)
-        {
-            foreach (object obj in edges)
-                inputEdges.Add(obj);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public IList NodedEdges
+        public IEnumerable<Edge<TCoordinate>> NodedEdges
         {
             get
             {
-                EdgeSetIntersector esi = new SimpleMCSweepLineIntersector();
-                SegmentIntersector si = new SegmentIntersector(li, true, false);
-                esi.ComputeIntersections(inputEdges, si, true);                
+                EdgeSetIntersector<TCoordinate> esi
+                    = new SimpleMonotoneChainSweepLineIntersector<TCoordinate>();
+                SegmentIntersector<TCoordinate> si
+                    = new SegmentIntersector<TCoordinate>(_li, true, false);
 
-                IList splitEdges = new ArrayList();
-                IEnumerator i = inputEdges.GetEnumerator();
-                while (i.MoveNext()) 
+                esi.ComputeIntersections(_inputEdges, si, true);
+
+                foreach (Edge<TCoordinate> edge in _inputEdges)
                 {
-                    Edge e = (Edge)i.Current;
-                    e.EdgeIntersectionList.AddSplitEdges(splitEdges);
+                    IEnumerable<Edge<TCoordinate>> splitEdges = edge.EdgeIntersections.GetSplitEdges();
+
+                    foreach (Edge<TCoordinate> splitEdge in splitEdges)
+                    {
+                        yield return splitEdge;
+                    }
                 }
-                return splitEdges;
             }
+        }
+
+        public void AddEdges(IEnumerable<Edge<TCoordinate>> edges)
+        {
+            _inputEdges.AddRange(edges);
         }
     }
 }

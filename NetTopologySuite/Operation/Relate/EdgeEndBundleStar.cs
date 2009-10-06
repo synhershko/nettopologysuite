@@ -1,51 +1,65 @@
-using System.Collections;
+using System;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
     /// <summary>
-    /// An ordered list of <c>EdgeEndBundle</c>s around a <c>RelateNode</c>.
-    /// They are maintained in CCW order (starting with the positive x-axis) around the node
-    /// for efficient lookup and topology building.
+    /// An ordered list of <see cref="EdgeEndBundle{TCoordinate}"/>s around a 
+    /// <see cref="RelateNode{TCoordinate}"/>.
     /// </summary>
-    public class EdgeEndBundleStar : EdgeEndStar
+    /// <remarks>
+    /// They are maintained in CCW order (starting with the positive x-axis) 
+    /// around the node for efficient lookup and topology building.
+    /// </remarks>
+    public class EdgeEndBundleStar<TCoordinate> : EdgeEndStar<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
         /// <summary>
-        /// 
+        /// Insert a <see cref="EdgeEnd{TCoordinate}"/> in order in the list.
+        /// If there is an existing <see cref="EdgeEndBundle{TCoordinate}"/> 
+        /// which is parallel, <paramref name="e"/> is added to the bundle.
+        /// Otherwise, a new <see cref="EdgeEndBundle{TCoordinate}"/>
+        /// is created to contain it.
         /// </summary>
-        public EdgeEndBundleStar() { }
-
-        /// <summary>
-        /// Insert a EdgeEnd in order in the list.
-        /// If there is an existing EdgeStubBundle which is parallel, the EdgeEnd is
-        /// added to the bundle.  Otherwise, a new EdgeEndBundle is created
-        /// to contain the EdgeEnd.
-        /// </summary>
-        /// <param name="e"></param>
-        public override void Insert(EdgeEnd e)
+        /// <param name="e">
+        /// The <see cref="EdgeEnd{TCoordinate}"/> to add to the list.
+        /// </param>
+        public override void Insert(EdgeEnd<TCoordinate> e)
         {
-            EdgeEndBundle eb = (EdgeEndBundle) edgeMap[e];
-            if (eb == null) 
+            EdgeEnd<TCoordinate> ee;
+
+            if (!EdgeMap.TryGetValue(e, out ee))
             {
-                eb = new EdgeEndBundle(e);
-                InsertEdgeEnd(e, eb);
+                ee = new EdgeEndBundle<TCoordinate>(e);
+                InsertEdgeEnd(e, ee);
             }
-            else 
+            else
+            {
+                EdgeEndBundle<TCoordinate> eb = ee as EdgeEndBundle<TCoordinate>;
+                Debug.Assert(eb != null);
                 eb.Insert(e);
-            
+            }
         }
 
         /// <summary>
-        /// Update the IM with the contribution for the EdgeStubs around the node.
+        /// Update the <see cref="IntersectionMatrix"/> with the 
+        /// contribution for the <see cref="EdgeEnd{TCoordinate}"/>s 
+        /// around the node.
         /// </summary>
-        /// <param name="im"></param>
-        public void UpdateIM(IntersectionMatrix im)
+        /// <param name="im">
+        /// The <see cref="IntersectionMatrix"/> to update.
+        /// </param>
+        public void UpdateIntersectionMatrix(IntersectionMatrix im)
         {
-            for (IEnumerator it = GetEnumerator(); it.MoveNext(); ) 
+            foreach (EdgeEndBundle<TCoordinate> end in this)
             {
-                EdgeEndBundle esb = (EdgeEndBundle) it.Current;
-                esb.UpdateIM(im);
+                end.UpdateIntersectionMatrix(im);
             }
         }
     }

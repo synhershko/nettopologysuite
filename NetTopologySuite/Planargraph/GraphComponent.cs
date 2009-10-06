@@ -1,128 +1,138 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph
 {
     /// <summary>
     /// The base class for all graph component classes.
+    /// </summary>
+    /// <remarks>
     /// Maintains flags of use in generic graph algorithms.
     /// Provides two flags:
-    /// marked - typically this is used to indicate a state that persists
+    /// <list type="table">
+    /// <item>
+    /// <term>Marked</term>
+    /// <description>
+    /// Typically this is used to indicate a state that persists
     /// for the course of the graph's lifetime.  For instance, it can be
     /// used to indicate that a component has been logically deleted from the graph.
-    /// visited - this is used to indicate that a component has been processed
+    /// </description>
+    /// <term>Visited</term>
+    /// <description>
+    /// This is used to indicate that a component has been processed
     /// or visited by an single graph algorithm.  For instance, a breadth-first traversal of the
     /// graph might use this to indicate that a node has already been traversed.
     /// The visited flag may be set and cleared many times during the lifetime of a graph.
-    /// </summary>
-    public abstract class GraphComponent
+    /// </description>
+    /// </list>
+    /// </remarks>
+    public abstract class GraphComponent<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-
         #region Static
 
         /// <summary>
-        /// Sets the <see cref="GraphComponent.Visited" /> state 
-        /// for all <see cref="GraphComponent" />s in an <see cref="IEnumerator" />.
+        /// Sets the <see cref="GraphComponent{TCoordinate}.Visited" /> state 
+        /// for all <see cref="GraphComponent{TCoordinate}" />s in an <see cref="IEnumerable{T}" />.
         /// </summary>
-        /// <param name="i">A <see cref="IEnumerator" /> to scan.</param>
-        /// <param name="visited">The state to set the <see cref="GraphComponent.Visited" /> flag to.</param>
-        public static void SetVisited(IEnumerator i, bool visited)
+        /// <param name="components">An <see cref="IEnumerable{T}" /> to scan.</param>
+        /// <param name="visited">
+        /// The state to set the <see cref="GraphComponent{TCoordinate}.Visited" /> flag to.
+        /// </param>
+        public static void SetVisited(IEnumerable<GraphComponent<TCoordinate>> components, Boolean visited)
         {
-            while (i.MoveNext())
+            foreach (GraphComponent<TCoordinate> component in components)
             {
-                GraphComponent comp = (GraphComponent) i.Current;
-                comp.Visited = visited;
+                component.Visited = visited;
             }
         }
 
         /// <summary>
-        /// Sets the <see cref="GraphComponent.Marked" /> state 
-        /// for all <see cref="GraphComponent" />s in an <see cref="IEnumerator" />.
+        /// Sets the <see cref="GraphComponent{TCoordinate}.Marked" /> state 
+        /// for all <see cref="GraphComponent{TCoordinate}" />s in an <see cref="IEnumerable{T}" />.
         /// </summary>
-        /// <param name="i">A <see cref="IEnumerator" /> to scan.</param>
-        /// <param name="marked">The state to set the <see cref="GraphComponent.Marked" /> flag to.</param>
-        public static void SetMarked(IEnumerator i, bool marked)
+        /// <param name="components">An <see cref="IEnumerable{T}" /> to scan.</param>
+        /// <param name="marked">The state to set the <see cref="GraphComponent{TCoordinate}.Marked" /> flag to.</param>
+        public static void SetMarked(IEnumerable<GraphComponent<TCoordinate>> components, Boolean marked)
         {
-            while (i.MoveNext())
+            foreach (GraphComponent<TCoordinate> component in components)
             {
-                GraphComponent comp = (GraphComponent) i.Current;
-                comp.Marked = marked;
+                component.Marked = marked;
             }
         }
 
         /// <summary>
-        /// Finds the first <see cref="GraphComponent" /> 
-        /// in a <see cref="IEnumerator" /> set
-        /// which has the specified <see cref="GraphComponent.Visited" /> state.
+        /// Finds the first <see cref="GraphComponent{TCoordinate}" /> 
+        /// in an <see cref="IEnumerable{T}" />
+        /// which has the specified <see cref="GraphComponent{TCoordinate}.Visited" /> state.
         /// </summary>
-        /// <param name="i">A <see cref="IEnumerator" /> to scan.</param>
-        /// <param name="visitedState">The <see cref="GraphComponent.Visited" /> state to test.</param>
-        /// <returns>The first <see cref="GraphComponent" /> found, or <c>null</c> if none found.</returns>
-        public static GraphComponent GetComponentWithVisitedState(IEnumerator i, bool visitedState)
+        /// <param name="components">An <see cref="IEnumerable{T}" /> to scan.</param>
+        /// <param name="visitedState">The <see cref="GraphComponent{TCoordinate}.Visited" /> state to test.</param>
+        /// <returns>
+        /// The first <see cref="GraphComponent{TCoordinate}" /> found, or <see langword="null" /> if none found.
+        /// </returns>
+        public static GraphComponent<TCoordinate> GetComponentWithVisitedState(
+            IEnumerable<GraphComponent<TCoordinate>> components, Boolean visitedState)
         {
-            while (i.MoveNext())
+            foreach (GraphComponent<TCoordinate> component in components)
             {
-                GraphComponent comp = (GraphComponent) i.Current;
-                if (comp.IsVisited == visitedState)
-                    return comp;
+                if (visitedState == component.Visited)
+                {
+                    return component;
+                }
             }
+
             return null;
         }
-        
+
         #endregion
 
-        /// <summary>
-        /// 
-        /// </summary>
-        protected bool isMarked = false;
+        protected Boolean _isMarked;
+        protected Boolean _isVisited;
 
         /// <summary>
-        /// 
-        /// </summary>
-        protected bool isVisited = false;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="GraphComponent"/> class.
-        /// </summary>
-        public GraphComponent() { }
-
-        /// <summary>
-        /// Tests if a component has been visited during the course of a graph algorithm.
+        /// Gets a value indicating if a component has been 
+        /// visited during the course of a graph algorithm.
         /// </summary>              
-        public bool IsVisited
+        public Boolean IsVisited
         {
             get { return Visited; }
         }
 
         /// <summary> 
-        /// Gets/Sets the visited flag for this component.
+        /// Gets or sets the visited flag for this component.
         /// </summary>
-        public bool Visited
+        public Boolean Visited
         {
-            get { return isVisited; }
-            set { isVisited = value; }
+            get { return _isVisited; }
+            set { _isVisited = value; }
         }
 
         /// <summary>
-        /// Tests if a component has been marked at some point during the processing
-        /// involving this graph.
+        /// Gets a value indicating if a component has been marked 
+        /// at some point during the processing involving this graph.
         /// </summary>
-        public bool IsMarked
+        public Boolean IsMarked
         {
             get { return Marked; }
         }
 
         /// <summary>
-        /// Gets/Sets the marked flag for this component.
+        /// Gets or sets the marked flag for this component.
         /// </summary>
-        public bool Marked
+        public Boolean Marked
         {
-            get { return isMarked; }
-            set { isMarked = value; }
+            get { return _isMarked; }
+            set { _isMarked = value; }
         }
 
         /// <summary>
-        /// Tests whether this component has been removed from its containing graph.
+        /// Gets a value indicating whether this component 
+        /// has been removed from its containing graph.
         /// </summary>
-        public abstract bool IsRemoved { get; }
+        public abstract Boolean IsRemoved { get; }
     }
 }

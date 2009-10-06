@@ -1,10 +1,17 @@
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
     /// Computes the centroid of an area point.
+    /// </summary>
+    /// <remarks>
     /// Algorithm:
     /// Based on the usual algorithm for calculating
     /// the centroid as a weighted sum of the centroids
@@ -12,37 +19,53 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
     /// The algorithm has been extended to handle holes and multi-polygons.
     /// See <see href="http://www.faqs.org/faqs/graphics/algorithms-faq"/>
     /// for further details of the basic approach.
-    /// </summary>
-    public class CentroidArea
+    /// </remarks>
+    public class CentroidArea<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private ICoordinate basePt = null;                       // the point all triangles are based at
-        private ICoordinate triangleCent3 = new Coordinate();    // temporary variable to hold centroid of triangle
-        private double areasum2 = 0;                            // Partial area sum
-        private ICoordinate cg3 = new Coordinate();              // partial centroid sum
+        private readonly ICoordinateFactory<TCoordinate> _factory;
+        private Double _areasum2; // Partial area sum
+        private TCoordinate _basePoint; // the point all triangles are based at
+        private TCoordinate _cg3; // partial centroid sum
+        private TCoordinate _triangleCent3; // temporary variable to hold centroid of triangle
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public CentroidArea() { }
+        public CentroidArea(ICoordinateFactory<TCoordinate> factory)
+        {
+            _factory = factory;
+        }
+
+        public TCoordinate Centroid
+        {
+            get
+            {
+                Double x = _cg3[Ordinates.X]/3/_areasum2;
+                Double y = _cg3[Ordinates.Y]/3/_areasum2;
+                return _factory.Create(x, y);
+            }
+        }
 
         /// <summary> 
         /// Adds the area defined by a Geometry to the centroid total.
-        /// If the point has no area it does not contribute to the centroid.
+        /// If the geometry has no area it does not contribute to the centroid.
         /// </summary>
-        /// <param name="geom">The point to add.</param>
-        public void Add(IGeometry geom)
+        /// <param name="geom">The geometry to add.</param>
+        public void Add(IGeometry<TCoordinate> geom)
         {
-            if (geom is IPolygon) 
+            if (geom is IPolygon<TCoordinate>)
             {
-                IPolygon poly = (IPolygon) geom;
-                BasePoint = poly.ExteriorRing.GetCoordinateN(0);
-                Add(poly);
+                IPolygon<TCoordinate> poly = geom as IPolygon<TCoordinate>;
+                setBasePoint(Slice.GetFirst(poly.ExteriorRing.Coordinates));
+                add(poly);
             }
-            else if (geom is IGeometryCollection) 
+            else if (geom is IGeometryCollection<TCoordinate>)
             {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
                     Add(geometry);
+                }
             }
         }
 
@@ -51,102 +74,92 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// coordinates.  The array must be a ring;
         /// i.e. end with the same coordinate as it starts with.
         /// </summary>
-        /// <param name="ring">An array of Coordinates.</param>
-        public void Add(ICoordinate[] ring)
+        /// <param name="ring">A set of <typeparamref name="TCoordinate"/>s.</param>
+        public void Add(IEnumerable<TCoordinate> ring)
         {
-            BasePoint = ring[0];
-            AddShell(ring);
+            setBasePoint(Slice.GetFirst(ring));
+            addShell(ring);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate Centroid
+        private void setBasePoint(TCoordinate basePoint)
         {
-            get
+            if (Coordinates<TCoordinate>.IsEmpty(_basePoint))
             {
-                ICoordinate cent = new Coordinate();
-                cent.X = cg3.X / 3 / areasum2;
-                cent.Y = cg3.Y / 3 / areasum2;
-                return cent;
-            }
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        private ICoordinate BasePoint
-        {
-            get
-            {
-                return this.basePt;
-            }
-            set
-            {
-                if (this.basePt == null)
-                    this.basePt = value;
+                _basePoint = basePoint;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="poly"></param>
-        private void Add(IPolygon poly)
+        private void add(IPolygon<TCoordinate> poly)
         {
-            AddShell(poly.ExteriorRing.Coordinates);
-            foreach (ILineString ls in poly.InteriorRings)
-                AddHole(ls.Coordinates);
+            addShell(poly.ExteriorRing.Coordinates);
+
+            foreach (ILineString<TCoordinate> ls in poly.InteriorRings)
+            {
+                addHole(ls.Coordinates);
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        private void AddShell(ICoordinate[] pts)
+        private void addShell(IEnumerable<TCoordinate> points)
         {
-            bool isPositiveArea = !CGAlgorithms.IsCCW(pts);
-            for (int i = 0; i < pts.Length - 1; i++)
-                AddTriangle(basePt, pts[i], pts[i + 1], isPositiveArea);
+            Boolean isPositiveArea = !CGAlgorithms<TCoordinate>.IsCCW(points);
+            addRing(points, isPositiveArea);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        private void AddHole(ICoordinate[] pts)
+        private void addHole(IEnumerable<TCoordinate> points)
         {
-            bool isPositiveArea = CGAlgorithms.IsCCW(pts);
-            for (int i = 0; i < pts.Length - 1; i++)
-                AddTriangle(basePt, pts[i], pts[i + 1], isPositiveArea);
+            Boolean isPositiveArea = CGAlgorithms<TCoordinate>.IsCCW(points);
+            addRing(points, isPositiveArea);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <param name="p2"></param>
-        /// <param name="isPositiveArea"></param>
-        private void AddTriangle(ICoordinate p0, ICoordinate p1, ICoordinate p2, bool isPositiveArea)
+        private void addRing(IEnumerable<TCoordinate> points, Boolean isPositiveArea)
         {
-            double sign = (isPositiveArea) ? 1.0 : -1.0;
-            Centroid3(p0, p1, p2, ref triangleCent3);
-            double area2 = Area2(p0, p1, p2);
-            cg3.X += sign * area2 * triangleCent3.X;
-            cg3.Y += sign * area2 * triangleCent3.Y;
-            areasum2 += sign * area2;
+            Boolean isPreviousSet = false;
+            TCoordinate previousPoint = default(TCoordinate);
+
+            foreach (TCoordinate point in points)
+            {
+                if (!isPreviousSet)
+                {
+                    isPreviousSet = true;
+                    previousPoint = point;
+                    continue;
+                }
+
+                addTriangle(_basePoint, previousPoint, point, isPositiveArea);
+                previousPoint = point;
+            }
+        }
+
+        private void addTriangle(TCoordinate p0, TCoordinate p1, TCoordinate p2, Boolean isPositiveArea)
+        {
+            Double sign = (isPositiveArea) ? 1.0 : -1.0;
+            centroid3(p0, p1, p2, ref _triangleCent3);
+            Double a2 = area2(p0, p1, p2);
+
+            Double x = 0;
+            Double y = 0;
+
+            if (!Coordinates<TCoordinate>.IsEmpty(_cg3))
+            {
+                x = _cg3[Ordinates.X];
+                y = _cg3[Ordinates.Y];
+            }
+
+            x += sign*a2*_triangleCent3[Ordinates.X];
+            y += sign*a2*_triangleCent3[Ordinates.Y];
+            _cg3 = _factory.Create(x, y);
+            _areasum2 += sign*a2;
         }
 
         /// <summary> 
         /// Returns three times the centroid of the triangle p1-p2-p3.
-        /// The factor of 3 is
-        /// left in to permit division to be avoided until later.
+        /// The factor of 3 is left in to permit division to be avoided until later.
         /// </summary>
-        private static void Centroid3(ICoordinate p1, ICoordinate p2, ICoordinate p3, ref ICoordinate c)
+        private void centroid3(TCoordinate p1, TCoordinate p2, TCoordinate p3, ref TCoordinate c)
         {
-            c.X = p1.X + p2.X + p3.X;
-            c.Y = p1.Y + p2.Y + p3.Y;
+            Double x = p1[Ordinates.X] + p2[Ordinates.X] + p3[Ordinates.X];
+            Double y = p1[Ordinates.Y] + p2[Ordinates.Y] + p3[Ordinates.Y];
+            c = _factory.Create(x, y);
             return;
         }
 
@@ -154,9 +167,10 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// Returns twice the signed area of the triangle p1-p2-p3,
         /// positive if a,b,c are oriented ccw, and negative if cw.
         /// </summary>
-        private static double Area2(ICoordinate p1, ICoordinate p2, ICoordinate p3)
+        private static Double area2(TCoordinate p1, TCoordinate p2, TCoordinate p3)
         {
-            return (p2.X - p1.X) * (p3.Y - p1.Y) - (p3.X - p1.X) * (p2.Y - p1.Y);
+            return (p2[Ordinates.X] - p1[Ordinates.X])*(p3[Ordinates.Y] - p1[Ordinates.Y])
+                   - (p3[Ordinates.X] - p1[Ordinates.X])*(p2[Ordinates.Y] - p1[Ordinates.Y]);
         }
     }
 }

@@ -1,26 +1,32 @@
 using System;
 using System.Globalization;
+using System.IO;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GeoAPI.IO.WellKnownText;
+using GeoAPI.IO.WellKnownBinary;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
+using NetTopologySuite.Coordinates;
+using NPack.Interfaces;
 
-namespace Open.Topology.TestRunner
+namespace GisSharpBlog.NetTopologySuite
 {
-	/// <summary>
-	/// Summary description for XmlTestFactory.
-	/// </summary>
-	public class XmlTestFactory
-	{
-        private static NumberFormatInfo nfi = null;
+    public class XmlTestFactory<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
+        private static NumberFormatInfo _numberFormapInfo;
 
         protected static IFormatProvider GetNumberFormatInfo()
         {
-            if (nfi == null)
+            if (_numberFormapInfo == null)
             {
-                nfi = new NumberFormatInfo();
-                nfi.NumberDecimalSeparator = ".";
+                _numberFormapInfo = new NumberFormatInfo();
+                _numberFormapInfo.NumberDecimalSeparator = ".";
             }
-            return nfi;
+
+            return _numberFormapInfo;
         }
 
         protected enum Target
@@ -30,173 +36,205 @@ namespace Open.Topology.TestRunner
             C = 3
         }
 
-        protected GeometryFactory m_objGeometryFactory = null;
-        protected WKTReader m_objReader = null;
+        protected IGeometryFactory<TCoordinate> _geometryFactory;
+        protected IWktGeometryReader<TCoordinate> _wktReader;
+        protected IWkbReader<TCoordinate> _wkbReader;
 
-        public XmlTestFactory(PrecisionModel pm)
-		{
-            m_objGeometryFactory = new GeometryFactory(pm);
-            m_objReader = new WKTReader(m_objGeometryFactory);
+        public XmlTestFactory(ICoordinateSequenceFactory<TCoordinate> seqFactory)
+        {
+            _geometryFactory = new GeometryFactory<TCoordinate>(seqFactory);
+            _wktReader =  new WktReader<TCoordinate>(_geometryFactory, null);
+            _wkbReader = new WkbReader<TCoordinate>(_geometryFactory);
+
         }
 
-        public XmlTest Create(XmlTestInfo testInfo, double tolerance)
+        public XmlTest<TCoordinate> Create(Int32 index, XmlTestInfo testInfo, Double tolerance)
         {
-            XmlTest xmlTest = new XmlTest(testInfo.GetValue("desc"), 
-                testInfo.IsDefaultTarget(), tolerance);
+            XmlTest<TCoordinate> xmlTest = new XmlTest<TCoordinate>(index, testInfo.GetValue("desc"),
+                                          testInfo.IsDefaultTarget(),
+                                          tolerance);
 
             // Handle test type or name.
-            string strTestType = testInfo.GetValue("name");
-            if (strTestType == null || strTestType.Length == 0)
-                return null;
+            String testType = testInfo.GetValue("name");
             
-            ParseType(strTestType, xmlTest);
-
-            // Handle the Geometry A:
-            string wktA = testInfo.GetValue("a");
-            if (wktA != null && wktA.Length > 0)
-                ParseGeometry(Target.A, wktA, xmlTest);
-            
-            // Handle the Geometry B:
-            string wktB = testInfo.GetValue("b");
-            if (wktB != null && wktB.Length > 0)           
-                ParseGeometry(Target.B, wktB, xmlTest);            
-
-            // Handle the arguments
-            string arg2 = testInfo.GetValue("arg2");
-            if (arg2 != null && arg2.Length > 0)
+            if (String.IsNullOrEmpty(testType))
             {
-                if (arg2 == "a")
-                    xmlTest.Argument1 = xmlTest.A;
-                else if (arg2 == "b")
-                    xmlTest.Argument1 = xmlTest.B;
+                return null;
             }
 
-            string arg3 = testInfo.GetValue("arg3");
-            if (arg3 != null && arg3.Length > 0)            
+            ParseType(testType, xmlTest);
+
+            // Handle the Geometry A:
+            String wktA = testInfo.GetValue("a");
+            
+            if (!String.IsNullOrEmpty(wktA))
+            {
+                ParseGeometry(Target.A, wktA, xmlTest);
+            }
+
+            // Handle the Geometry B:
+            String wktB = testInfo.GetValue("b");
+            
+            if (!String.IsNullOrEmpty(wktB))
+            {
+                ParseGeometry(Target.B, wktB, xmlTest);
+            }
+
+            // Handle the arguments
+            String arg2 = testInfo.GetValue("arg2");
+
+            if (!String.IsNullOrEmpty(arg2))
+            {
+                switch (arg2[0])
+                {
+                    case 'A':
+                    case 'a':
+                        xmlTest.Argument1 = xmlTest.A;
+                        break;
+                    case 'B':
+                    case 'b':
+                        xmlTest.Argument1 = xmlTest.B;
+                        break;
+                }
+            }
+
+            String arg3 = testInfo.GetValue("arg3");
+            
+            if (!String.IsNullOrEmpty(arg3))
+            {
                 xmlTest.Argument2 = arg3;
+            }
 
-            string strResult = testInfo.GetValue("result");
-            if (strResult == null || strResult.Length == 0)
+            String result = testInfo.GetValue("result");
+            
+            if (String.IsNullOrEmpty(result))
+            {
                 return null;
+            }
 
-            ParseResult(strResult, xmlTest);
+            ParseResult(result, xmlTest);
 
             return xmlTest;
         }
 
-        protected bool ParseType(string testType, XmlTest xmlTestItem)
+        protected Boolean ParseType(String testType, XmlTest<TCoordinate> xmlTestItem)
         {
             testType = testType.ToLower();
 
-            if (testType == "getarea")
-                xmlTestItem.TestType = XmlTestType.Area;
-            
-            else if (testType == "getboundary")
-                xmlTestItem.TestType = XmlTestType.Boundary;
-            
-            else if (testType == "getboundarydimension")
-                xmlTestItem.TestType = XmlTestType.BoundaryDimension;
-            
-            else if (testType == "buffer")
-                xmlTestItem.TestType = XmlTestType.Buffer;
-            
-            else if (testType == "getcentroid")
-                xmlTestItem.TestType = XmlTestType.Centroid;
-            
-            else if (testType == "contains")
-                xmlTestItem.TestType = XmlTestType.Contains;
-            
-            else if (testType == "convexhull")
-                xmlTestItem.TestType = XmlTestType.ConvexHull;
-            
-            else if (testType == "crosses")
-                xmlTestItem.TestType = XmlTestType.Crosses;
-            
-            else if (testType == "difference")
-                xmlTestItem.TestType = XmlTestType.Difference;
-            
-            else if (testType == "getdimension")
-                xmlTestItem.TestType = XmlTestType.Dimension;
-            
-            else if (testType == "disjoint")
-                xmlTestItem.TestType = XmlTestType.Disjoint;
-            
-            else if (testType == "distance")
-                xmlTestItem.TestType = XmlTestType.Distance;
-            
-            else if (testType == "getenvelope")
-                xmlTestItem.TestType = XmlTestType.Envelope;
-            
-            else if (testType == "equals")
-                xmlTestItem.TestType = XmlTestType.Equals;
-            
-            else if (testType == "getinteriorpoint")
-                xmlTestItem.TestType = XmlTestType.InteriorPoint;
-            
-            else if (testType == "intersection")
-                xmlTestItem.TestType = XmlTestType.Intersection;
-            
-            else if (testType == "intersects")
-                xmlTestItem.TestType = XmlTestType.Intersects;
-            
-            else if (testType == "isempty")
-                xmlTestItem.TestType = XmlTestType.IsEmpty;
-            
-            else if (testType == "issimple")
-                xmlTestItem.TestType = XmlTestType.IsSimple;
-            
-            else if (testType == "isvalid")
-                xmlTestItem.TestType = XmlTestType.IsValid;
-            
-            else if (testType == "iswithindistance")
-                xmlTestItem.TestType = XmlTestType.IsWithinDistance;
-            
-            else if (testType == "getlength")
-                xmlTestItem.TestType = XmlTestType.Length;
-            
-            else if (testType == "getnumpoints")
-                xmlTestItem.TestType = XmlTestType.NumPoints;
-            
-            else if (testType == "overlaps")
-                xmlTestItem.TestType = XmlTestType.Overlaps;
-            
-            else if (testType == "relate")
-                xmlTestItem.TestType = XmlTestType.Relate;
-            
-            else if (testType == "getsrid")
-                xmlTestItem.TestType = XmlTestType.SRID;
-            
-            else if (testType == "symmetricdifference")
-                xmlTestItem.TestType = XmlTestType.SymmetricDifference;
-            
-            else if (testType == "symdifference")
-                xmlTestItem.TestType = XmlTestType.SymmetricDifference;
-            
-            else if (testType == "touches")
-                xmlTestItem.TestType = XmlTestType.Touches;
-            
-            else if (testType == "union")
-                xmlTestItem.TestType = XmlTestType.Union;
-            
-            else if (testType == "within")
-                xmlTestItem.TestType = XmlTestType.Within;
+            switch (testType.ToLower())
+            {
+                case "getarea":
+                    xmlTestItem.TestType = XmlTestType.Area;
+                    break;
+                case "getboundary":
+                    xmlTestItem.TestType = XmlTestType.Boundary;
+                    break;
+                case "getboundarydimension":
+                    xmlTestItem.TestType = XmlTestType.BoundaryDimension;
+                    break;
+                case "buffer":
+                    xmlTestItem.TestType = XmlTestType.Buffer;
+                    break;
+                case "getcentroid":
+                    xmlTestItem.TestType = XmlTestType.Centroid;
+                    break;
+                case "contains":
+                    xmlTestItem.TestType = XmlTestType.Contains;
+                    break;
+                case "convexhull":
+                    xmlTestItem.TestType = XmlTestType.ConvexHull;
+                    break;
+                case "crosses":
+                    xmlTestItem.TestType = XmlTestType.Crosses;
+                    break;
+                case "difference":
+                    xmlTestItem.TestType = XmlTestType.Difference;
+                    break;
+                case "getdimension":
+                    xmlTestItem.TestType = XmlTestType.Dimension;
+                    break;
+                case "disjoint":
+                    xmlTestItem.TestType = XmlTestType.Disjoint;
+                    break;
+                case "distance":
+                    xmlTestItem.TestType = XmlTestType.Distance;
+                    break;
+                case "getenvelope":
+                    xmlTestItem.TestType = XmlTestType.Envelope;
+                    break;
+                case "equals":
+                    xmlTestItem.TestType = XmlTestType.Equals;
+                    break;
+                case "getinteriorpoint":
+                    xmlTestItem.TestType = XmlTestType.InteriorPoint;
+                    break;
+                case "intersection":
+                    xmlTestItem.TestType = XmlTestType.Intersection;
+                    break;
+                case "intersects":
+                    xmlTestItem.TestType = XmlTestType.Intersects;
+                    break;
+                case "isempty":
+                    xmlTestItem.TestType = XmlTestType.IsEmpty;
+                    break;
+                case "issimple":
+                    xmlTestItem.TestType = XmlTestType.IsSimple;
+                    break;
+                case "isvalid":
+                    xmlTestItem.TestType = XmlTestType.IsValid;
+                    break;
+                case "iswithindistance":
+                    xmlTestItem.TestType = XmlTestType.IsWithinDistance;
+                    break;
+                case "getlength":
+                    xmlTestItem.TestType = XmlTestType.Length;
+                    break;
+                case "getnumpoints":
+                    xmlTestItem.TestType = XmlTestType.NumPoints;
+                    break;
+                case "overlaps":
+                    xmlTestItem.TestType = XmlTestType.Overlaps;
+                    break;
+                case "relate":
+                    xmlTestItem.TestType = XmlTestType.Relate;
+                    break;
+                case "getsrid":
+                    xmlTestItem.TestType = XmlTestType.SRID;
+                    break;
+                case "symmetricdifference":
+                    xmlTestItem.TestType = XmlTestType.SymmetricDifference;
+                    break;
+                case "symdifference":
+                    xmlTestItem.TestType = XmlTestType.SymmetricDifference;
+                    break;
+                case "touches":
+                    xmlTestItem.TestType = XmlTestType.Touches;
+                    break;
+                case "union":
+                    xmlTestItem.TestType = XmlTestType.Union;
+                    break;
+                case "within":
+                    xmlTestItem.TestType = XmlTestType.Within;
+                    break;
+                case "covers":
+                    xmlTestItem.TestType = XmlTestType.Covers;
+                    break;
+                case "coveredby":
+                    xmlTestItem.TestType = XmlTestType.CoveredBy;
+                    break;
+                default:
+                    throw new ArgumentException(
+                        String.Format("The operation type \"{0}\" is not valid: ", testType));
+            }
 
-            else if (testType == "covers")
-                xmlTestItem.TestType = XmlTestType.Covers;
-
-            else if (testType == "coveredby")
-                xmlTestItem.TestType = XmlTestType.CoveredBy;
-            
-            else throw new ArgumentException(String.Format("The operation type \"{0}\" is not valid: ", testType));
-            
             return true;
         }
 
-        protected bool ParseResult(string result, XmlTest xmlTestItem)
+        protected Boolean ParseResult(String result, XmlTest<TCoordinate> xmlTestItem)
         {
-            switch (xmlTestItem.TestType) 
+            switch (xmlTestItem.TestType)
             {
-                // Here we expect double
+                    // Here we expect Double
                 case XmlTestType.Area:
                 case XmlTestType.Distance:
                 case XmlTestType.Length:
@@ -213,7 +251,7 @@ namespace Open.Topology.TestRunner
                     }
                 }
 
-                // Here we expect integer
+                    // Here we expect integer
                 case XmlTestType.BoundaryDimension:
                 case XmlTestType.Dimension:
                 case XmlTestType.NumPoints:
@@ -231,7 +269,7 @@ namespace Open.Topology.TestRunner
                     }
                 }
 
-                // Here we expect a point
+                    // Here we expect a point
                 case XmlTestType.Boundary:
                 case XmlTestType.Buffer:
                 case XmlTestType.Centroid:
@@ -243,19 +281,29 @@ namespace Open.Topology.TestRunner
                 case XmlTestType.SymmetricDifference:
                 case XmlTestType.Union:
                 {
+                    IGeometry<TCoordinate> geo = null;
                     try
                     {
-                        xmlTestItem.Result = m_objReader.Read(result);                        
-                        return true;
+                        geo = _wktReader.Read(result);
                     }
                     catch (Exception ex)
                     {
-                        XmlTestExceptionManager.Publish(ex);
-                        return false;
+                        try
+                        {
+                            geo = _wkbReader.Read(HexStringToByteArray(result));
+                        }
+                        catch (Exception ex1)
+                        {
+                            XmlTestExceptionManager.Publish(ex);
+                            XmlTestExceptionManager.Publish(ex1);
+                            return false;
+                        }
                     }
+                    xmlTestItem.Result = geo;
+                    return true;
                 }
 
-                // Here we expect boolean
+                    // Here we expect boolean
                 case XmlTestType.Contains:
                 case XmlTestType.Crosses:
                 case XmlTestType.Disjoint:
@@ -290,24 +338,64 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        protected bool ParseGeometry(Target targetType, string targetText, XmlTest xmlTestItem)
-        {   
-            IGeometry geom = null;
+        //public static byte[] HexStringToByteArray(String s)
+        //{
+        //    int len = s.length();
+        //    byte[] data = new byte[len / 2];
+        //    for (int i = 0; i < len; i += 2)
+        //    {
+        //        data[i / 2] = (byte)((Character.digit(s.charAt(i), 16) << 4)
+        //                             + Character.digit(s.charAt(i + 1), 16));
+        //    }
+        //    return data;
+        //}
+
+        private static Byte[] HexStringToByteArray(string hexString)
+        {
+            if (hexString.Length == 0)
+                return null;
+
+            hexString = hexString.Replace("\n", "").Trim();
+            Int32 size = hexString.Length / 2;
+            Byte[] ret = new Byte[size];
+
+            for (Int32 i = 0; i < hexString.Length; i += 2)
+                ret[i/2] = Convert.ToByte(hexString.Substring(i, 2), 16);
+
+            return ret;
+        }
+
+        protected Boolean ParseGeometry(Target targetType, String targetText, XmlTest<TCoordinate> xmlTestItem)
+        {
+            IGeometry<TCoordinate> geom;
+
             try
             {
-                geom = m_objReader.Read(targetText);
+                geom = _wktReader.Read(targetText);
             }
-            catch (Exception ex)
+            catch
             {
-                xmlTestItem.Thrown = ex;
-                XmlTestExceptionManager.Publish(ex);
-                return false;
+                try
+                {
+                    geom = _wkbReader.Read(HexStringToByteArray(targetText));
+                }
+                catch (Exception ex)
+                {
+                    xmlTestItem.Thrown = ex;
+                    XmlTestExceptionManager.Publish(ex);
+                    return false;
+                }
             }
 
             if (geom == null)
-                return false;
+                geom = _wkbReader.Read(HexStringToByteArray(targetText));
 
-            switch (targetType) 
+            if (geom == null)
+            {
+                return false;
+            }
+
+            switch (targetType)
             {
                 case Target.A:
                     xmlTestItem.A = geom;

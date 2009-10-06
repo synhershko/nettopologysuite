@@ -1,188 +1,210 @@
-using System.Collections;
-using GeoAPI.Geometries;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.Diagnostics;
 using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Buffer
 {
     /// <summary>
     /// A RightmostEdgeFinder find the DirectedEdge in a list which has the highest coordinate,
     /// and which is oriented L to R at that point. (I.e. the right side is on the RHS of the edge.)
+    /// 
+    /// The DirectedEdge returned is guaranteed to have the R of the world on its RHS.
     /// </summary>
-    public class RightmostEdgeFinder
-    {        
-        private int minIndex = -1;
-        private ICoordinate minCoord = null;
-        private DirectedEdge minDe = null;
-        private DirectedEdge orientedDe = null;
+    public class RightmostEdgeFinder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
+    {
+        private TCoordinate _minCoord;
+        private DirectedEdge<TCoordinate> _minDe;
+        private Int32 _minIndex = -1;
+        private DirectedEdge<TCoordinate> _orientedDe;
 
-        /// <summary>
-        /// A RightmostEdgeFinder finds the DirectedEdge with the rightmost coordinate.
-        /// The DirectedEdge returned is guaranteed to have the R of the world on its RHS.
-        /// </summary>
-        public RightmostEdgeFinder() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public DirectedEdge Edge
+        public DirectedEdge<TCoordinate> Edge
         {
-            get
-            {
-                return orientedDe;
-            }
+            get { return _orientedDe; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate Coordinate
+        public TCoordinate Coordinate
         {
-            get
-            {
-                return minCoord;
-            }
+            get { return _minCoord; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="dirEdgeList"></param>
-        public void FindEdge(IList dirEdgeList)
+        public void FindEdge(IEnumerable<DirectedEdge<TCoordinate>> edges)
         {
             /*
              * Check all forward DirectedEdges only.  This is still general,
              * because each edge has a forward DirectedEdge.
              */
-            for (IEnumerator i = dirEdgeList.GetEnumerator(); i.MoveNext(); )
+            foreach (DirectedEdge<TCoordinate> edge in edges)
             {
-                DirectedEdge de = (DirectedEdge) i.Current;
-                if (!de.IsForward) continue;
-                CheckForRightmostCoordinate(de);
+                if (!edge.IsForward)
+                {
+                    continue;
+                }
+
+                checkForRightmostCoordinate(edge);
             }
 
             /*
              * If the rightmost point is a node, we need to identify which of
              * the incident edges is rightmost.
              */
-            Assert.IsTrue(minIndex != 0 || minCoord.Equals(minDe.Coordinate), "inconsistency in rightmost processing");
-            if (minIndex == 0)            
-                 FindRightmostEdgeAtNode();            
-            else FindRightmostEdgeAtVertex();            
+            Assert.IsTrue(_minIndex != 0 || _minCoord.Equals(_minDe.Coordinate),
+                          "inconsistency in rightmost processing");
+
+            if (_minIndex == 0)
+            {
+                findRightmostEdgeAtNode();
+            }
+            else
+            {
+                findRightmostEdgeAtVertex();
+            }
 
             /*
              * now check that the extreme side is the R side.
              * If not, use the sym instead.
              */
-            orientedDe = minDe;
-            Positions rightmostSide = GetRightmostSide(minDe, minIndex);
-            if (rightmostSide == Positions.Left)            
-                orientedDe = minDe.Sym;
-        }
+            _orientedDe = _minDe;
+            Positions rightmostSide = getRightmostSide(_minDe, _minIndex);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void FindRightmostEdgeAtNode()
-        {
-            Node node = minDe.Node;
-            DirectedEdgeStar star = (DirectedEdgeStar) node.Edges;
-            minDe = star.GetRightmostEdge();
-            // the DirectedEdge returned by the previous call is not
-            // necessarily in the forward direction. Use the sym edge if it isn't.
-            if (!minDe.IsForward)
+            if (rightmostSide == Positions.Left)
             {
-                minDe = minDe.Sym;
-                minIndex = minDe.Edge.Coordinates.Length - 1;
+                _orientedDe = _minDe.Sym;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void FindRightmostEdgeAtVertex()
+        private void findRightmostEdgeAtNode()
+        {
+            Node<TCoordinate> node = _minDe.Node;
+            DirectedEdgeStar<TCoordinate> star = node.Edges as DirectedEdgeStar<TCoordinate>;
+            Debug.Assert(star != null);
+            _minDe = star.GetRightmostEdge();
+
+            // the DirectedEdge returned by the previous call is not
+            // necessarily in the forward direction. Use the sym edge if it isn't.
+            if (!_minDe.IsForward)
+            {
+                _minDe = _minDe.Sym;
+                _minIndex = _minDe.Edge.Coordinates.Count - 1;
+            }
+        }
+
+        private void findRightmostEdgeAtVertex()
         {
             /*
              * The rightmost point is an interior vertex, so it has a segment on either side of it.
              * If these segments are both above or below the rightmost point, we need to
              * determine their relative orientation to decide which is rightmost.
              */
-            ICoordinate[] pts = minDe.Edge.Coordinates;
-            Assert.IsTrue(minIndex > 0 && minIndex < pts.Length, "rightmost point expected to be interior vertex of edge");
-            ICoordinate pPrev = pts[minIndex - 1];
-            ICoordinate pNext = pts[minIndex + 1];
-            int orientation = CGAlgorithms.ComputeOrientation(minCoord, pNext, pPrev);
-            bool usePrev = false;
+            ICoordinateSequence<TCoordinate> pts = _minDe.Edge.Coordinates;
+            Assert.IsTrue(_minIndex > 0 && _minIndex < pts.Count,
+                          "rightmost point expected to be interior vertex of edge");
+
+            TCoordinate pPrev = pts[_minIndex - 1];
+            TCoordinate pNext = pts[_minIndex + 1];
+
+            Orientation orientation = CGAlgorithms<TCoordinate>.ComputeOrientation(_minCoord, pNext, pPrev);
+
+            Boolean usePrev = false;
+
             // both segments are below min point
-            if (pPrev.Y < minCoord.Y && pNext.Y < minCoord.Y && orientation == CGAlgorithms.CounterClockwise)            
-                usePrev = true;            
-            else if (pPrev.Y > minCoord.Y && pNext.Y > minCoord.Y && orientation == CGAlgorithms.Clockwise)            
-                usePrev = true;            
+            if (pPrev[Ordinates.Y] < _minCoord[Ordinates.Y]
+                && pNext[Ordinates.Y] < _minCoord[Ordinates.Y]
+                && orientation == Orientation.CounterClockwise)
+            {
+                usePrev = true;
+            }
+            else if (pPrev[Ordinates.Y] > _minCoord[Ordinates.Y]
+                     && pNext[Ordinates.Y] > _minCoord[Ordinates.Y]
+                     && orientation == Orientation.Clockwise)
+            {
+                usePrev = true;
+            }
+
             // if both segments are on the same side, do nothing - either is safe
             // to select as a rightmost segment
-            if (usePrev) minIndex = minIndex - 1;            
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        private void CheckForRightmostCoordinate(DirectedEdge de)
-        {
-            ICoordinate[] coord = de.Edge.Coordinates;
-            for (int i = 0; i < coord.Length - 1; i++)
+            if (usePrev)
             {
-                // only check vertices which are the start or end point of a non-horizontal segment
-                // <FIX> MD 19 Sep 03 - NO!  we can test all vertices, since the rightmost must have a non-horiz segment adjacent to it
-                if (minCoord == null || coord[i].X > minCoord.X)
-                {
-                    minDe = de;
-                    minIndex = i;
-                    minCoord = coord[i];
-                }
+                _minIndex = _minIndex - 1;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        private Positions GetRightmostSide(DirectedEdge de, int index)
+        private void checkForRightmostCoordinate(DirectedEdge<TCoordinate> de)
         {
-            Positions side = GetRightmostSideOfSegment(de, index);
+            IEnumerable<TCoordinate> coordinates = de.Edge.Coordinates;
+
+            Int32 i = 0;
+
+            foreach (TCoordinate coordinate in coordinates)
+            {
+                // only check vertices which are the start or end point of a non-horizontal segment
+                // <FIX> MD 19 Sep 03 - NO!  we can test all vertices, since the rightmost 
+                //                    - must have a non-horiz segment adjacent to it
+                if (Coordinates<TCoordinate>.IsEmpty(_minCoord)
+                    || coordinate[Ordinates.X] > _minCoord[Ordinates.X])
+                {
+                    _minDe = de;
+                    _minIndex = i;
+                    _minCoord = coordinate;
+                }
+
+                i += 1;
+            }
+        }
+
+        private Positions getRightmostSide(DirectedEdge<TCoordinate> de, Int32 index)
+        {
+            Positions side = getRightmostSideOfSegment(de, index);
+
             if (side < 0)
-                side = GetRightmostSideOfSegment(de, index - 1);
+            {
+                side = getRightmostSideOfSegment(de, index - 1);
+            }
+
             if (side < 0)
             {
                 // reaching here can indicate that segment is horizontal                
-                minCoord = null;
-                CheckForRightmostCoordinate(de);
+                _minCoord = default(TCoordinate);
+                checkForRightmostCoordinate(de);
             }
+
             return side;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="de"></param>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        private Positions GetRightmostSideOfSegment(DirectedEdge de, int i)
+        private static Positions getRightmostSideOfSegment(DirectedEdge<TCoordinate> de, Int32 i)
         {
-            Edge e = de.Edge;
-            ICoordinate[] coord = e.Coordinates;
+            Edge<TCoordinate> e = de.Edge;
+            IEnumerable<TCoordinate> coordinates = e.Coordinates;
 
-            if (i < 0 || i + 1 >= coord.Length) 
+            Pair<TCoordinate>? pair = Slice.GetPairAt(coordinates, i);
+
+            if (pair == null)
+            {
                 return Positions.Parallel;
-            if (coord[i].Y == coord[i + 1].Y)
-                return Positions.Parallel;    
+            }
+
+            Double y1 = pair.Value.First[Ordinates.Y];
+            Double y2 = pair.Value.Second[Ordinates.Y];
+
+            if (y1 == y2)
+            {
+                return Positions.Parallel;
+            }
 
             Positions pos = Positions.Left;
-            if (coord[i].Y < coord[i + 1].Y) 
+
+            if (y1 < y2)
+            {
                 pos = Positions.Right;
+            }
 
             return pos;
         }
