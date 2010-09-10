@@ -1,45 +1,37 @@
+using System;
+using GeoAPI.Indexing;
+
 namespace GisSharpBlog.NetTopologySuite.Index.Strtree
 {
     /// <summary>
-    /// Boundable wrapper for a non-Boundable spatial object. Used internally by
-    /// AbstractSTRtree.
+    /// Boundable wrapper for a non-boundable object. Used internally by
+    /// AbstractStrTree.
     /// </summary>
-    public class ItemBoundable : IBoundable 
+    public abstract class ItemBoundable<TBounds, TItem> : IBoundable<TBounds>
     {
-        private object bounds;
-        private object item;
+        private readonly TBounds _bounds;
+        private readonly TItem _item;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="bounds"></param>
-        /// <param name="item"></param>
-        public ItemBoundable(object bounds, object item) 
+        protected ItemBoundable(TBounds bounds, TItem item)
         {
-            this.bounds = bounds;
-            this.item = item;
+            _bounds = bounds;
+            _item = item;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public object Bounds 
+        public TItem Item
         {
-            get
-            {
-                return bounds;
-            }
+            get { return _item; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public object Item
+        #region IBoundable<TBounds> Members
+
+        public TBounds Bounds
         {
-            get
-            {
-                return item;
-            }
+            get { return _bounds; }
         }
+
+        public abstract Boolean Intersects(TBounds bounds);
+
+        #endregion
     }
 }

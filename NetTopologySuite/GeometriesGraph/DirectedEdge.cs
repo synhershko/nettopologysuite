@@ -1,311 +1,235 @@
 using System;
-using System.IO;
+using System.Diagnostics;
+using System.Text;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    public class DirectedEdge : EdgeEnd
+    public class DirectedEdge<TCoordinate> : EdgeEnd<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// Computes the factor for the change in depth when moving from one location to another.
-        /// E.g. if crossing from the Interior to the Exterior the depth decreases, so the factor is -1.
-        /// </summary>
-        public static int DepthFactor(Locations currLocation, Locations nextLocation)
-        {
-            if (currLocation == Locations.Exterior && nextLocation == Locations.Interior)
-                return 1;
-            else if (currLocation == Locations.Interior && nextLocation == Locations.Exterior)
-                return -1;
-            return 0;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        protected bool isForward;
-
-        private bool isInResult = false;
-        private bool isVisited = false;
-
-        private DirectedEdge sym; // the symmetric edge
-        private DirectedEdge next;  // the next edge in the edge ring for the polygon containing this edge
-        private DirectedEdge nextMin;  // the next edge in the MinimalEdgeRing that contains this edge
-        private EdgeRing edgeRing;  // the EdgeRing that this edge is part of
-        private EdgeRing minEdgeRing;  // the MinimalEdgeRing that this edge is part of
-
         /// <summary> 
         /// The depth of each side (position) of this edge.
         /// The 0 element of the array is never used.
         /// </summary>
-        private int[] depth = { 0, -999, -999 };
+        private readonly Int32[] _depth = {0, -999, -999};
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="isForward"></param>
-        public DirectedEdge(Edge edge, bool isForward) : base(edge)
-        {            
-            this.isForward = isForward;
-            if (isForward) 
-                Init(edge.GetCoordinate(0), edge.GetCoordinate(1));            
-            else 
+        private EdgeRing<TCoordinate> _edgeRing; // the EdgeRing that this edge is part of
+
+        private Boolean _isForward;
+        private Boolean _isInResult;
+        private Boolean _isVisited;
+        private EdgeRing<TCoordinate> _minEdgeRing; // the MinimalEdgeRing that this edge is part of
+
+        private DirectedEdge<TCoordinate> _next; // the next edge in the edge ring for the polygon containing this edge
+        private DirectedEdge<TCoordinate> _nextMin; // the next edge in the MinimalEdgeRing that contains this edge
+        private DirectedEdge<TCoordinate> _sym; // the symmetric edge
+
+        public DirectedEdge(Edge<TCoordinate> edge, Boolean isForward)
+            : base(edge)
+        {
+            _isForward = isForward;
+
+            if (isForward)
             {
-                int n = edge.NumPoints - 1;
-                Init(edge.GetCoordinate(n), edge.GetCoordinate(n-1));
+                Init(edge.Coordinates[0], edge.Coordinates[1]);
             }
-            ComputeDirectedLabel();
-        }        
+            else
+            {
+                Int32 n = edge.PointCount - 1;
+                Init(edge.Coordinates[n], edge.Coordinates[n - 1]);
+            }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool InResult
+            computeDirectedLabel();
+        }
+
+        public Boolean IsInResult
+        {
+            get { return _isInResult; }
+            set { _isInResult = value; }
+        }
+
+        //public Boolean IsInResult
+        //{
+        //    get { return _isInResult; }
+        //}
+
+        public Boolean IsVisited
+        {
+            get { return _isVisited; }
+            set { _isVisited = value; }
+        }
+
+        //public Boolean IsVisited
+        //{
+        //    get { return _isVisited; }
+        //}
+
+        public EdgeRing<TCoordinate> EdgeRing
+        {
+            get { return _edgeRing; }
+            set { _edgeRing = value; }
+        }
+
+        public EdgeRing<TCoordinate> MinEdgeRing
+        {
+            get { return _minEdgeRing; }
+            set { _minEdgeRing = value; }
+        }
+
+        public Int32 DepthDelta
         {
             get
             {
-                return isInResult;
-            }
-            set
-            {
-                isInResult = value;
-            }
-        }
+                Int32 depthDelta = Edge.DepthDelta;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsInResult
-        {
-            get
-            {
-                return isInResult;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool Visited
-        {
-            get
-            {
-                return isVisited;
-            }
-            set
-            {
-                isVisited = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsVisited
-        {
-            get
-            {
-                return isVisited;
-            }
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeRing EdgeRing
-        {
-            get
-            {
-                return edgeRing;
-            }
-            set
-            {
-                edgeRing = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeRing MinEdgeRing
-        {
-            get
-            {
-                return minEdgeRing;
-            }
-            set
-            {
-                minEdgeRing = value; 
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="position"></param>
-        /// <returns></returns>
-        public int GetDepth(Positions position) 
-        { 
-            return depth[(int)position]; 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="position"></param>
-        /// <param name="depthVal"></param>
-        public void SetDepth(Positions position, int depthVal)
-        {
-            if (depth[(int)position] != -999) 
-                if (depth[(int)position] != depthVal)                                     
-                    throw new TopologyException("assigned depths do not match", Coordinate);                                    
-            depth[(int)position] = depthVal;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public int DepthDelta
-        {
-            get
-            {
-                int depthDelta = edge.DepthDelta;
-                if (!IsForward) 
+                if (!IsForward)
+                {
                     depthDelta = -depthDelta;
+                }
+
                 return depthDelta;
             }
         }
 
         /// <summary>
-        /// VisitedEdge get property returns <c>true</c> if bot Visited 
-        /// and Sym.Visited are <c>true</c>.
-        /// VisitedEdge set property marks both DirectedEdges attached to a given Edge.
-        /// This is used for edges corresponding to lines, which will only
-        /// appear oriented in a single direction in the result.
+        /// Gets or sets whether the entire edge is visited. The edge is visted when 
+        /// both the <see cref="DirectedEdge{TCoordinate}"/> and the corresponding 
+        /// <see cref="DirectedEdge{TCoordinate}.Sym"/> have an <see cref="IsVisited"/>
+        /// property with the value of <see langword="true"/>.
         /// </summary>
-        public bool VisitedEdge
+        public Boolean IsEdgeVisited
         {
-            get
-            {
-                return Visited && sym.Visited;
-            }
+            get { return IsVisited && _sym.IsVisited; }
             set
             {
-                Visited = value;
-                sym.Visited = value;
-            }
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsForward
-        {
-            get
-            {
-                return this.isForward;
+                IsVisited = value;
+                _sym.IsVisited = value;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public DirectedEdge Sym
+        public Boolean IsForward
         {
-            get
-            {
-                return this.sym; 
-            }
-            set
-            {
-                sym = value;
-            }
+            get { return _isForward; }
+            protected set { _isForward = value; }
+        }
+
+        public DirectedEdge<TCoordinate> Sym
+        {
+            get { return _sym; }
+            set { _sym = value; }
+        }
+
+        public DirectedEdge<TCoordinate> Next
+        {
+            get { return _next; }
+            set { _next = value; }
+        }
+
+        public DirectedEdge<TCoordinate> NextMin
+        {
+            get { return _nextMin; }
+            set { _nextMin = value; }
         }
 
         /// <summary>
-        /// 
+        /// Gets <see langword="true"/> if at least one of the edge's labels is a line label
+        /// any labels which are not line labels have all <see cref="Positions"/> 
+        /// equal to <see cref="Locations.Exterior"/>.
         /// </summary>
-        public DirectedEdge Next
+        public Boolean IsLineEdge
         {
             get
             {
-                return next;
-            }
-            set
-            {
-                next = value;
-            }
-        }
+                Debug.Assert(Label.HasValue);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public DirectedEdge NextMin
-        {
-            get
-            {
-                return nextMin;
-            }
-            set
-            {
-                nextMin = value;
-            }
-        }
+                Label label = Label.Value;
 
-        /// <summary>
-        /// This edge is a line edge if
-        /// at least one of the labels is a line label
-        /// any labels which are not line labels have all Locations = Exterior.
-        /// </summary>
-        public bool IsLineEdge
-        {
-            get
-            {
-                bool isLine = label.IsLine(0) || label.IsLine(1);
-                bool isExteriorIfArea0 =
+                Boolean isLine = label.IsLine(0) || label.IsLine(1);
+
+                Boolean isExteriorIfArea0 =
                     !label.IsArea(0) || label.AllPositionsEqual(0, Locations.Exterior);
-                bool isExteriorIfArea1 =
+
+                Boolean isExteriorIfArea1 =
                     !label.IsArea(1) || label.AllPositionsEqual(1, Locations.Exterior);
+
                 return isLine && isExteriorIfArea0 && isExteriorIfArea1;
             }
         }
 
         /// <summary> 
-        /// This is an interior Area edge if
-        /// its label is an Area label for both Geometries
-        /// and for each Geometry both sides are in the interior.
+        /// Gets <see langword="true"/> if
+        /// the edge's label is an area label for both geometries
+        /// and for each geometry both sides are in the interior.
         /// </summary>
-        /// <returns><c>true</c> if this is an interior Area edge.</returns>
-        public bool IsInteriorAreaEdge
+        /// <returns><see langword="true"/> if this is an interior Area edge.</returns>
+        public Boolean IsInteriorAreaEdge
         {
             get
             {
-                bool isInteriorAreaEdge = true;
-                for (int i = 0; i < 2; i++)
+                Boolean isInteriorAreaEdge = true;
+
+                Debug.Assert(Label.HasValue);
+
+                Label label = Label.Value;
+
+                for (Int32 i = 0; i < 2; i++)
                 {
                     if (!(label.IsArea(i)
-                        && label.GetLocation(i, Positions.Left)  == Locations.Interior
-                        && label.GetLocation(i, Positions.Right) == Locations.Interior))
+                          && label[i, Positions.Left] == Locations.Interior
+                          && label[i, Positions.Right] == Locations.Interior))
                     {
                         isInteriorAreaEdge = false;
                     }
                 }
+
                 return isInteriorAreaEdge;
             }
         }
 
         /// <summary>
-        /// Compute the label in the appropriate orientation for this DirEdge.
+        /// Computes the factor for the change in depth 
+        /// when moving from one location to another.
+        /// E.g. if crossing from the <see cref="Locations.Interior"/> 
+        /// to the <see cref="Locations.Exterior"/>
+        /// the depth decreases, so the factor is -1.
         /// </summary>
-        private void ComputeDirectedLabel()
+        public static Int32 DepthFactor(Locations from, Locations to)
         {
-            label = new Label(edge.Label);
-            if (!isForward)
-                label.Flip();
+            if (from == Locations.Exterior && to == Locations.Interior)
+            {
+                return 1;
+            }
+
+            if (from == Locations.Interior && to == Locations.Exterior)
+            {
+                return -1;
+            }
+
+            return 0;
+        }
+
+        public Int32 GetDepth(Positions position)
+        {
+            return _depth[(Int32) position];
+        }
+
+        public void SetDepth(Positions position, Int32 depthVal)
+        {
+            if (_depth[(Int32) position] != -999)
+            {
+                if (_depth[(Int32) position] != depthVal)
+                {
+                    throw new TopologyException("Assigned depths do not match", Coordinate);
+                }
+            }
+
+            _depth[(Int32) position] = depthVal;
         }
 
         /// <summary> 
@@ -314,70 +238,110 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
         /// The other is computed depending on the Location 
         /// transition and the depthDelta of the edge.
         /// </summary>
-        /// <param name="depth"></param>
-        /// <param name="position"></param>
-        public void SetEdgeDepths(Positions position, int depth)
+        public void SetEdgeDepths(Positions position, Int32 depth)
         {
             // get the depth transition delta from R to Curve for this directed Edge
-            int depthDelta = Edge.DepthDelta;
-            if (!isForward) 
+            Int32 depthDelta = Edge.DepthDelta;
+
+            if (!_isForward)
+            {
                 depthDelta = -depthDelta;
+            }
 
             // if moving from Curve to R instead of R to Curve must change sign of delta
-            int directionFactor = 1;
+            Int32 directionFactor = 1;
+
             if (position == Positions.Left)
+            {
                 directionFactor = -1;
+            }
 
             Positions oppositePos = Position.Opposite(position);
-            int delta = depthDelta * directionFactor;            
-            int oppositeDepth = depth + delta;
+            Int32 delta = depthDelta*directionFactor;
+            Int32 oppositeDepth = depth + delta;
             SetDepth(position, depth);
             SetDepth(oppositePos, oppositeDepth);
         }
 
-        /// <summary> 
-        /// Set both edge depths.  One depth for a given side is provided.  The other is
-        /// computed depending on the Location transition and the depthDelta of the edge.
-        /// </summary>
-        /// <param name="depth"></param>
-        /// <param name="position"></param>
-        [Obsolete("Use SetEdgeDepths instead")]
-        public void OLDSetEdgeDepths(Positions position, int depth)
+        //public override String ToString()
+        //{
+        //    StringBuilder sb = new StringBuilder();
+
+        //    Int32 leftDepth = _depth[(Int32)Positions.Left];
+        //    Int32 rightDepth = _depth[(Int32)Positions.Right];
+        //    sb.AppendFormat("{0} {1}/{2} ({3}) ", IsForward ? "Forward" : "Reverse", 
+        //                                         leftDepth, rightDepth, DepthDelta);
+
+        //    if (_isInResult)
+        //    {
+        //        sb.Append(" in result ");
+        //    }
+
+        //    sb.Append(base.ToString());
+
+        //    return sb.ToString();
+        //}
+
+        // Compute the label in the appropriate orientation for this directed edge.
+        private void computeDirectedLabel()
         {
-            int depthDelta = Edge.DepthDelta;
-            Locations loc = label.GetLocation(0, position);
-            Positions oppositePos = Position.Opposite(position);
-            Locations oppositeLoc = label.GetLocation(0, oppositePos);
-            int delta = Math.Abs(depthDelta) * DepthFactor(loc, oppositeLoc);            
-            int oppositeDepth = depth + delta;
-            SetDepth(position, depth);
-            SetDepth(oppositePos, oppositeDepth);
+            Debug.Assert(Edge.Label.HasValue);
+
+            Label = Edge.Label.Value;
+
+            if (!_isForward)
+            {
+                Label = Label.Value.Flip();
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
-        public override void Write(StreamWriter outstream)
+        //public void WriteEdge(StreamWriter outstream)
+        //{
+        //    outstream.Write(ToString());
+        //    outstream.Write(" ");
+
+        //    if (_isForward)
+        //    {
+        //        Edge.Write(outstream);
+        //    }
+        //    else
+        //    {
+        //        Edge.WriteReverse(outstream);
+        //    }
+        //}
+
+
+        public override string ToString()
         {
-            base.Write(outstream);
-            outstream.Write(" " + depth[(int)Positions.Left] + "/" + depth[(int)Positions.Right]);
-            outstream.Write(" (" + DepthDelta + ")");            
-            if (isInResult)
-                outstream.Write(" inResult");
+            return
+                Coordinate +
+                (" -> ") +
+                DirectedCoordinate +
+                (_isForward ? "F " : "R ") +
+                (_isVisited ? "* " : "_ ") +
+                (_isInResult ? "in " : "no ") +
+                (Next == null
+                     ? "__________ "
+                     : Next.Coordinate +
+                       (" -> ") +
+                       Next.DirectedCoordinate +
+                       " ") +
+                (printCoords(Edge.Coordinates));
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="outstream"></param>
-        public void WriteEdge(StreamWriter outstream)
+        private static string printCoords(ICoordinateSequence coordinates)
         {
-            Write(outstream);
-            outstream.Write(" ");
-            if (isForward)
-                 edge.Write(outstream);
-            else edge.WriteReverse(outstream);
+            StringBuilder builder = new StringBuilder();
+
+            foreach (ICoordinate coordinate in coordinates)
+            {
+                builder.Append(coordinate);
+                builder.Append(" ");
+            }
+
+            --builder.Length;
+
+            return builder.ToString();
         }
     }
 }

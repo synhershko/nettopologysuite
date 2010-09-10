@@ -1,5 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
@@ -9,64 +15,85 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
     /// Compute the average of the midpoints
     /// of all line segments weighted by the segment length.
     /// </summary>
-    public class CentroidLine
+    public class CentroidLine<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private ICoordinate centSum = new Coordinate();
-        private double totalLength = 0.0;
+        private readonly ICoordinateFactory<TCoordinate> _factory;
+        private TCoordinate _centSum;
+        private Double _totalLength;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public CentroidLine() { }
-
-        /// <summary> 
-        /// Adds the linestring(s) defined by a Geometry to the centroid total.
-        /// If the point is not linear it does not contribute to the centroid.
-        /// </summary>
-        /// <param name="geom">The point to add.</param>
-        public void Add(IGeometry geom)
+        public CentroidLine(ICoordinateFactory<TCoordinate> factory)
         {
-            if (geom is ILineString)             
-                Add(geom.Coordinates);            
-
-            else if (geom is IGeometryCollection) 
-            {
-                IGeometryCollection gc = (IGeometryCollection) geom;
-                foreach (IGeometry geometry in gc.Geometries)
-                    Add(geometry);
-            }
+            _factory = factory;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate Centroid
+        public TCoordinate Centroid
         {
             get
             {
-                ICoordinate cent = new Coordinate();
-                cent.X = centSum.X / totalLength;
-                cent.Y = centSum.Y / totalLength;
-                return cent;
+                Double x = _centSum[Ordinates.X]/_totalLength;
+                Double y = _centSum[Ordinates.Y]/_totalLength;
+                return _factory.Create(x, y);
             }
         }
 
         /// <summary> 
-        /// Adds the length defined by an array of coordinates.
+        /// Adds the linestring(s) defined by a Geometry to the centroid total.
+        /// If the geometry is not linear it does not contribute to the centroid.
         /// </summary>
-        /// <param name="pts">An array of <c>Coordinate</c>s.</param>
-        public void Add(ICoordinate[] pts)
+        /// <param name="geom">The geometry to add.</param>
+        public void Add(IGeometry<TCoordinate> geom)
         {
-            for (int i = 0; i < pts.Length - 1; i++)
+            if (geom is ILineString<TCoordinate>)
             {
-                double segmentLen = pts[i].Distance(pts[i + 1]);
-                totalLength += segmentLen;
-
-                double midx = (pts[i].X + pts[i + 1].X) / 2;
-                centSum.X += segmentLen * midx;
-                double midy = (pts[i].Y + pts[i + 1].Y) / 2;
-                centSum.Y += segmentLen * midy;
+                Add(geom.Coordinates);
             }
+
+            else if (geom is IGeometryCollection<TCoordinate>)
+            {
+                IGeometryCollection<TCoordinate> gc = geom as IGeometryCollection<TCoordinate>;
+
+                Debug.Assert(gc != null);
+
+                foreach (IGeometry<TCoordinate> geometry in gc)
+                {
+                    Add(geometry);
+                }
+            }
+        }
+
+        /// <summary> 
+        /// Adds the length defined by a set of coordinates.
+        /// </summary>
+        /// <param name="points">A set of <typeparamref name="TCoordinate"/>s.</param>
+        public void Add(IEnumerable<TCoordinate> points)
+        {
+            Double x = 0, y = 0;
+
+            if (!Coordinates<TCoordinate>.IsEmpty(_centSum))
+            {
+                x = _centSum[Ordinates.X];
+                y = _centSum[Ordinates.Y];
+            }
+
+            foreach (Pair<TCoordinate> pair in Slice.GetOverlappingPairs(points))
+            {
+                TCoordinate point1 = pair.First;
+                TCoordinate point2 = pair.Second;
+
+                Double segmentLen = point1.Distance(point2);
+                _totalLength += segmentLen;
+
+                Double midX = (point1[Ordinates.X] + point2[Ordinates.X])/2;
+                x += segmentLen*midX;
+
+                Double midY = (point1[Ordinates.Y] + point2[Ordinates.Y])/2;
+                y += segmentLen*midY;
+            }
+
+            _centSum = _factory.Create(x, y);
         }
     }
 }

@@ -1,132 +1,167 @@
-using System.Collections;
-using GeoAPI.Geometries;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
     /// <summary> 
-    /// An EdgeEndBuilder creates EdgeEnds for all the "split edges"
-    /// created by the intersections determined for an Edge.
-    /// Computes the <c>EdgeEnd</c>s which arise from a noded <c>Edge</c>.
+    /// An <see cref="EdgeEndBuilder{TCoordinate}"/> creates <see cref="EdgeEnd{TCoordinate}"/>s 
+    /// for all the "split edges" created by the intersections determined for an 
+    /// <see cref="Edge{TCoordinate}"/>.
     /// </summary>
-    public class EdgeEndBuilder
+    /// <remarks>
+    /// Computes the <see cref="EdgeEnd{TCoordinate}"/>s which arise from a 
+    /// noded <see cref="Edge{TCoordinate}"/>.
+    /// </remarks>
+    public class EdgeEndBuilder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        public EdgeEndBuilder() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="edges"></param>
-        /// <returns></returns>
-        public IList ComputeEdgeEnds(IEnumerator edges)
+        public IEnumerable<EdgeEnd<TCoordinate>> ComputeEdgeEnds(IEnumerable<Edge<TCoordinate>> edges)
         {
-            IList l = new ArrayList();
-            for (IEnumerator i = edges; i.MoveNext(); ) 
+            foreach (Edge<TCoordinate> edge in edges)
             {
-                Edge e = (Edge) i.Current;
-                ComputeEdgeEnds(e, l);
+                foreach (EdgeEnd<TCoordinate> edgeEnd in ComputeEdgeEnds(edge))
+                {
+                    yield return edgeEnd;
+                }
             }
-            return l;
         }
 
         /// <summary>
         /// Creates stub edges for all the intersections in this
-        /// Edge (if any) and inserts them into the graph.
+        /// Edge (if any) and returns them for insertion into a graph.
         /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="l"></param>
-        public void ComputeEdgeEnds(Edge edge, IList l)
+        public IEnumerable<EdgeEnd<TCoordinate>> ComputeEdgeEnds(Edge<TCoordinate> edge)
         {
-            EdgeIntersectionList eiList = edge.EdgeIntersectionList;       
+            EdgeIntersectionList<TCoordinate> eiList = edge.EdgeIntersections;
+
             // ensure that the list has entries for the first and last point of the edge
             eiList.AddEndpoints();
 
-            IEnumerator it = eiList.GetEnumerator();
-            EdgeIntersection eiPrev = null;
-            EdgeIntersection eiCurr = null;
+            IEnumerator<EdgeIntersection<TCoordinate>> it = eiList.GetEnumerator();
+            EdgeIntersection<TCoordinate>? eiCurr = null;
+
             // no intersections, so there is nothing to do
-            if (! it.MoveNext()) return;
-            EdgeIntersection eiNext = (EdgeIntersection) it.Current;
-            do 
+            if (! it.MoveNext())
             {
-                eiPrev = eiCurr;
+                yield break;
+            }
+
+            EdgeIntersection<TCoordinate>? eiNext = it.Current;
+
+            do
+            {
+                EdgeIntersection<TCoordinate>? eiPrev = eiCurr;
                 eiCurr = eiNext;
                 eiNext = null;
-                
-                if (it.MoveNext())
-                    eiNext = (EdgeIntersection) it.Current;                
 
-                if (eiCurr != null) 
+                if (it.MoveNext())
                 {
-                    CreateEdgeEndForPrev(edge, l, eiCurr, eiPrev);
-                    CreateEdgeEndForNext(edge, l, eiCurr, eiNext);
+                    eiNext = it.Current;
                 }
-            } 
-            while (eiCurr != null);
+
+                if (eiCurr != null)
+                {
+                    foreach (EdgeEnd<TCoordinate> edgeEnd in CreateEdgeEndForPrev(edge, eiCurr.Value, eiPrev))
+                    {
+                        yield return edgeEnd;
+                    }
+
+                    foreach (EdgeEnd<TCoordinate> edgeEnd in CreateEdgeEndForNext(edge, eiCurr.Value, eiNext))
+                    {
+                        yield return edgeEnd;
+                    }
+                }
+            } while (eiCurr != null);
         }
 
         /// <summary>
         /// Create a EdgeStub for the edge before the intersection eiCurr.
+        /// </summary>
+        /// <remarks>
         /// The previous intersection is provided
         /// in case it is the endpoint for the stub edge.
         /// Otherwise, the previous point from the parent edge will be the endpoint.
         /// eiCurr will always be an EdgeIntersection, but eiPrev may be null.
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="l"></param>
-        /// <param name="eiCurr"></param>
-        /// <param name="eiPrev"></param>
-        public void CreateEdgeEndForPrev(Edge edge, IList l, EdgeIntersection eiCurr, EdgeIntersection eiPrev)
+        /// </remarks>
+        public IEnumerable<EdgeEnd<TCoordinate>> CreateEdgeEndForPrev(
+            Edge<TCoordinate> edge, EdgeIntersection<TCoordinate> eiCurr,
+            EdgeIntersection<TCoordinate>? eiPrev)
         {
-            int iPrev = eiCurr.SegmentIndex;
-            if (eiCurr.Distance == 0.0) 
+            Int32 iPrev = eiCurr.SegmentIndex;
+
+            if (eiCurr.Distance == 0.0)
             {
                 // if at the start of the edge there is no previous edge
                 if (iPrev == 0)
-                    return;
+                {
+                    yield break;
+                }
+
                 iPrev--;
             }
 
-            ICoordinate pPrev = edge.GetCoordinate(iPrev);
-            // if prev intersection is past the previous vertex, use it instead
-            if (eiPrev != null && eiPrev.SegmentIndex >= iPrev)
-                pPrev = eiPrev.Coordinate;
+            TCoordinate pPrev = edge.Coordinates[iPrev];
 
-            Label label = new Label(edge.Label);
-            // since edgeStub is oriented opposite to it's parent edge, have to flip sides for edge label
-            label.Flip();
-            EdgeEnd e = new EdgeEnd(edge, eiCurr.Coordinate, pPrev, label);        
-            l.Add(e);
+            // if prev intersection is past the previous vertex, use it instead
+            if (eiPrev != null && eiPrev.Value.SegmentIndex >= iPrev)
+            {
+                pPrev = eiPrev.Value.Coordinate;
+            }
+
+            Debug.Assert(edge.Label.HasValue);
+
+            Label label = edge.Label.Value;
+
+            // since edgeStub is oriented opposite to its parent edge, 
+            // have to flip sides for edge label
+            label = label.Flip();
+
+            EdgeEnd<TCoordinate> e = new EdgeEnd<TCoordinate>(
+                edge, eiCurr.Coordinate, pPrev, label);
+
+            yield return e;
         }
 
         /// <summary>
         /// Create a StubEdge for the edge after the intersection eiCurr.
+        /// </summary>
+        /// <remarks>
         /// The next intersection is provided
         /// in case it is the endpoint for the stub edge.
         /// Otherwise, the next point from the parent edge will be the endpoint.
         /// eiCurr will always be an EdgeIntersection, but eiNext may be null.
-        /// </summary>
-        /// <param name="edge"></param>
-        /// <param name="l"></param>
-        /// <param name="eiCurr"></param>
-        /// <param name="eiNext"></param>
-        public void CreateEdgeEndForNext(Edge edge, IList l, EdgeIntersection eiCurr, EdgeIntersection eiNext)
+        /// </remarks>
+        public IEnumerable<EdgeEnd<TCoordinate>> CreateEdgeEndForNext(
+            Edge<TCoordinate> edge, EdgeIntersection<TCoordinate> eiCurr,
+            EdgeIntersection<TCoordinate>? eiNext)
         {
-            int iNext = eiCurr.SegmentIndex + 1;
+            Int32 iNext = eiCurr.SegmentIndex + 1;
+
             // if there is no next edge there is nothing to do            
-            if (iNext >= edge.NumPoints && eiNext == null)          
-                return;
+            if (iNext >= edge.PointCount && eiNext == null)
+            {
+                yield break;
+            }
 
-            ICoordinate pNext = edge.GetCoordinate(iNext);
+            TCoordinate pNext = edge.Coordinates[iNext];
+
             // if the next intersection is in the same segment as the current, use it as the endpoint
-            if (eiNext != null && eiNext.SegmentIndex == eiCurr.SegmentIndex)
-                pNext = eiNext.Coordinate;
+            if (eiNext != null && eiNext.Value.SegmentIndex == eiCurr.SegmentIndex)
+            {
+                pNext = eiNext.Value.Coordinate;
+            }
 
-            EdgeEnd e = new EdgeEnd(edge, eiCurr.Coordinate, pNext, new Label(edge.Label));
-            l.Add(e);
+            Debug.Assert(edge.Label.HasValue);
+
+            EdgeEnd<TCoordinate> e = new EdgeEnd<TCoordinate>(
+                edge, eiCurr.Coordinate, pNext, edge.Label.Value);
+
+            yield return e;
         }
     }
 }

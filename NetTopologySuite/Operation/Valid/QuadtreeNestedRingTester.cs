@@ -1,105 +1,100 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Diagnostics;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 {
     /// <summary>
-    /// Tests whether any of a set of <c>LinearRing</c>s are
-    /// nested inside another ring in the set, using a <c>Quadtree</c>
+    /// Tests whether any of a set of <see cref="LinearRing{TCoordinate}" />s are
+    /// nested inside another ring in the set, using a <see cref="Quadtree{TCoordinate,TItem}"/>
     /// index to speed up the comparisons.
     /// </summary>
-    public class QuadtreeNestedRingTester
+    public class QuadtreeNestedRingTester<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IDivisible<Double, TCoordinate>, IConvertible
     {
-        private GeometryGraph graph;  // used to find non-node vertices
-        private IList rings = new ArrayList();
-        private IEnvelope totalEnv = new Envelope();
-        private Quadtree quadtree;
-        private ICoordinate nestedPt;
+        private readonly IGeometryFactory<TCoordinate> _geoFactory;
+        private readonly GeometryGraph<TCoordinate> _graph; // used to find non-node vertices
+        private readonly List<ILinearRing<TCoordinate>> _rings = new List<ILinearRing<TCoordinate>>();
+        private readonly IExtents<TCoordinate> _totalExtents;
+        private Quadtree<TCoordinate, ILinearRing<TCoordinate>> _index;
+        private TCoordinate _nestedPoint;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="graph"></param>
-        public QuadtreeNestedRingTester(GeometryGraph graph)
+        public QuadtreeNestedRingTester(IGeometryFactory<TCoordinate> geoFactory, GeometryGraph<TCoordinate> graph)
         {
-            this.graph = graph;
+            _geoFactory = geoFactory;
+            _totalExtents = new Extents<TCoordinate>(geoFactory);
+            _graph = graph;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ICoordinate NestedPoint
+        public TCoordinate NestedPoint
         {
-            get
+            get { return _nestedPoint; }
+        }
+
+        public void Add(ILinearRing<TCoordinate> ring)
+        {
+            _rings.Add(ring);
+            _totalExtents.ExpandToInclude(ring.Extents);
+        }
+
+        public Boolean IsNonNested()
+        {
+            buildQuadtree();
+
+            foreach (ILinearRing<TCoordinate> innerRing in _rings)
             {
-                return nestedPt;
-            }
-        }
+                IEnumerable<TCoordinate> innerRingCoordinates = innerRing.Coordinates;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="ring"></param>
-        public void Add(ILinearRing ring)
-        {
-            rings.Add(ring);
-            totalEnv.ExpandToInclude(ring.EnvelopeInternal);
-        }
+                IEnumerable<ILinearRing<TCoordinate>> results = _index.Query(innerRing.Extents);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool IsNonNested()
-        {
-            BuildQuadtree();
-
-            for (int i = 0; i < rings.Count; i++)
-            {
-                ILinearRing innerRing = (ILinearRing) rings[i];
-                ICoordinate[] innerRingPts = innerRing.Coordinates;
-
-                IList results = quadtree.Query(innerRing.EnvelopeInternal);
-                for (int j = 0; j < results.Count; j++)
+                foreach (ILinearRing<TCoordinate> searchRing in results)
                 {
-                    ILinearRing searchRing = (ILinearRing) results[j];
-                    ICoordinate[] searchRingPts = searchRing.Coordinates;
+                    IEnumerable<TCoordinate> searchRingCoordinates = searchRing.Coordinates;
 
-                    if (innerRing == searchRing) continue;
+                    if (innerRing == searchRing)
+                    {
+                        continue;
+                    }
 
-                    if (!innerRing.EnvelopeInternal.Intersects(searchRing.EnvelopeInternal)) continue;
+                    if (!innerRing.Extents.Intersects(searchRing.Extents))
+                    {
+                        continue;
+                    }
 
-                    ICoordinate innerRingPt = IsValidOp.FindPointNotNode(innerRingPts, searchRing, graph);
-                    Assert.IsTrue(innerRingPt != null, "Unable to find a ring point not a node of the search ring");
+                    TCoordinate innerRingPt = IsValidOp<TCoordinate>.FindPointNotNode(
+                        innerRingCoordinates, searchRing, _graph);
 
-                    bool isInside = CGAlgorithms.IsPointInRing(innerRingPt, searchRingPts);
+                    Assert.IsTrue(!Coordinates<TCoordinate>.IsEmpty(innerRingPt),
+                                  "Unable to find a ring point not a node of the search ring");
+
+                    Boolean isInside = CGAlgorithms<TCoordinate>.IsPointInRing(innerRingPt, searchRingCoordinates);
+
                     if (isInside)
                     {
-                        nestedPt = innerRingPt;
+                        _nestedPoint = innerRingPt;
                         return false;
                     }
                 }
             }
+
             return true;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void BuildQuadtree()
+        private void buildQuadtree()
         {
-            quadtree = new Quadtree();
+            _index = new Quadtree<TCoordinate, ILinearRing<TCoordinate>>(_geoFactory);
 
-            for (int i = 0; i < rings.Count; i++)
+            foreach (ILinearRing<TCoordinate> ring in _rings)
             {
-                ILinearRing ring = (ILinearRing) rings[i];
-                Envelope env = (Envelope) ring.EnvelopeInternal;
-                quadtree.Insert(env, ring);
+                _index.Insert(ring);
             }
         }
     }

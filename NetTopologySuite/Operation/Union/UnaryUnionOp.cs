@@ -1,52 +1,57 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
 using GisSharpBlog.NetTopologySuite.Operation.Overlay;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Union
 {
-    /// <summary>
-    /// Unions a collection of Geometry or a single Geometry 
-    /// (which may be a collection) together.
-    /// By using this special-purpose operation over a collection of geometries
-    /// it is possible to take advantage of various optimizations to improve performance.
-    /// Heterogeneous {@link GeometryCollection}s are fully supported.
-    /// 
-    /// The result obeys the following contract:
-    /// <list type="Bullet">
-    /// <item>Unioning a set of overlapping {@link Polygons}s has the effect of
-    /// merging the areas (i.e. the same effect as 
-    /// iteratively unioning all individual polygons together).</item>
-    /// <item>Unioning a set of {@link LineString}s has the effect of <b>fully noding</b> 
-    /// and <b>dissolving</b> the input linework.
-    /// In this context "fully noded" means that there will be a node or endpoint in the output 
-    /// for every endpoint or line segment crossing in the input.
-    /// "Dissolved" means that any duplicate (e.g. coincident) line segments or portions
-    /// of line segments will be reduced to a single line segment in the output.  
-    /// This is consistent with the semantics of the 
-    /// {@link Geometry#union(Geometry)} operation.
-    /// If <b>merged</b> linework is required, the {@link LineMerger} class can be used.</item>
-    /// 
-    /// <item>Unioning a set of {@link Points}s has the effect of merging
-    /// all identical points (producing a set with no duplicates).</item>
-    /// </list>
-    /// </summary>
-    public class UnaryUnionOp
+    ///<summary>
+    ///Unions a collection of Geometry or a single Geometry 
+    ///(which may be a collection) together.
+    ///By using this special-purpose operation over a collection of geometries
+    ///it is possible to take advantage of various optimizations to improve performance.
+    ///Heterogeneous {@link GeometryCollection}s are fully supported.
+    ///
+    ///The result obeys the following contract:
+    ///<list type="Bullet">
+    ///<item>Unioning a set of overlapping {@link Polygons}s has the effect of
+    ///merging the areas (i.e. the same effect as 
+    ///iteratively unioning all individual polygons together).</item>
+    ///<item>Unioning a set of {@link LineString}s has the effect of <b>fully noding</b> 
+    ///and <b>dissolving</b> the input linework.
+    ///In this context "fully noded" means that there will be a node or endpoint in the output 
+    ///for every endpoint or line segment crossing in the input.
+    ///"Dissolved" means that any duplicate (e.g. coincident) line segments or portions
+    ///of line segments will be reduced to a single line segment in the output.  
+    ///This is consistent with the semantics of the 
+    ///{@link Geometry#union(Geometry)} operation.
+    ///If <b>merged</b> linework is required, the {@link LineMerger} class can be used.</item>
+    ///
+    ///<item>Unioning a set of {@link Points}s has the effect of merging
+    ///al identical points (producing a set with no duplicates).</item>
+    ///</list>
+    ///</summary>
+    ///<typeparam name="TCoordinate"></typeparam>
+    public class UnaryUnionOp<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private readonly List<ILineString> _lines = new List<ILineString>();
-        private readonly List<IPoint> _points = new List<IPoint>();
-        private readonly List<IPolygon> _polygons = new List<IPolygon>();
+        private readonly List<ILineString<TCoordinate>> _lines = new List<ILineString<TCoordinate>>();
+        private readonly List<IPoint<TCoordinate>> _points = new List<IPoint<TCoordinate>>();
+        private readonly List<IPolygon<TCoordinate>> _polygons = new List<IPolygon<TCoordinate>>();
 
-        private IGeometryFactory _geomFact;
+        private IGeometryFactory<TCoordinate> _geomFact;
 
         ///<summary>
         /// Constructs an instance of this class
         ///</summary>
-        ///<param name="geoms">an <see cref="IEnumerable{T}"/> of <see cref="IGeometry"/>s</param>
-        ///<param name="geomFact">an <see cref="IGeometryFactory"/></param>
-        public UnaryUnionOp(IEnumerable<IGeometry> geoms, IGeometryFactory geomFact)
+        ///<param name="geoms">an <see cref="IEnumerable{T}"/> of <see cref="IGeometry{TCoordinate}"/>s</param>
+        ///<param name="geomFact">an <see cref="IGeometryFactory{TCoordinate}"/></param>
+        public UnaryUnionOp(IEnumerable<IGeometry<TCoordinate>> geoms, IGeometryFactory<TCoordinate> geomFact)
         {
             _geomFact = geomFact;
             Extract(geoms);
@@ -55,8 +60,8 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///<summary>
         /// Constructs an instance of this class
         ///</summary>
-        ///<param name="geoms">an <see cref="IEnumerable{T}"/> of <see cref="IGeometry"/>s</param>
-        public UnaryUnionOp(IEnumerable<IGeometry> geoms)
+        ///<param name="geoms">an <see cref="IEnumerable{T}"/> of <see cref="IGeometry{TCoordinate}"/>s</param>
+        public UnaryUnionOp(IEnumerable<IGeometry<TCoordinate>> geoms)
         {
             Extract(geoms);
         }
@@ -65,8 +70,8 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///<summary>
         /// Constructs an instance of this class
         ///</summary>
-        ///<param name="geom">an <see cref="IGeometry"/></param>
-        public UnaryUnionOp(IGeometry geom)
+        ///<param name="geom">an <see cref="IGeometry{TCoordinate}"/></param>
+        public UnaryUnionOp(IGeometry<TCoordinate> geom)
         {
             Extract(geom);
         }
@@ -75,9 +80,9 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///</summary>
         ///<param name="geoms"></param>
         ///<returns></returns>
-        public static IGeometry Union(IEnumerable<IGeometry> geoms)
+        public static IGeometry<TCoordinate> Union(IEnumerable<IGeometry<TCoordinate>> geoms)
         {
-            UnaryUnionOp op = new UnaryUnionOp(geoms);
+            UnaryUnionOp<TCoordinate> op = new UnaryUnionOp<TCoordinate>(geoms);
             return op.Union();
         }
 
@@ -86,10 +91,10 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///<param name="geoms"></param>
         ///<param name="geomFact"></param>
         ///<returns></returns>
-        public static IGeometry Union(IEnumerable<IGeometry> geoms,
-                                                   IGeometryFactory geomFact)
+        public static IGeometry<TCoordinate> Union(IEnumerable<IGeometry<TCoordinate>> geoms,
+                                                   IGeometryFactory<TCoordinate> geomFact)
         {
-            UnaryUnionOp op = new UnaryUnionOp(geoms, geomFact);
+            UnaryUnionOp<TCoordinate> op = new UnaryUnionOp<TCoordinate>(geoms, geomFact);
             return op.Union();
         }
 
@@ -97,33 +102,31 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///</summary>
         ///<param name="geom"></param>
         ///<returns></returns>
-        public static IGeometry Union(IGeometry geom)
+        public static IGeometry<TCoordinate> Union(IGeometry<TCoordinate> geom)
         {
-            UnaryUnionOp op = new UnaryUnionOp(geom);
+            UnaryUnionOp<TCoordinate> op = new UnaryUnionOp<TCoordinate>(geom);
             return op.Union();
         }
 
-        private void Extract(IEnumerable<IGeometry> geoms)
+        private void Extract(IEnumerable<IGeometry<TCoordinate>> geoms)
         {
-            foreach (IGeometry geom in geoms)
+            foreach (IGeometry<TCoordinate> geom in geoms)
                 Extract(geom);
         }
 
-        private void Extract(IGeometry geom)
+        private void Extract(IGeometry<TCoordinate> geom)
         {
             if (_geomFact == null)
-            {
                 _geomFact = geom.Factory;
-            }
 
             /*
             PolygonExtracter.getPolygons(geom, polygons);
             LineStringExtracter.getLines(geom, lines);
             PointExtracter.getPoints(geom, points);
             */
-            _polygons.AddRange(PolygonExtracter.GetPolygons(geom).Cast<IPolygon>());
-            _lines.AddRange(LinearComponentExtracter.GetLines(geom).Cast<ILineString>());
-            _points.AddRange(PointExtracter.GetPoints(geom).Cast<IPoint>());
+            _polygons.AddRange(GeometryFilter.Extract<IPolygon<TCoordinate>, TCoordinate>(geom));
+            _lines.AddRange(GeometryFilter.Extract<ILineString<TCoordinate>, TCoordinate>(geom));
+            _points.AddRange(GeometryFilter.Extract<IPoint<TCoordinate>, TCoordinate>(geom));
         }
 
         ///<summary>
@@ -132,104 +135,81 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///</summary>
         ///<returns>a Geometry containing the union</returns>
         /// <returns>an empty GEOMETRYCOLLECTION if no geometries were provided in the input</returns>
-        public IGeometry Union()
+        public IGeometry<TCoordinate> Union()
         {
             if (_geomFact == null)
             {
                 return null;
             }
 
-            IGeometry unionPoints = null;
-
+            IGeometry<TCoordinate> unionPoints = null;
             if (_points.Count > 0)
             {
-                IGeometry ptGeom =
-                    _geomFact.BuildGeometry(convertPoints(_points).ToList());
+                IGeometry<TCoordinate> ptGeom =
+                    _geomFact.BuildGeometry(convertPoints(_points));
                 unionPoints = UnionNoOpt(ptGeom);
             }
 
-            IGeometry unionLines = null;
-
+            IGeometry<TCoordinate> unionLines = null;
             if (_lines.Count > 0)
             {
-                IGeometry lineGeom = _geomFact.BuildGeometry(convertLineStrings(_lines).ToList());
+                IGeometry<TCoordinate> lineGeom = _geomFact.BuildGeometry(convertLineStrings(_lines));
                 unionLines = UnionNoOpt(lineGeom);
             }
 
-            IGeometry unionPolygons = null;
-
+            IGeometry<TCoordinate> unionPolygons = null;
             if (_polygons.Count > 0)
             {
-                unionPolygons = CascadedPolygonUnion.Union(_polygons);
+                unionPolygons = CascadedPolygonUnion<TCoordinate>.Union(_polygons);
             }
 
             /**
              * Performing two unions is somewhat inefficient,
              * but is mitigated by unioning lines and points first
              */
-            IGeometry unionLA = UnionWithNull(unionLines, unionPolygons);
-            IGeometry union = null;
-
+            IGeometry<TCoordinate> unionLA = UnionWithNull(unionLines, unionPolygons);
+            IGeometry<TCoordinate> union = null;
             if (unionPoints == null)
-            {
                 union = unionLA;
-            }
             else if (unionLA == null)
-            {
                 union = unionPoints;
-            }
             else
-            {
-                union = PointGeometryUnion.Union((IPoint) unionPoints, unionLA);
-            }
+                union = PointGeometryUnion<TCoordinate>.Union((IPuntal<TCoordinate>) unionPoints, unionLA);
 
             if (union == null)
-            {
                 return _geomFact.CreateGeometryCollection(null);
-            }
 
             return union;
         }
 
-        private IEnumerable<IGeometry> convertPoints(IEnumerable<IPoint> geom)
+        private IEnumerable<IGeometry<TCoordinate>> convertPoints(IEnumerable<IPoint<TCoordinate>> geom)
         {
-            foreach (IPoint point in geom)
-            {
+            foreach (IPoint<TCoordinate> point in geom)
                 yield return point;
-            }
         }
 
-        private IEnumerable<IGeometry> convertLineStrings(IEnumerable<ILineString> geom)
+        private IEnumerable<IGeometry<TCoordinate>> convertLineStrings(IEnumerable<ILineString<TCoordinate>> geom)
         {
-            foreach (ILineString point in geom)
-            {
-                yield return point;
-            }
+            foreach (ILineString<TCoordinate> line in geom)
+                yield return line;
         }
 
         /// <summary>
         /// Computes the union of two geometries, either of both of which may be null.
-        /// </summary>
-        /// <param name="g0">a <see cref="IGeometry"/></param>
-        /// <param name="g1">a <see cref="IGeometry"/></param>
+        /// </summary>"/>
+        /// <param name="g0">a <see cref="IGeometry{TCoordinate}"/></param>
+        /// <param name="g1">a <see cref="IGeometry{TCoordinate}"/></param>
         /// <returns>the union of the input(s)</returns>
         /// <returns>null if both inputs are null</returns>
-        private static IGeometry UnionWithNull(IGeometry g0, IGeometry g1)
+        private static IGeometry<TCoordinate> UnionWithNull(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
             if (g0 == null && g1 == null)
-            {
                 return null;
-            }
 
             if (g1 == null)
-            {
                 return g0;
-            }
-
             if (g0 == null)
-            {
                 return g1;
-            }
 
             return g0.Union(g1);
         }
@@ -245,10 +225,10 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         ///@return the union of the input geometry
          */
 
-        private IGeometry UnionNoOpt(IGeometry g0)
+        private IGeometry<TCoordinate> UnionNoOpt(IGeometry<TCoordinate> g0)
         {
-            IGeometry empty = _geomFact.CreatePoint((ICoordinate)null);
-            return OverlayOp.Overlay(g0, empty, SpatialFunction.Union);
+            IGeometry<TCoordinate> empty = _geomFact.CreatePoint();
+            return OverlayOp<TCoordinate>.Overlay(g0, empty, SpatialFunctions.Union);
         }
     }
 }

@@ -2,23 +2,26 @@
 using System.Text;
 using System.Collections.Generic;
 using System.Linq;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-using GeoAPI.Operations.Buffer;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
 using GisSharpBlog.NetTopologySuite.Operation.Buffer;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NetTopologySuite.Coordinates;
 
 namespace NetTopologySuite.VersionComparisonTests
 {
     /// <summary>
-    /// Summary description for UnitTest1
+    /// Summary description for BufferTest
     /// </summary>
     [TestClass]
     public class BufferTest
     {
         public BufferTest()
         {
+            //
+            // TODO: Add constructor logic here
+            //
         }
 
         private TestContext testContextInstance;
@@ -38,7 +41,6 @@ namespace NetTopologySuite.VersionComparisonTests
                 testContextInstance = value;
             }
         }
-
 
         #region Additional test attributes
         //
@@ -62,29 +64,22 @@ namespace NetTopologySuite.VersionComparisonTests
         //
         #endregion
 
+        private readonly IGeometryFactory<BufferedCoordinate> _geometryFactory =
+            new GeometryFactory<BufferedCoordinate>(
+                new BufferedCoordinateSequenceFactory(
+                    new BufferedCoordinateFactory(PrecisionModelType.DoubleFloating))
+                );
+
         [TestMethod]
-        public void BasicBuffer()
+        public void Test_T97Buffer()
         {
-            ILineString ls = new WKTReader().Read("LINESTRING(0 0, 100 100)") as ILineString;
+            ILineString ls = _geometryFactory.WktReader.Read("LINESTRING(0 0, 100 100)") as ILineString;
             Assert.IsNotNull(ls);
-            BufferBuilder bb = new BufferBuilder();
-            IGeometry res = bb.Buffer(ls, 10);
+
+            BufferBuilder<BufferedCoordinate> bb =
+                new BufferBuilder<BufferedCoordinate>(_geometryFactory);
+            IGeometry<BufferedCoordinate> res = bb.Buffer((IGeometry<BufferedCoordinate>)ls, 10);
             Assert.IsNotNull(res);
-        }
-
-
-
-        [TestMethod]
-        public void BasicBufferPoint()
-        {
-            IPoint ls = new WKTReader().Read("POINT(0 0)") as IPoint;
-            Assert.IsNotNull(ls);
-            BufferBuilder bb = new BufferBuilder();
-            bb.EndCapStyle = BufferStyle.CapSquare;
-            bb.QuadrantSegments = 2;
-            IGeometry actual = bb.Buffer(ls, 10);
-            IGeometry expected = new WKTReader().Read("POLYGON((10 10, -10 10, -10 -10, 10 -10, 10 10))");
-            Assert.AreEqual(actual, expected);
         }
     }
 }

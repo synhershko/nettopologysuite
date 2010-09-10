@@ -1,72 +1,66 @@
 using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
 using GisSharpBlog.NetTopologySuite.Samples.SimpleTests;
 using NUnit.Framework;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.Tests.Various
 {
-    /// <summary>
-    /// 
-    /// </summary>
     [TestFixture]
     public class NormalizeTest : BaseSamples
     {
-        private IPolygon polygon = null;
-        private ILinearRing shell = null;
-        private ILinearRing hole = null;
+        #region Setup/Teardown
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="T:NormalizeTest"/> class.
-        /// </summary>
-        public NormalizeTest() : base() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
         [SetUp]
         public void Init()
         {
-            shell = Factory.CreateLinearRing(new ICoordinate[] {    new Coordinate(100,100),
-                                                                    new Coordinate(200,100),
-                                                                    new Coordinate(200,200),                
-                                                                    new Coordinate(100,200),
-                                                                    new Coordinate(100,100), });
+            shell = GeoFactory.CreateLinearRing(new ICoordinate[]
+                                                    {
+                                                        CoordFactory.Create(100, 100),
+                                                        CoordFactory.Create(200, 100),
+                                                        CoordFactory.Create(200, 200),
+                                                        CoordFactory.Create(100, 200),
+                                                        CoordFactory.Create(100, 100),
+                                                    });
             // NOTE: Hole is created with not correct order for holes
-            hole = Factory.CreateLinearRing(new ICoordinate[] {      new Coordinate(120,120),
-                                                                    new Coordinate(180,120),
-                                                                    new Coordinate(180,180),                                                                                
-                                                                    new Coordinate(120,180),                                                                
-                                                                    new Coordinate(120,120), });
-            polygon = Factory.CreatePolygon(shell, new ILinearRing[] { hole, });
+            hole = GeoFactory.CreateLinearRing(new ICoordinate[]
+                                                   {
+                                                       CoordFactory.Create(120, 120),
+                                                       CoordFactory.Create(180, 120),
+                                                       CoordFactory.Create(180, 180),
+                                                       CoordFactory.Create(120, 180),
+                                                       CoordFactory.Create(120, 120),
+                                                   });
+            polygon = GeoFactory.CreatePolygon(shell, new[] {hole,});
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        #endregion
+
+        private IPolygon polygon;
+        private ILinearRing shell;
+        private ILinearRing hole;
+
         [Test]
-        [ExpectedException(typeof(ArgumentOutOfRangeException))]
-        public void NotNormalizedGDBOperation()
-        {                        
-	        byte[] bytes = new GDBWriter().Write(polygon);
-            IGeometry test = new GDBReader().Read(bytes);
-
-            Assert.IsNull(test);    
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        [Test]        
-        public void NormalizedGDBOperation()
+        [Ignore("GDBWriter and GDBReader not implemented")]
+        public void NormalizedGdbOperation()
         {
             polygon.Normalize();
 
-            byte[] bytes = new GDBWriter().Write(polygon);
-            IGeometry test = new GDBReader().Read(bytes);
+            //Byte[] bytes = new GDBWriter().Write(polygon);
+            //IGeometry test = new GDBReader().Read(bytes);
 
-            Assert.IsNotNull(test);            
+            //Assert.IsNotNull(test);            
+        }
+
+        [Test]
+        [ExpectedException(typeof (ArgumentOutOfRangeException))]
+        [Ignore("GDBWriter and GDBReader not implemented")]
+        public void NotNormalizedGdbOperation()
+        {
+            //Byte[] bytes = new GDBWriter().Write(polygon);
+            //IGeometry test = new GDBReader().Read(bytes);
+
+            //Assert.IsNull(test);    
         }
     }
 }

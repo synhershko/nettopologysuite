@@ -1,6 +1,10 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
@@ -8,138 +12,130 @@ namespace GisSharpBlog.NetTopologySuite.Simplify
     /// Simplifies a point, ensuring that
     /// the result is a valid point having the
     /// same dimension and number of components as the input.
+    /// </summary>
+    /// <remarks>
     /// The simplification uses a maximum distance difference algorithm
     /// similar to the one used in the Douglas-Peucker algorithm.
     /// In particular, if the input is an areal point
-    /// ( <c>Polygon</c> or <c>MultiPolygon</c> )
+    /// ( <see cref="IPolygon{TCoordinate}" /> or <see cref="IMultiPolygon{TCoordinate}"/> )
     /// The result has the same number of shells and holes (rings) as the input,
     /// in the same order
     /// The result rings touch at no more than the number of touching point in the input
     /// (although they may touch at fewer points).
-    /// </summary>
-    public class TopologyPreservingSimplifier
+    /// </remarks>
+    public class TopologyPreservingSimplifier<TCoordinate>
+         where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <param name="distanceTolerance"></param>
-        /// <returns></returns>
-        public static IGeometry Simplify(IGeometry geom, double distanceTolerance)
+
+        private static IGeometryFactory<TCoordinate> _geoFactory;
+        public static IGeometryFactory<TCoordinate> GeometryFactory
         {
-            TopologyPreservingSimplifier tss = new TopologyPreservingSimplifier(geom);
-            tss.DistanceTolerance = distanceTolerance;
-            return tss.GetResultGeometry();
+            get { return _geoFactory; }
+            set { _geoFactory = value; }
+        }
+        
+        public static IGeometry<TCoordinate> Simplify(IGeometry<TCoordinate> geom, Double distanceTolerance)
+        {
+            TopologyPreservingSimplifier<TCoordinate> simplifier 
+                = new TopologyPreservingSimplifier<TCoordinate>(geom);
+            simplifier.DistanceTolerance = distanceTolerance;
+            return simplifier.GetResultGeometry();
         }
 
-        private IGeometry inputGeom;
-        private TaggedLinesSimplifier lineSimplifier = new TaggedLinesSimplifier();
-        private IDictionary lineStringMap;
+        private readonly IGeometry<TCoordinate> _inputGeom;
+        private readonly TaggedLinesSimplifier<TCoordinate> _lineSimplifier = new TaggedLinesSimplifier<TCoordinate>();
+        private readonly Dictionary<IGeometry<TCoordinate>, TaggedLineString<TCoordinate>> _lineStringMap 
+            = new Dictionary<IGeometry<TCoordinate>, TaggedLineString<TCoordinate>>();
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="inputGeom"></param>
-        public TopologyPreservingSimplifier(IGeometry inputGeom)
+        public TopologyPreservingSimplifier(IGeometry<TCoordinate> inputGeom)
         {
-            this.inputGeom = inputGeom;            
+            _inputGeom = inputGeom;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public double DistanceTolerance
+        public Double DistanceTolerance
         {
-            get
+            get { return _lineSimplifier.DistanceTolerance; }
+            set { _lineSimplifier.DistanceTolerance = value; }
+        }
+
+        public IGeometry<TCoordinate> GetResultGeometry()
+        {
+
+            TopologyPreservingSimplifier<TCoordinate> container;
+            foreach (ILineString<TCoordinate> lineString in GeometryFilter.Filter<ILineString<TCoordinate>, TCoordinate>(_inputGeom))
             {
-                return lineSimplifier.DistanceTolerance;
-            }
-            set
-            {
-                lineSimplifier.DistanceTolerance = value;
-            }
-        }
+                Int32 pointCount = lineString is ILinearRing<TCoordinate> ? 4 : 2;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public IGeometry GetResultGeometry() 
-        {
-            lineStringMap = new Hashtable();
-            inputGeom.Apply(new LineStringMapBuilderFilter(this));
-            lineSimplifier.Simplify(new ArrayList(lineStringMap.Values));
-            IGeometry result = (new LineStringTransformer(this)).Transform(inputGeom);
+                TaggedLineString<TCoordinate> taggedLine = new TaggedLineString<TCoordinate>(lineString, pointCount);
+                _lineStringMap.Add(lineString, taggedLine);
+            }
+
+            //_inputGeom.Apply(new LineStringMapBuilderFilter(this));
+            IEnumerable<TaggedLineString<TCoordinate>> lineStrings = _lineStringMap.Values;
+            _lineSimplifier.Simplify(lineStrings);
+            IGeometry<TCoordinate> result = (new LineStringTransformer(this)).Transform(_inputGeom);
             return result;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private class LineStringTransformer : GeometryTransformer
+        private class LineStringTransformer : GeometryTransformer<TCoordinate>
         {
-            private TopologyPreservingSimplifier container = null;
+            private readonly TopologyPreservingSimplifier<TCoordinate> _container = null;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public LineStringTransformer(TopologyPreservingSimplifier container)            
+            public LineStringTransformer(TopologyPreservingSimplifier<TCoordinate> container)
             {
-                this.container = container;
+                _container = container;
+                
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="coords"></param>
-            /// <param name="parent"></param>
-            /// <returns></returns>
-            protected override ICoordinateSequence TransformCoordinates(ICoordinateSequence coords, IGeometry parent)
+            protected override ICoordinateSequence<TCoordinate> TransformCoordinates(ICoordinateSequence<TCoordinate> coords, IGeometry<TCoordinate> parent)
             {
-                if (parent is ILineString) 
+                if (parent is ILineString<TCoordinate>)
                 {
-                    TaggedLineString taggedLine = (TaggedLineString) container.lineStringMap[parent];
+                    TaggedLineString<TCoordinate> taggedLine;
+                    _container._lineStringMap.TryGetValue(parent, out taggedLine);
+                    Debug.Assert(taggedLine != null);
                     return CreateCoordinateSequence(taggedLine.ResultCoordinates);
                 }
+
                 // for anything else (e.g. points) just copy the coordinates
                 return base.TransformCoordinates(coords, parent);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private class LineStringMapBuilderFilter : IGeometryComponentFilter
+        /*
+        private class LineStringMapBuilderFilter : IGeometryComponentFilter<TCoordinate>
         {
-            private TopologyPreservingSimplifier container = null;
+            private readonly TopologyPreservingSimplifier<TCoordinate> _container = null;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public LineStringMapBuilderFilter(TopologyPreservingSimplifier container)            
+            public LineStringMapBuilderFilter(TopologyPreservingSimplifier<TCoordinate> container)
             {
-                this.container = container;
+                _container = container;
             }
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="geom"></param>
-            public void Filter(IGeometry geom)
+            public void Filter(IGeometry<TCoordinate> geom)
             {
-                if (geom is ILinearRing) 
+                ILineString<TCoordinate> line = geom as ILineString<TCoordinate>;
+                Int32 pointCount;
+
+                if (geom is ILinearRing)
                 {
-                    TaggedLineString taggedLine = new TaggedLineString((ILineString) geom, 4);
-                    container.lineStringMap.Add(geom, taggedLine);
+                    pointCount = 4;
                 }
-                else if (geom is ILineString) 
+                else if (geom is ILineString)
                 {
-                    TaggedLineString taggedLine = new TaggedLineString((ILineString) geom, 2);
-                    container.lineStringMap.Add(geom, taggedLine);
+                    pointCount = 2;
                 }
+                else
+                {
+                    return;
+                }
+                
+                TaggedLineString<TCoordinate> taggedLine = new TaggedLineString<TCoordinate>(line, pointCount);
+                _container._lineStringMap.Add(geom, taggedLine);
             }
         }
+         */
     }
 }

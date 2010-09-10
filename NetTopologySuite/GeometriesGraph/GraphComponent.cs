@@ -1,5 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
+using GeoAPI.Diagnostics;
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
@@ -8,169 +13,107 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
     /// that form a graph.  Each GraphComponent can carry a
     /// Label.
     /// </summary>
-    abstract public class GraphComponent
-    {        
-        /// <summary>
-        /// 
-        /// </summary>
-        protected Label label;
+    public abstract class GraphComponent<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
+    {
 
-        // isInResult indicates if this component has already been included in the result
-        private bool isInResult = false;
+        
+        private Boolean _isCovered;
+        private Boolean _isCoveredSet;
+        private Boolean _isInResult;
+        private Boolean _isVisited;
+        private Label? _label;
 
-        private bool isCovered = false;
-        private bool isCoveredSet = false;
-        private bool isVisited = false;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public GraphComponent() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="label"></param>
-        public GraphComponent(Label label)
+        public GraphComponent()
         {
-            this.label = label;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public Label Label
+        public GraphComponent(Label label)
         {
-            get
-            {
-                return label;
-            }
-            set
-            {
-                label = value;
-            }
-        }     
-                
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool InResult
-        { 
-            get
-            {
-                return isInResult;
-            }
-            set
-            {
-                isInResult = value;
-            }           
+            _label = label;
+        }
+
+        public Label? Label
+        {
+            get { return _label; }
+            set { _label = value; }
+        }
+
+        public Boolean InResult
+        {
+            get { return _isInResult; }
+            set { _isInResult = value; }
         }
 
         /// <summary> 
-        /// IsInResult indicates if this component has already been included in the result.
+        /// Indicates if this component has already been included 
+        /// in the result.
         /// </summary>
-        public bool IsInResult
+        public Boolean IsInResult
         {
-            get
-            {
-                return InResult;
-            }
+            get { return InResult; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool Covered
+        public Boolean Covered
         {
-            get
-            {
-                return this.isCovered;
-            }
+            get { return _isCovered; }
             set
             {
-                isCovered = value;
-                isCoveredSet = true;                
+                _isCovered = value;
+                _isCoveredSet = true;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsCovered
+        public Boolean IsCovered
         {
-            get
-            {
-                return Covered;
-            }
+            get { return Covered; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsCoveredSet 
+        public Boolean IsCoveredSet
         {
-            get
-            {
-                return isCoveredSet;
-            }
+            get { return _isCoveredSet; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool Visited
+        public Boolean Visited
         {
-            get
-            {
-                return isVisited;
-            }
-            set
-            {
-                isVisited = value;
-            }
+            get { return _isVisited; }
+            set { _isVisited = value; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsVisited
+        public Boolean IsVisited
         {
-            get
-            {
-                return isVisited;
-            }
+            get { return _isVisited; }
         }
-    
-        /// <summary>
-        /// 
-        /// </summary>
+
         /// <returns>
         /// A coordinate in this component (or null, if there are none).
         /// </returns>
-        abstract public ICoordinate Coordinate { get; }
-
-        /// <summary>
-        /// Compute the contribution to an IM for this component.
-        /// </summary>
-        abstract public void ComputeIM(IntersectionMatrix im);
+        public abstract TCoordinate Coordinate { get; }
 
         /// <summary>
         /// An isolated component is one that does not intersect or touch any other
         /// component.  This is the case if the label has valid locations for
         /// only a single Geometry.
         /// </summary>
-        /// <returns><c>true</c> if this component is isolated.</returns>
-        abstract public bool IsIsolated { get; }
+        /// <returns><see langword="true"/> if this component is isolated.</returns>
+        public abstract Boolean IsIsolated { get; }
+
+        /// <summary>
+        /// Compute the contribution to an IM for this component.
+        /// </summary>
+        public abstract void ComputeIntersectionMatrix(IntersectionMatrix im);
 
         /// <summary>
         /// Update the IM with the contribution for this component.
-        /// A component only contributes if it has a labelling for both parent geometries.
+        /// A component only contributes if it has a labeling for both 
+        /// parent geometries.
         /// </summary>
-        /// <param name="im"></param>
-        public void UpdateIM(IntersectionMatrix im)
+        public void UpdateIntersectionMatrix(IntersectionMatrix im)
         {
-            Assert.IsTrue(label.GeometryCount >= 2, "found partial label");
-            ComputeIM(im);
+            Debug.Assert(_label.HasValue);
+            Assert.IsTrue(_label.Value.GeometryCount >= 2, "found partial label");
+            ComputeIntersectionMatrix(im);
         }
     }
 }

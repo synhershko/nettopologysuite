@@ -1,4 +1,8 @@
+using System;
+using System.Diagnostics;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Distance
 {
@@ -7,83 +11,143 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Distance
     /// Maintains both the actual point location (which of course
     /// may not be exact) as well as information about the component
     /// and segment index where the point occurs.
-    /// Locations inside area Geometrys will not have an associated segment index,
-    /// so in this case the segment index will have the sentinel value of InsideArea.
     /// </summary>
-    public class GeometryLocation
+    /// <remarks>
+    /// Locations inside area Geometries will not have an associated segment index,
+    /// so in this case the segment index will be null.
+    /// </remarks>
+    public struct GeometryLocation<TCoordinate> : IEquatable<GeometryLocation<TCoordinate>>,
+                                                  IComparable<GeometryLocation<TCoordinate>>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// Special value of segment-index for locations inside area geometries. These
-        /// locations do not have an associated segment index.
-        /// </summary>
-        public const int InsideArea = -1;
-
-        private IGeometry component = null;
-        private int segIndex;
-        private ICoordinate pt = null;
+        private readonly IGeometry<TCoordinate> _component;
+        private readonly TCoordinate _coordinate;
+        private readonly Int32? _segIndex;
 
         /// <summary>
         /// Constructs a GeometryLocation specifying a point on a point, as well as the 
         /// segment that the point is on (or InsideArea if the point is not on a segment).
         /// </summary>
-        /// <param name="component"></param>
-        /// <param name="segIndex"></param>
-        /// <param name="pt"></param>
-        public GeometryLocation(IGeometry component, int segIndex, ICoordinate pt)
+        public GeometryLocation(IGeometry<TCoordinate> component, Int32? segIndex, TCoordinate pt)
         {
-            this.component = component;
-            this.segIndex = segIndex;
-            this.pt = pt;
+            _component = component;
+            _segIndex = segIndex;
+            _coordinate = pt;
         }
 
         /// <summary> 
         /// Constructs a GeometryLocation specifying a point inside an area point.
         /// </summary>
-        public GeometryLocation(IGeometry component, ICoordinate pt) : this(component, InsideArea, pt) { }
-
-        /// <summary>
-        /// Returns the point associated with this location.
-        /// </summary>
-        public IGeometry GeometryComponent
+        public GeometryLocation(IGeometry<TCoordinate> component, TCoordinate pt)
+            : this(component, null, pt)
         {
-            get
-            {
-                return component;
-            }
         }
 
         /// <summary>
-        /// Returns the segment index for this location. If the location is inside an
-        /// area, the index will have the value InsideArea;
+        /// Gets the point associated with this location.
         /// </summary>
-        public int SegmentIndex
+        public IGeometry<TCoordinate> GeometryComponent
         {
-            get
-            {
-                return segIndex;
-            }
+            get { return _component; }
+        }
+
+        /// <summary>
+        /// Gets the segment index for this location. If the location is inside an
+        /// area, the index will be null.
+        /// </summary>
+        public Int32? SegmentIndex
+        {
+            get { return _segIndex; }
         }
 
         /// <summary>
         /// Returns the location.
         /// </summary>
-        public ICoordinate Coordinate
+        public TCoordinate Coordinate
         {
-            get
-            {
-                return pt;
-            }
+            get { return _coordinate; }
         }
 
         /// <summary>
         /// Returns whether this GeometryLocation represents a point inside an area point.
         /// </summary>
-        public bool IsInsideArea
+        public Boolean IsInsideArea
         {
-            get
+            get { return !_segIndex.HasValue; }
+        }
+
+        #region IComparable<GeometryLocation<TCoordinate>> Members
+
+        public Int32 CompareTo(GeometryLocation<TCoordinate> other)
+        {
+            if (Equals(other))
             {
-                return segIndex == InsideArea;
+                return 0;
             }
+            else
+            {
+                Int32 comparison;
+
+                // First compare the geometries
+                comparison = other._component.CompareTo(_component);
+
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+
+                // If the geometries are equal, check the segment indexes.
+                // If either has a null segment index (they aren't equal here),
+                // it's less.
+                if (!other._segIndex.HasValue || !_segIndex.HasValue)
+                {
+                    if (_segIndex.HasValue)
+                    {
+                        return -1;
+                    }
+                    else
+                    {
+                        return 1;
+                    }
+                }
+
+                comparison = other._segIndex.Value.CompareTo(_segIndex.Value);
+
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+
+                comparison = other._coordinate.CompareTo(_coordinate);
+
+                Debug.Assert(comparison != 0);
+
+                return comparison;
+            }
+        }
+
+        #endregion
+
+        #region IEquatable<GeometryLocation<TCoordinate>> Members
+
+        public Boolean Equals(GeometryLocation<TCoordinate> other)
+        {
+            return other._segIndex == _segIndex &&
+                   other._coordinate.Equals(_coordinate) &&
+                   other._component == _component;
+        }
+
+        #endregion
+
+        public override Boolean Equals(Object obj)
+        {
+            if (!(obj is GeometryLocation<TCoordinate>))
+            {
+                return false;
+            }
+
+            return Equals((GeometryLocation<TCoordinate>) obj);
         }
     }
 }

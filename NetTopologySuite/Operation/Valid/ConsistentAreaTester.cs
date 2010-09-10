@@ -1,54 +1,50 @@
-using System.Collections;
+using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph;
 using GisSharpBlog.NetTopologySuite.GeometriesGraph.Index;
 using GisSharpBlog.NetTopologySuite.Operation.Relate;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Valid
 {
     /// <summary> 
     /// Checks that a {GeometryGraph} representing an area
-    /// (a <c>Polygon</c> or <c>MultiPolygon</c> )
+    /// (am <see cref="IPolygon{TCoordinate}" /> or <see cref="IMultiPolygon{TCoordinate}"/> )
     /// is consistent with the SFS semantics for area geometries.
     /// Checks include:
     /// Testing for rings which self-intersect (both properly and at nodes).
     /// Testing for duplicate rings.
     /// If an inconsistency if found the location of the problem is recorded.
     /// </summary>
-    public class ConsistentAreaTester 
+    public class ConsistentAreaTester<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private readonly LineIntersector li = new RobustLineIntersector();
-        private GeometryGraph geomGraph;
-        private RelateNodeGraph nodeGraph = new RelateNodeGraph();
+        private readonly GeometryGraph<TCoordinate> _geomGraph;
+        private readonly LineIntersector<TCoordinate> _li;
+        private readonly RelateNodeGraph<TCoordinate> _nodeGraph = new RelateNodeGraph<TCoordinate>();
 
         // the intersection point found (if any)
-        private ICoordinate invalidPoint;
+        private TCoordinate _invalidPoint;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomGraph"></param>
-        public ConsistentAreaTester(GeometryGraph geomGraph)
+        public ConsistentAreaTester(GeometryGraph<TCoordinate> geomGraph)
         {
-            this.geomGraph = geomGraph;
+            if (geomGraph == null) throw new ArgumentNullException("geomGraph");
+            _geomGraph = geomGraph;
+            _li = CGAlgorithms<TCoordinate>.CreateRobustLineIntersector(geomGraph.Geometry.Factory);
         }
 
         /// <summary>
-        /// Returns the intersection point, or <c>null</c> if none was found.
+        /// Returns the intersection point, or <see langword="null" /> if none was found.
         /// </summary>        
-        public ICoordinate InvalidPoint
+        public TCoordinate InvalidPoint
         {
-            get
-            {
-                return invalidPoint;
-            }
+            get { return _invalidPoint; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool IsNodeConsistentArea
+        public Boolean IsNodeConsistentArea
         {
             get
             {
@@ -56,13 +52,15 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
                 * To fully check validity, it is necessary to
                 * compute ALL intersections, including self-intersections within a single edge.
                 */
-                SegmentIntersector intersector = geomGraph.ComputeSelfNodes(li, true);
+                SegmentIntersector<TCoordinate> intersector = _geomGraph.ComputeSelfNodes(_li, true);
+
                 if (intersector.HasProperIntersection)
                 {
-                    invalidPoint = intersector.ProperIntersectionPoint;
+                    _invalidPoint = intersector.ProperIntersectionPoint;
                     return false;
                 }
-                nodeGraph.Build(geomGraph);
+
+                _nodeGraph.Build(_geomGraph);
                 return IsNodeEdgeAreaLabelsConsistent;
             }
         }
@@ -71,19 +69,19 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
         /// Check all nodes to see if their labels are consistent.
         /// If any are not, return false.
         /// </summary>
-        private bool IsNodeEdgeAreaLabelsConsistent
+        private Boolean IsNodeEdgeAreaLabelsConsistent
         {
             get
             {
-                for (IEnumerator nodeIt = nodeGraph.GetNodeEnumerator(); nodeIt.MoveNext(); )
+                foreach (RelateNode<TCoordinate> node in _nodeGraph.Nodes)
                 {
-                    RelateNode node = (RelateNode) nodeIt.Current;
-                    if (!node.Edges.IsAreaLabelsConsistent)
+                    if (!node.Edges.IsAreaLabelsConsistent(_geomGraph.BoundaryNodeRule))
                     {
-                        invalidPoint = (ICoordinate) node.Coordinate.Clone();
+                        _invalidPoint = node.Coordinate.Clone();
                         return false;
                     }
                 }
+
                 return true;
             }
         }
@@ -98,25 +96,24 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Valid
         /// (This is because topologically consistent areas cannot have two rings sharing
         /// the same line segment, unless the rings are equal).
         /// The start point of one of the equal rings will be placed in invalidPoint.
-        /// Returns <c>true</c> if this area Geometry is topologically consistent but has two duplicate rings.
+        /// Returns <see langword="true"/> if this area Geometry is topologically consistent but has two duplicate rings.
         /// </summary>
-        public bool HasDuplicateRings
+        public Boolean HasDuplicateRings
         {
             get
             {
-                for (IEnumerator nodeIt = nodeGraph.GetNodeEnumerator(); nodeIt.MoveNext(); )
+                foreach (RelateNode<TCoordinate> node in _nodeGraph.Nodes)
                 {
-                    RelateNode node = (RelateNode) nodeIt.Current;
-                    for (IEnumerator i = node.Edges.GetEnumerator(); i.MoveNext(); )
+                    foreach (EdgeEndBundle<TCoordinate> eeb in node.Edges)
                     {
-                        EdgeEndBundle eeb = (EdgeEndBundle) i.Current;
-                        if (eeb.EdgeEnds.Count > 1)
+                        if (eeb.EdgeEndsCount > 1)
                         {
-                            invalidPoint = eeb.Edge.GetCoordinate(0);
+                            _invalidPoint = eeb.Edge.Coordinates[0];
                             return true;
                         }
                     }
                 }
+
                 return false;
             }
         }

@@ -25,41 +25,39 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Attributes
 
         private void TestShapeCreation()
         {
-            var points = new ICoordinate[3];
+            ICoordinate[] points = new ICoordinate[3];
             points[0] = new Coordinate(0, 0);
             points[1] = new Coordinate(1, 0);
             points[2] = new Coordinate(1, 1);
 
-            var line_string = new LineString(points);
+            LineString line_string = new LineString(points);
 
-            var attributes = new AttributesTable();
+            AttributesTable attributes = new AttributesTable();
             attributes.AddAttribute("FOO", "FOO");
 
-            var feature = new Feature(Factory.CreateMultiLineString(new ILineString[] { line_string }), attributes);
-            var features = new Feature[1];
+            Feature feature = new Feature(Factory.CreateMultiLineString(new ILineString[] { line_string }), attributes);
+            Feature[] features = new Feature[1];
             features[0] = feature;
 
-            var shp_writer = new ShapefileDataWriter("C:\\line_string")
-            {
-                Header = ShapefileDataWriter.GetHeader(features[0], features.Length)
-            };
+            ShapefileDataWriter shp_writer = new ShapefileDataWriter("C:\\line_string");
+            shp_writer.Header = ShapefileDataWriter.GetHeader(features[0], features.Length);
             shp_writer.Write(features);             
         }
 
         private void TestSharcDbf()
         {
-			const string filename = @"\Strade.dbf";
+			string filename = @"\Strade.dbf";
             if (!File.Exists(filename))
                 throw new FileNotFoundException(filename + " not found at " + Environment.CurrentDirectory);
 
-            var reader = new DbaseFileReader(filename);
-            var header = reader.GetHeader();
+            DbaseFileReader reader = new DbaseFileReader(filename);
+            DbaseFileHeader header = reader.GetHeader();
             Console.WriteLine("HeaderLength: " + header.HeaderLength);
             Console.WriteLine("RecordLength: " + header.RecordLength);
             Console.WriteLine("NumFields: " + header.NumFields);
             Console.WriteLine("NumRecords: " + header.NumRecords);            
             Console.WriteLine("LastUpdateDate: " + header.LastUpdateDate);
-            foreach (var descr in header.Fields)
+            foreach (DbaseFieldDescriptor descr in header.Fields)
             {
                 Console.WriteLine("FieldName: " + descr.Name);
                 Console.WriteLine("DBF Type: " + descr.DbaseType);
@@ -69,11 +67,11 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Attributes
                 Console.WriteLine("DataAddress: " + descr.DataAddress);                
             }
 
-            var ienum = reader.GetEnumerator();
+            IEnumerator ienum = reader.GetEnumerator();
             while (ienum.MoveNext())
             {
-                var objs = (ArrayList)ienum.Current;
-                foreach (var obj in objs)
+                ArrayList objs = (ArrayList)ienum.Current;
+                foreach (object obj in objs)
                     Console.WriteLine(obj);                
             }
             Console.WriteLine();            
@@ -81,47 +79,48 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Attributes
 
         private void ReadFromShapeFile()
         {
-            var featureCollection = new ArrayList();
-            const string filename = @"country";
+            ArrayList featureCollection = new ArrayList();
+            string filename = @"country";
             if (!File.Exists(filename + ".dbf"))
                 throw new FileNotFoundException(filename + " not found at " + Environment.CurrentDirectory);
-            var dataReader = new ShapefileDataReader(filename, new GeometryFactory());                        
+            ShapefileDataReader dataReader = new ShapefileDataReader(filename, new GeometryFactory());                        
             while (dataReader.Read())
             {
-                var feature = new Feature {Geometry = dataReader.Geometry};
-
-                var length = dataReader.DbaseHeader.NumFields;
-                var keys = new string[length];
-                for (var i = 0; i < length; i++)                
+                Feature feature = new Feature();                
+                feature.Geometry = dataReader.Geometry;                
+                                
+                int length = dataReader.DbaseHeader.NumFields;
+                string[] keys = new string[length];
+                for (int i = 0; i < length; i++)                
                     keys[i] = dataReader.DbaseHeader.Fields[i].Name;                
 
                 feature.Attributes = new AttributesTable();
-                for (var i = 0; i < length; i++)
+                for (int i = 0; i < length; i++)
                 {                                        
-                    var val = dataReader.GetValue(i);
+                    object val = dataReader.GetValue(i);
                     feature.Attributes.AddAttribute(keys[i], val);
                 }
                
                 featureCollection.Add(feature);
             }
 
-            var index = 0;
+            int index = 0;
             Console.WriteLine("Elements = " + featureCollection.Count);
             foreach (Feature feature in featureCollection)
             {
                 Console.WriteLine("Feature " + index++);                
-                var table = feature.Attributes as AttributesTable;
-                foreach (var name in table.GetNames())
+                AttributesTable table = feature.Attributes as AttributesTable;
+                foreach (string name in table.GetNames())
                     Console.WriteLine(name + ": " + table[name]);
             }
             
             // Test write with stub header            
-			var file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"../../../NetTopologySuite.Samples.Shapefiles/testWriteStubHeader");
+			string file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"../../../NetTopologySuite.Samples.Shapefiles/testWriteStubHeader");
 			if (File.Exists(file + ".shp")) File.Delete(file + ".shp");
             if (File.Exists(file + ".shx")) File.Delete(file + ".shx");
             if (File.Exists(file + ".dbf")) File.Delete(file + ".dbf");
 
-            var dataWriter = new ShapefileDataWriter(file);
+            ShapefileDataWriter dataWriter = new ShapefileDataWriter(file);
             dataWriter.Header = ShapefileDataWriter.GetHeader(featureCollection[0] as Feature, featureCollection.Count);
             dataWriter.Write(featureCollection);
 
@@ -131,12 +130,8 @@ namespace GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Attributes
             if (File.Exists(file + ".shx")) File.Delete(file + ".shx");
             if (File.Exists(file + ".dbf")) File.Delete(file + ".dbf");
 
-            dataWriter = new ShapefileDataWriter(file)
-            {
-                Header =
-                    ShapefileDataWriter.GetHeader(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                        @"../../../NetTopologySuite.Samples.Shapefiles/country.dbf"))
-            };
+            dataWriter = new ShapefileDataWriter(file);
+            dataWriter.Header = ShapefileDataWriter.GetHeader(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"../../../NetTopologySuite.Samples.Shapefiles/country.dbf"));
             dataWriter.Write(featureCollection);
         }
     }

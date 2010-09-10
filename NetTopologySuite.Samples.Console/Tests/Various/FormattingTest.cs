@@ -1,135 +1,133 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GeoAPI.IO.WellKnownText;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.IO;
 using GisSharpBlog.NetTopologySuite.Samples.SimpleTests;
+using NetTopologySuite.Coordinates;
 using NUnit.Framework;
 
 namespace GisSharpBlog.NetTopologySuite.Samples.Tests.Various
 {
-    /// <summary>
-    /// 
-    /// </summary>
     [TestFixture]
     public class FormattingTest : BaseSamples
     {
-        private const double longDouble = 1.2345678901234567890;
+        private const Double PreciseDouble = 1.2345678901234567890D;
 
-        NumberFormatInfo nfi = null;
+        private readonly NumberFormatInfo _numberFormatInfo;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public FormattingTest() : base() 
+        public FormattingTest()
         {
-            nfi = new NumberFormatInfo();
-            nfi.NumberDecimalSeparator = ".";
+            _numberFormatInfo = new NumberFormatInfo();
+            _numberFormatInfo.NumberDecimalSeparator = ".";
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        private void TestDoubleValueResult()
+        {
+            String result = Convert.ToString(PreciseDouble, _numberFormatInfo);
+            Assert.IsNotNull(result);
+            Debug.WriteLine(result);
+        }
+
         [Test]
         public void DoubleFormattingFixedTest()
-        {            
-            nfi.NumberDecimalDigits = 1;
+        {
+            _numberFormatInfo.NumberDecimalDigits = 1;
             TestDoubleValueResult();
-        }    
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
         [Test]
         public void DoubleFormattingFloatingTest()
         {
-            nfi.NumberDecimalDigits = 10;
+            _numberFormatInfo.NumberDecimalDigits = 10;
             TestDoubleValueResult();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         [Test]
         public void FloatFormatting17DigitsTest1()
         {
-            Coordinate coordinate = new Coordinate(0.00000000000000000001, 0.00000000000000000001);
-            IPoint point = GeometryFactory.Floating.CreatePoint(coordinate);
-            IPoint test = (IPoint)new WKTReader(GeometryFactory.Floating).Read(point.ToString());
-            
-            // If i modify PrecisionModel.MaximumSignificantDigits from 16 to (as example) 20, all the digits are printed... 
+            ICoordinate coordinate = CoordFactory.Create(0.00000000000000000001,
+                                                         0.00000000000000000001);
+            IGeometryFactory<BufferedCoordinate> floatingFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory(
+                        (BufferedCoordinateFactory) CoordFactory));
+            IPoint2D point = (IPoint2D) floatingFactory.CreatePoint(coordinate);
+            IWktGeometryReader wktReader = new WktReader<BufferedCoordinate>(floatingFactory, null);
+            IPoint2D test = (IPoint2D) wktReader.Read(point.ToString());
+
+            // If i modify PrecisionModel.MaximumSignificantDigits from 16 to (as example) 20, 
+            // all the digits are printed... 
             Debug.WriteLine(point.ToString());
             Debug.WriteLine(test.ToString());
 
             Assert.IsFalse(point.X == 0);
-            Assert.IsFalse(point.Y == 0);          
+            Assert.IsFalse(point.Y == 0);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         [Test]
         public void FloatFormatting9MoreDigitsTest1()
         {
-            Coordinate coordinate = new Coordinate(0.0000000000001, 0.0000000000002);
-            IPoint point = GeometryFactory.Floating.CreatePoint(coordinate);            
-            IPoint test = (IPoint) new WKTReader(GeometryFactory.Floating).Read(point.ToString());
+            ICoordinate coordinate = CoordFactory.Create(0.0000000000001, 0.0000000000002);
+            IGeometryFactory<BufferedCoordinate> floatingFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory(
+                        (BufferedCoordinateFactory) CoordFactory));
+            IPoint2D point = (IPoint2D) floatingFactory.CreatePoint(coordinate);
+            IWktGeometryReader wktReader = new WktReader<BufferedCoordinate>(floatingFactory, null);
+            IPoint2D test = (IPoint2D) wktReader.Read(point.ToString());
+
             Debug.WriteLine(point.ToString());
             Debug.WriteLine(test.ToString());
 
             Assert.AreEqual(test.X, point.X);
             Assert.AreEqual(test.Y, point.Y);
-            Boolean result = test.Equals(point);   // Geometry not overrides ==...
-            Assert.IsTrue(result);                                                                             
+            Boolean result = test.Equals(point); // Geometry not overrides ==...
+            Assert.IsTrue(result);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         [Test]
         public void FloatFormatting9MoreDigitsTest2()
         {
-            Coordinate coordinate = new Coordinate(0.0000000000001, 0.0000000000002);
-            IPoint point = GeometryFactory.FloatingSingle.CreatePoint(coordinate);
-            IPoint test = (IPoint)new WKTReader(GeometryFactory.FloatingSingle).Read(point.ToString());
-            Debug.WriteLine(point.ToString());
-            Debug.WriteLine(test.ToString());
-            
-            // Assertis correct because WktReader creates test with coordinates == 0
-            // point has the double values as coordinates
-            Boolean result = test.Equals(point);   // Remember: Geometry not overrides ==...
-            Assert.IsFalse(result); 
-        }
+            ICoordinate coordinate = CoordFactory.Create(0.0000000000001, 0.0000000000002);
+            IGeometryFactory<BufferedCoordinate> floatingFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory(
+                        new BufferedCoordinateFactory(PrecisionModelType.SingleFloating)));
+            IPoint2D point = (IPoint2D) floatingFactory.CreatePoint(coordinate);
+            IWktGeometryReader wktReader = new WktReader<BufferedCoordinate>(floatingFactory, null);
+            IPoint2D test = (IPoint2D) wktReader.Read(point.ToString());
 
-        /// <summary>
-        /// 
-        /// </summary>
-        [Test]
-        public void FloatFormatting9MoreDigitsTest3()
-        {
-            Coordinate coordinate = new Coordinate(0.0000000000001, 0.0000000000002);
-            IPoint point = GeometryFactory.Fixed.CreatePoint(coordinate);
-            IPoint test = (IPoint)new WKTReader(GeometryFactory.Fixed).Read(point.ToString());
             Debug.WriteLine(point.ToString());
             Debug.WriteLine(test.ToString());
 
             // Assertis correct because WktReader creates test with coordinates == 0
-            // point has the double values as coordinates
-            Boolean result = test.Equals(point);   // Are you read that Geometry not overrides ==...
+            // point has the Double values as coordinates
+            Boolean result = test.Equals(point); // Remember: Geometry not overrides ==...
             Assert.IsFalse(result);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void TestDoubleValueResult()
+        [Test]
+        public void FloatFormatting9MoreDigitsTest3()
         {
-            string result = Convert.ToString(longDouble, nfi);
-            Assert.IsNotNull(result);
-            Debug.WriteLine(result);
+            ICoordinate coordinate = CoordFactory.Create(0.0000000000001, 0.0000000000002);
+            IGeometryFactory<BufferedCoordinate> fixedFactory =
+                new GeometryFactory<BufferedCoordinate>(
+                    new BufferedCoordinateSequenceFactory(
+                        new BufferedCoordinateFactory(PrecisionModelType.SingleFloating)));
+            IPoint2D point = (IPoint2D) fixedFactory.CreatePoint(coordinate);
+            IWktGeometryReader wktReader = new WktReader<BufferedCoordinate>(fixedFactory, null);
+            IPoint2D test = (IPoint2D) wktReader.Read(point.ToString());
+
+            Debug.WriteLine(point.ToString());
+            Debug.WriteLine(test.ToString());
+
+            // Assertis correct because WktReader creates test with coordinates == 0
+            // point has the Double values as coordinates
+            Boolean result = test.Equals(point); // Are you read that Geometry not overrides ==...
+            Assert.IsFalse(result);
         }
     }
 }
-
-

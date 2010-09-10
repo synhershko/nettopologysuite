@@ -1,207 +1,185 @@
 using System;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
-using Wintellect.PowerCollections;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
 {
-    /// <summary>
-    /// Snaps the vertices and segments of a <see cref="IGeometry"/> to another Geometry's vertices.
-    /// Improves robustness for overlay operations, by eliminating
-    /// nearly parallel edges (which cause problems during noding and intersection calculation).
-    /// </summary>
-    public class GeometrySnapper
+    ///<summary>
+    ///Snaps the vertices and segments of a <see cref="IGeometry{TCoordinate}"/> to another Geometry's vertices.
+    ///Improves robustness for overlay operations, by eliminating
+    ///nearly parallel edges (which cause problems during noding and intersection calculation).
+    ///
+    ///@author Martin Davis
+    ///@version 1.7
+    ///</summary>
+    ///<typeparam name="TCoordinate"></typeparam>
+    public class GeometrySnapper<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        private const double SnapPrexisionFactor = 10E-10;
 
-        /// <summary>
+        private const double SnapPrecisionFactor = 10e-10;
+
+        ///<summary>
         /// Estimates the snap tolerance for a Geometry, taking into account its precision model.
-        /// </summary>
-        /// <param name="g"></param>
-        /// <returns>The estimated snap tolerance</returns>
-        public static double ComputeOverlaySnapTolerance(IGeometry g)
+        ///</summary>
+        ///<param name="g">a Geometry</param>
+        ///<returns>the estimated snap tolerance</returns>
+        public static double ComputeOverlaySnapTolerance(IGeometry<TCoordinate> g)
         {
             double snapTolerance = ComputeSizeBasedSnapTolerance(g);
 
             /**
-             * Overlay is carried out in most precise precision model 
-             * of inputs.  
-             * If this precision model is fixed, then the snap tolerance
-             * must reflect the grid size.  
-             * Precisely, the snap tolerance should be at least 
+             * Overlay is carried out in the precision model 
+             * of the two inputs.  
+             * If this precision model is of type 'Fixed', then the snap tolerance
+             * must reflect the precision grid size.  
+             * Specifically, the snap tolerance should be at least 
              * the distance from a corner of a precision grid cell
              * to the centre point of the cell.  
              */
-            IPrecisionModel pm = g.PrecisionModel;
-            if (pm.PrecisionModelType == PrecisionModels.Fixed)
+            IPrecisionModel pm = g.Factory.PrecisionModel;
+            if (pm.PrecisionModelType == PrecisionModelType.Fixed)
             {
-                double fixedSnapTol = (1 / pm.Scale) * 2 / 1.415;
+                double fixedSnapTol = (1d / pm.Scale) * 2d / 1.415d;
                 if (fixedSnapTol > snapTolerance)
                     snapTolerance = fixedSnapTol;
             }
             return snapTolerance;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        /// <returns></returns>
-        public static double ComputeSizeBasedSnapTolerance(IGeometry g)
+        public static double ComputeSizeBasedSnapTolerance(IGeometry<TCoordinate> g)
         {
-            IEnvelope env = g.EnvelopeInternal;
-            double minDimension = Math.Min(env.Height, env.Width);
-            double snapTol = minDimension * SnapPrexisionFactor;
+            IExtents<TCoordinate> env = g.Extents;
+            Double minDimension = Math.Min((env.GetMax(Ordinates.X) - env.GetMin(Ordinates.X)),
+                                           (env.GetMax(Ordinates.Y) - env.GetMin(Ordinates.Y)));
+            Double snapTol = minDimension * SnapPrecisionFactor;
             return snapTol;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <returns></returns>
-        public static double ComputeOverlaySnapTolerance(IGeometry g0, IGeometry g1)
+        public static double ComputeOverlaySnapTolerance(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
             return Math.Min(ComputeOverlaySnapTolerance(g0), ComputeOverlaySnapTolerance(g1));
         }
 
-        /// <summary>
+        ///<summary>
         /// Snaps two geometries together with a given tolerance.
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <param name="snapTolerance"></param>
-        /// <returns></returns>
-        public static IGeometry[] Snap(IGeometry g0, IGeometry g1, double snapTolerance)
+        ///</summary>
+        ///<param name="g0">a <see cref="IGeometry{TCoordinate}"/></param> to snap</param>
+        ///<param name="g1">a <see cref="IGeometry{TCoordinate}"/></param> to snap</param>
+        ///<param name="snapTolerance"></param>
+        ///<returns>the snapped geometries</returns>
+        public static IGeometry<TCoordinate>[] Snap(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1, Double snapTolerance)
         {
-            IGeometry[] snapGeom = new IGeometry[2];
-            GeometrySnapper snapper0 = new GeometrySnapper(g0);
+            IGeometry<TCoordinate>[] snapGeom = new IGeometry<TCoordinate>[2];
+            GeometrySnapper<TCoordinate> snapper0 = new GeometrySnapper<TCoordinate>(g0);
             snapGeom[0] = snapper0.SnapTo(g1, snapTolerance);
 
-            GeometrySnapper snapper1 = new GeometrySnapper(g1);
+            GeometrySnapper<TCoordinate> snapper1 = new GeometrySnapper<TCoordinate>(g1);
             /**
              * Snap the second geometry to the snapped first geometry
              * (this strategy minimizes the number of possible different points in the result)
              */
             snapGeom[1] = snapper1.SnapTo(snapGeom[0], snapTolerance);
+
+            //    System.out.println(snap[0]);
+            //    System.out.println(snap[1]);
             return snapGeom;
         }
 
-        private IGeometry srcGeom;
+        private IGeometry<TCoordinate> srcGeom;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        public GeometrySnapper(IGeometry g)
+        ///<summary>
+        /// Creates a new snapper acting on the given geometry
+        ///</summary>
+        ///<param name="srcGeom">the geometry to snap</param>
+        public GeometrySnapper(IGeometry<TCoordinate> srcGeom)
         {
-            srcGeom = g;
+            this.srcGeom = srcGeom;
         }
 
-        /// <summary>
+        ///<summary>
         /// Computes the snap tolerance based on the input geometries.
-        /// </summary>
-        /// <param name="ringPts"></param>
+        ///</summary>
+        ///<param name="ringPts"></param>
         /// <returns></returns>
-        private double ComputeSnapTolerance(ICoordinate[] ringPts)
+        private Double ComputeSnapTolerance(ICoordinateSequence<TCoordinate> ringPts)
         {
             double minSegLen = ComputeMinimumSegmentLength(ringPts);
-            // Use a small percentage of this to be safe
+            // use a small percentage of this to be safe
             double snapTol = minSegLen / 10;
             return snapTol;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pts"></param>
-        /// <returns></returns>
-        private double ComputeMinimumSegmentLength(ICoordinate[] pts)
+        private Double ComputeMinimumSegmentLength(ICoordinateSequence<TCoordinate> pts)
         {
-            double minSegLen = Double.MaxValue;
-            for (int i = 0; i < pts.Length - 1; i++) 
+            Double minSegLen = Double.MaxValue;
+            foreach (Pair<TCoordinate> pt in Slice.GetOverlappingPairs(pts))
             {
-                double segLen = pts[i].Distance(pts[i + 1]);
+                Double segLen = pt.First.Distance(pt.Second);
                 if (segLen < minSegLen)
                     minSegLen = segLen;
             }
             return minSegLen;
         }
 
-        /// <summary>
-        ///  Snaps the vertices in the component <see cref="ILineString" />s
-        ///  of the source geometry
-        ///  to the vertices of the given geometry.
-        /// </summary>
-        /// <param name="g"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public IGeometry SnapTo(IGeometry g, double tolerance)
+        /**
+         * Snaps the vertices in the component {@link LineString}s
+         * of the source geometry
+         * to the vertices of the given snap geometry.
+         *
+         * @param snapGeom a geometry to snap the source to
+         * @return a new snapped Geometry
+         */
+        public IGeometry<TCoordinate> SnapTo(IGeometry<TCoordinate> snapGeom, Double snapTolerance)
         {
-            ICoordinate[] snapPts = ExtractTargetCoordinates(g);
+            ICoordinateSequence<TCoordinate> snapPts = ExtractTargetCoordinates(snapGeom);
 
-            SnapTransformer snapTrans = new SnapTransformer(tolerance, snapPts);
+            SnapTransformer snapTrans = new SnapTransformer(snapTolerance, snapPts);
             return snapTrans.Transform(srcGeom);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        /// <returns></returns>
-        public ICoordinate[] ExtractTargetCoordinates(IGeometry g)
+        public ICoordinateSequence<TCoordinate> ExtractTargetCoordinates(IGeometry<TCoordinate> g)
         {
-            // TODO: should do this more efficiently.  Use CoordSeq filter to get points, KDTree for uniqueness & queries
-            Set<ICoordinate> ptSet = new Set<ICoordinate>(g.Coordinates);
-            ICoordinate[] result = new ICoordinate[ptSet.Count];
-            ptSet.CopyTo(result, 0);
-            return result;
-        }
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    class SnapTransformer : GeometryTransformer
-    {
-        private double snapTolerance;
-        private ICoordinate[] snapPts;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="snapTolerance"></param>
-        /// <param name="snapPts"></param>
-        public SnapTransformer(double snapTolerance, ICoordinate[] snapPts)
-        {
-            this.snapTolerance = snapTolerance;
-            this.snapPts = snapPts;
+            return g.Coordinates.WithoutRepeatedPoints();
+            //// TODO: should do this more efficiently.  Use CoordSeq filter to get points, KDTree for uniqueness & queries
+            //Set ptSet = new TreeSet();
+            //Coordinate[] pts = g.getCoordinates();
+            //for (int i = 0; i < pts.length; i++)
+            //{
+            //    ptSet.add(pts[i]);
+            //}
+            //return (Coordinate[]) ptSet.toArray(new Coordinate[0]);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="coords"></param>
-        /// <param name="parent"></param>
-        /// <returns></returns>
-        protected override ICoordinateSequence TransformCoordinates(ICoordinateSequence coords, IGeometry parent)
+        private class SnapTransformer : GeometryTransformer<TCoordinate>
         {
-            ICoordinate[] srcPts = coords.ToCoordinateArray();
-            ICoordinate[] newPts = SnapLine(srcPts, snapPts);
-            return factory.CoordinateSequenceFactory.Create(newPts);
+            Double _snapTolerance;
+            ICoordinateSequence<TCoordinate> _snapPts;
+
+            public SnapTransformer(Double snapTolerance, ICoordinateSequence<TCoordinate> snapPts)
+            {
+                _snapTolerance = snapTolerance;
+                _snapPts = snapPts;
+            }
+
+            protected override ICoordinateSequence<TCoordinate> TransformCoordinates(ICoordinateSequence<TCoordinate> coords, IGeometry<TCoordinate> parent)
+            {
+                ICoordinateSequence<TCoordinate> srcPts = coords;
+                ICoordinateSequence<TCoordinate> newPts = SnapLine(srcPts, _snapPts);
+                return newPts;
+            }
+
+            private ICoordinateSequence<TCoordinate> SnapLine(ICoordinateSequence<TCoordinate> srcPts, ICoordinateSequence<TCoordinate> snapPts)
+            {
+                LineStringSnapper<TCoordinate> snapper = new LineStringSnapper<TCoordinate>(srcPts, _snapTolerance);
+                return snapper.SnapTo(_snapPts);
+            }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="srcPts"></param>
-        /// <param name="snapPts"></param>
-        /// <returns></returns>
-        private ICoordinate[] SnapLine(ICoordinate[] srcPts, ICoordinate[] snapPts)
-        {
-            LineStringSnapper snapper = new LineStringSnapper(srcPts, snapTolerance);
-            return snapper.SnapTo(snapPts);
-        }
     }
 }

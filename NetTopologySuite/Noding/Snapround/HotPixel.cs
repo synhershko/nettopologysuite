@@ -1,231 +1,297 @@
 using System;
+using GeoAPI.Coordinates;
+using GeoAPI.Diagnostics;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding.Snapround
 {
-
     /// <summary>
     /// Implements a "hot pixel" as used in the Snap Rounding algorithm.
+    /// </summary>
+    /// <remarks>
     /// A hot pixel contains the interior of the tolerance square and the boundary
     /// minus the top and right segments.
     /// The hot pixel operations are all computed in the integer domain
     /// to avoid rounding problems.
-    /// </summary>
-    public class HotPixel
+    /// </remarks>
+    public class HotPixel<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private LineIntersector li = null;
+        //static coordinatefactory that creates double_precision coordinate values!
+        private static IGeometryFactory<TCoordinate> _geometryFactory;
+        public static IGeometryFactory<TCoordinate> FloatingPrecisionGeometryFactory
+        {
+            get { return _geometryFactory; }
+            set
+            {
+                _geometryFactory = value;
+                if ( value == null )
+                    _coordinateFactory = null;
+                else
+                    _coordinateFactory = _geometryFactory.CoordinateFactory;
+            }
+        }
 
-        private ICoordinate pt = null;
-        private ICoordinate originalPt = null;        
-
-        private ICoordinate p0Scaled = null;
-        private ICoordinate p1Scaled = null;
-
-        private double scaleFactor;
-
-        private double minx;
-        private double maxx;
-        private double miny;
-        private double maxy;
-
+        private static ICoordinateFactory<TCoordinate> _coordinateFactory;
+        public static ICoordinateFactory<TCoordinate> FloatingPrecisionCoordinateFactory
+        {
+            get
+            {
+                if (_coordinateFactory == null)
+                    throw new ArgumentNullException("static geometry factory not set!");
+                return _coordinateFactory;
+            }
+        }
+        
         /*
          * The corners of the hot pixel, in the order:
          *  10
          *  23
          */
-        private ICoordinate[] corner = new ICoordinate[4];
+        private readonly TCoordinate _corner0;
+        private readonly TCoordinate _corner1;
+        private readonly TCoordinate _corner2;
+        private readonly TCoordinate _corner3;
 
-        private Envelope safeEnv = null;
+        //private readonly ICoordinateFactory<TCoordinate> _factory;
+        private readonly LineIntersector<TCoordinate> _li;
+        private readonly Double _maxx;
+        private readonly Double _maxy;
+        private readonly Double _minx;
+        private readonly Double _miny;
+        private readonly TCoordinate _originalPt;
+        private readonly TCoordinate _pt;
+        private readonly Double _scaleFactor;
+        private Extents<TCoordinate> _safeExtents;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="HotPixel"/> class.
+        /// Initializes a new instance of the <see cref="HotPixel{TCoordinate}"/> class.
         /// </summary>
-        /// <param name="pt"></param>
-        /// <param name="scaleFactor"></param>
-        /// <param name="li"></param>
-        public HotPixel(ICoordinate pt, double scaleFactor, LineIntersector li)
+        public HotPixel(TCoordinate pt, Double scaleFactor,
+                        LineIntersector<TCoordinate> li, ICoordinateFactory<TCoordinate> factory)
         {
-            originalPt = pt;
-            this.pt = pt;
-            this.scaleFactor = scaleFactor;
-            this.li = li;            
+            _originalPt = pt;
+            _pt = pt;
+            _scaleFactor = scaleFactor;
+            _li = li;
+            _minx = _miny = _maxx = _maxy = 0;
+            _corner0 = _corner1 = _corner2 = _corner3 = default(TCoordinate);
+            _safeExtents = null;
+            //_factory = factory;
+
             if (scaleFactor != 1.0)
             {
-                this.pt = new Coordinate(Scale(pt.X), Scale(pt.Y));
-                p0Scaled = new Coordinate();
-                p1Scaled = new Coordinate();
+                //_pt = _factory.Create(scale(pt[Ordinates.X]), scale(pt[Ordinates.Y]));
+                _pt = FloatingPrecisionCoordinateFactory.Create(scale(pt[Ordinates.X]), scale(pt[Ordinates.Y]));
+                //_p0Scaled = new TCoordinate();
+                //_p1Scaled = new TCoordinate();
             }
-            InitCorners(this.pt);
+
+            Double tolerance = 0.5;
+            _minx = pt[Ordinates.X] - tolerance;
+            _maxx = pt[Ordinates.X] + tolerance;
+            _miny = pt[Ordinates.Y] - tolerance;
+            _maxy = pt[Ordinates.Y] + tolerance;
+
+            /*_corner0 = _factory.Create(_maxx, _maxy);
+            _corner1 = _factory.Create(_minx, _maxy);
+            _corner2 = _factory.Create(_minx, _miny);
+            _corner3 = _factory.Create(_maxx, _miny);*/
+            _corner0 = FloatingPrecisionCoordinateFactory.Create(_maxx, _maxy);
+            _corner1 = FloatingPrecisionCoordinateFactory.Create(_minx, _maxy);
+            _corner2 = FloatingPrecisionCoordinateFactory.Create(_minx, _miny);
+            _corner3 = FloatingPrecisionCoordinateFactory.Create(_maxx, _miny);
+        }
+
+        public TCoordinate Coordinate
+        {
+            get { return _originalPt; }
         }
 
         /// <summary>
-        /// 
+        /// Returns a "safe" envelope that is guaranteed to contain the 
+        /// hot pixel.
         /// </summary>
-        public ICoordinate Coordinate
+        public IExtents<TCoordinate> GetSafeExtents()//IGeometryFactory<TCoordinate> geoFactory)
         {
-            get
+            if (_safeExtents == null)
             {
-                return originalPt;
+                Double safeTolerance = 0.75/_scaleFactor;
+
+                _safeExtents = new Extents<TCoordinate>(
+                    FloatingPrecisionGeometryFactory,
+                    _originalPt[Ordinates.X] - safeTolerance,
+                    _originalPt[Ordinates.X] + safeTolerance,
+                    _originalPt[Ordinates.Y] - safeTolerance,
+                    _originalPt[Ordinates.Y] + safeTolerance);
             }
+
+            return _safeExtents;
         }
 
-        /// <summary>
-        /// Returns a "safe" envelope that is guaranteed to contain the hot pixel.
-        /// </summary>
-        /// <returns></returns>
-        public IEnvelope GetSafeEnvelope()
+        public Boolean Intersects(LineSegment<TCoordinate> segment)
         {
-            if (safeEnv == null)
+            return Intersects(segment.P0, segment.P1);
+        }
+
+        public Boolean Intersects(TCoordinate p0, TCoordinate p1)
+        {
+            if (_scaleFactor == 1.0)
             {
-                double safeTolerance = 0.75 / scaleFactor;
-                safeEnv = new Envelope(originalPt.X - safeTolerance, originalPt.X + safeTolerance,
-                                       originalPt.Y - safeTolerance, originalPt.Y + safeTolerance);
-            }
-            return safeEnv;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="pt"></param>
-        private void InitCorners(ICoordinate pt)
-        {
-            double tolerance = 0.5;
-            minx = pt.X - tolerance;
-            maxx = pt.X + tolerance;
-            miny = pt.Y - tolerance;
-            maxy = pt.Y + tolerance;
-
-            corner[0] = new Coordinate(maxx, maxy);
-            corner[1] = new Coordinate(minx, maxy);
-            corner[2] = new Coordinate(minx, miny);
-            corner[3] = new Coordinate(maxx, miny);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="val"></param>
-        /// <returns></returns>
-        private double Scale(double val)
-        {
-            return (double) Math.Round(val * scaleFactor);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <returns></returns>
-        public bool Intersects(ICoordinate p0, ICoordinate p1)
-        {
-            if (scaleFactor == 1.0)
                 return IntersectsScaled(p0, p1);
+            }
 
-            CopyScaled(p0, p0Scaled);
-            CopyScaled(p1, p1Scaled);
+            TCoordinate p0Scaled = copyScaled(p0);
+            TCoordinate p1Scaled = copyScaled(p1);
             return IntersectsScaled(p0Scaled, p1Scaled);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p"></param>
-        /// <param name="pScaled"></param>
-        private void CopyScaled(ICoordinate p, ICoordinate pScaled)
+        public Boolean IntersectsScaled(TCoordinate p0, TCoordinate p1)
         {
-            pScaled.X = Scale(p.X);
-            pScaled.Y = Scale(p.Y);
-        }
+            Double segMinx = Math.Min(p0[Ordinates.X], p1[Ordinates.X]);
+            Double segMaxx = Math.Max(p0[Ordinates.X], p1[Ordinates.X]);
+            Double segMiny = Math.Min(p0[Ordinates.Y], p1[Ordinates.Y]);
+            Double segMaxy = Math.Max(p0[Ordinates.Y], p1[Ordinates.Y]);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <returns></returns>
-        public bool IntersectsScaled(ICoordinate p0, ICoordinate p1)
-        {
-            double segMinx = Math.Min(p0.X, p1.X);
-            double segMaxx = Math.Max(p0.X, p1.X);
-            double segMiny = Math.Min(p0.Y, p1.Y);
-            double segMaxy = Math.Max(p0.Y, p1.Y);
+            Boolean isOutsidePixelEnv = _maxx < segMinx || _minx > segMaxx ||
+                                        _maxy < segMiny || _miny > segMaxy;
 
-            bool isOutsidePixelEnv = maxx < segMinx || minx > segMaxx || 
-                                     maxy < segMiny || miny > segMaxy;
             if (isOutsidePixelEnv)
+            {
                 return false;
-            bool intersects = IntersectsToleranceSquare(p0, p1);           
+            }
+
+            Boolean intersects = intersectsToleranceSquare(p0, p1);
             Assert.IsTrue(!(isOutsidePixelEnv && intersects), "Found bad envelope test");
             return intersects;
         }
 
-        /// <summary>
-        /// Tests whether the segment p0-p1 intersects the hot pixel tolerance square.
-        /// Because the tolerance square point set is partially open (along the
-        /// top and right) the test needs to be more sophisticated than
-        /// simply checking for any intersection.  However, it
-        /// can take advantage of the fact that because the hot pixel edges
-        /// do not lie on the coordinate grid.  It is sufficient to check
-        /// if there is at least one of:
-        ///  - a proper intersection with the segment and any hot pixel edge.
-        ///  - an intersection between the segment and both the left and bottom edges.
-        ///  - an intersection between a segment endpoint and the hot pixel coordinate.
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <returns></returns>
-        private bool IntersectsToleranceSquare(ICoordinate p0, ICoordinate p1)
+        private Double scale(Double val)
         {
-            bool intersectsLeft = false;
-            bool intersectsBottom = false;
+            return Math.Round(val*_scaleFactor);
+        }
 
-            li.ComputeIntersection(p0, p1, corner[0], corner[1]);
-            if(li.IsProper) return true;
+        private TCoordinate copyScaled(TCoordinate p)
+        {
+            //return _factory.Create(scale(p[Ordinates.X]), scale(p[Ordinates.Y]));
+            return FloatingPrecisionCoordinateFactory.Create(scale(p[Ordinates.X]), scale(p[Ordinates.Y]));
+        }
 
-            li.ComputeIntersection(p0, p1, corner[1], corner[2]);
-            if(li.IsProper) return true;
-            if(li.HasIntersection) intersectsLeft = true;
+        // Tests whether the segment p0-p1 intersects the hot pixel tolerance square.
+        // Because the tolerance square point set is partially open (along the
+        // top and right) the test needs to be more sophisticated than
+        // simply checking for any intersection.  However, it
+        // can take advantage of the fact that because the hot pixel edges
+        // do not lie on the coordinate grid.  It is sufficient to check
+        // if there is at least one of:
+        //  - a proper intersection with the segment and any hot pixel edge.
+        //  - an intersection between the segment and both the left and bottom edges.
+        //  - an intersection between a segment endpoint and the hot pixel coordinate.
+        private Boolean intersectsToleranceSquare(TCoordinate p0, TCoordinate p1)
+        {
+            Boolean intersectsLeft = false;
+            Boolean intersectsBottom = false;
 
-            li.ComputeIntersection(p0, p1, corner[2], corner[3]);
-            if(li.IsProper) return true;
-            if(li.HasIntersection) intersectsBottom = true;
+            Intersection<TCoordinate> intersection;
 
-            li.ComputeIntersection(p0, p1, corner[3], corner[0]);
-            if(li.IsProper) return true;
+            intersection = _li.ComputeIntersection(p0, p1, _corner0, _corner1);
 
-            if(intersectsLeft && intersectsBottom) return true;
+            if (intersection.IsProper)
+            {
+                return true;
+            }
 
-            if(p0.Equals(pt)) return true;
-            if(p1.Equals(pt)) return true;
+            intersection = _li.ComputeIntersection(p0, p1, _corner1, _corner2);
+
+            if (intersection.IsProper)
+            {
+                return true;
+            }
+
+            if (intersection.HasIntersection)
+            {
+                intersectsLeft = true;
+            }
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner2, _corner3);
+
+            if (intersection.IsProper)
+            {
+                return true;
+            }
+
+            if (intersection.HasIntersection)
+            {
+                intersectsBottom = true;
+            }
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner3, _corner0);
+
+            if (intersection.IsProper)
+            {
+                return true;
+            }
+
+            if (intersectsLeft && intersectsBottom)
+            {
+                return true;
+            }
+
+            if (p0.Equals(_pt))
+            {
+                return true;
+            }
+
+            if (p1.Equals(_pt))
+            {
+                return true;
+            }
 
             return false;
         }
 
-        /// <summary>
-        /// Test whether the given segment intersects
-        /// the closure of this hot pixel.
-        /// This is NOT the test used in the standard snap-rounding
-        /// algorithm, which uses the partially closed tolerance square instead.
-        /// This routine is provided for testing purposes only.
-        /// </summary>
-        /// <param name="p0"></param>
-        /// <param name="p1"></param>
-        /// <returns></returns>
-        private bool IntersectsPixelClosure(ICoordinate p0, ICoordinate p1)
+        // Test whether the given segment intersects
+        // the closure of this hot pixel.
+        // This is NOT the test used in the standard snap-rounding
+        // algorithm, which uses the partially closed tolerance square instead.
+        // This routine is provided for testing purposes only.
+        private Boolean intersectsPixelClosure(TCoordinate p0, TCoordinate p1)
         {
-            li.ComputeIntersection(p0, p1, corner[0], corner[1]);
-            if(li.HasIntersection) return true;
-            li.ComputeIntersection(p0, p1, corner[1], corner[2]);
-            if(li.HasIntersection) return true;
-            li.ComputeIntersection(p0, p1, corner[2], corner[3]);
-            if(li.HasIntersection) return true;
-            li.ComputeIntersection(p0, p1, corner[3], corner[0]);
-            if(li.HasIntersection) return true;
+            Intersection<TCoordinate> intersection;
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner0, _corner1);
+
+            if (intersection.HasIntersection)
+            {
+                return true;
+            }
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner1, _corner2);
+
+            if (intersection.HasIntersection)
+            {
+                return true;
+            }
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner2, _corner3);
+
+            if (intersection.HasIntersection)
+            {
+                return true;
+            }
+
+            intersection = _li.ComputeIntersection(p0, p1, _corner3, _corner0);
+
+            if (intersection.HasIntersection)
+            {
+                return true;
+            }
+
             return false;
         }
     }

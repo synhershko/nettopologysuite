@@ -1,64 +1,61 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
     /// <summary>
-    /// Base class for <see cref="INoder" />s which make a single pass to find intersections.
-    /// This allows using a custom <see cref="ISegmentIntersector" />
+    /// Base class for <see cref="INoder{TCoordinate}" />s which make a single pass to find intersections.
+    /// This allows using a custom <see cref="ISegmentIntersector{TCoordinate}" />
     /// (which for instance may simply identify intersections, rather than insert them).
     /// </summary>
-    public abstract class SinglePassNoder : INoder
+    public abstract class SinglePassNoder<TCoordinate> : INoder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private ISegmentIntersector segInt = null;
-       
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SinglePassNoder"/> class.
-        /// </summary>
-        public SinglePassNoder() { }
+        private readonly ISegmentIntersector<TCoordinate> _segInt;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SinglePassNoder"/> class.
+        /// Initializes a new instance of the <see cref="SinglePassNoder{TCoordinate}"/> class.
         /// </summary>
-        /// <param name="segInt">The <see cref="ISegmentIntersector" /> to use.</param>
-        public SinglePassNoder(ISegmentIntersector segInt)
+        /// <param name="segInt">The <see cref="ISegmentIntersector{TCoordinate}" /> to use.</param>
+        public SinglePassNoder(ISegmentIntersector<TCoordinate> segmentIntersector)
         {
-            this.segInt = segInt;
+            _segInt = segmentIntersector;
         }
 
         /// <summary>
-        /// Gets/sets the <see cref="ISegmentIntersector" /> to use with this noder.
-        /// A <see cref="ISegmentIntersector" />  will normally add intersection nodes
+        /// Gets/sets the <see cref="ISegmentIntersector{TCoordinate}" /> to use with this noder.
+        /// A <see cref="ISegmentIntersector{TCoordinate}" />  will normally add intersection nodes
         /// to the input segment strings, but it may not - it may
         /// simply record the presence of intersections.
-        /// However, some <see cref="INoder" />s may require that intersections be added.
+        /// However, some <see cref="INoder{TCoordinate}" />s may require that intersections be added.
         /// </summary>
-        public ISegmentIntersector SegmentIntersector
+        public ISegmentIntersector<TCoordinate> SegmentIntersector
         {
-            get 
-            { 
-                return segInt; 
-            }
-            set 
-            { 
-                segInt = value; 
-            }
+            get { return _segInt; }
         }
 
+        #region INoder<TCoordinate> Members
 
         /// <summary>
-        /// Computes the noding for a collection of <see cref="SegmentString"/>s.
-        /// Some Noders may add all these nodes to the input <see cref="SegmentString"/>s;
+        /// Returns a set of fully noded <see cref="NodedSegmentString{TCoordinate}"/>s.
+        /// The <see cref="NodedSegmentString{TCoordinate}"/>s have the same context as their parent.
+        /// </summary>
+        /// <remarks>
+        /// Computes the noding for a collection of <see cref="NodedSegmentString{TCoordinate}"/>s.
+        /// Some Noders may add all these nodes to the input <see cref="NodedSegmentString{TCoordinate}"/>s;
         /// others may only add some or none at all.
-        /// </summary>
-        /// <param name="segStrings"></param>
-        public abstract void ComputeNodes(IList segStrings);
+        /// </remarks>
+        public abstract IEnumerable<ISegmentString<TCoordinate>> Node(
+            IEnumerable<ISegmentString<TCoordinate>> segmentStrings);
 
-        /// <summary>
-        /// Returns a <see cref="IList"/> of fully noded <see cref="SegmentString"/>s.
-        /// The <see cref="SegmentString"/>s have the same context as their parent.
-        /// </summary>
-        /// <returns></returns>
-        public abstract IList GetNodedSubstrings();
+        public abstract void ComputeNodes(IEnumerable<ISegmentString<TCoordinate>> segmentStrings);
+        #endregion
 
+        public abstract IEnumerable<TNodingResult> Node<TNodingResult>(
+            IEnumerable<ISegmentString<TCoordinate>> segmentStrings,
+            Func<ISegmentString<TCoordinate>, TNodingResult> generator);
     }
 }

@@ -1,110 +1,97 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
-using GisSharpBlog.NetTopologySuite.Index;
 using GisSharpBlog.NetTopologySuite.Index.Quadtree;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
     /// <summary>
-    /// An index of LineSegments.
+    /// An index of <see cref="LineSegment{TCoordinate}"/>s.
     /// </summary>
-    public class LineSegmentIndex
+    public class LineSegmentIndex<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        private Quadtree index = new Quadtree();
+        private readonly Quadtree<TCoordinate, TaggedLineSegment<TCoordinate>> _index;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public LineSegmentIndex() { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="line"></param>
-        public void Add(TaggedLineString line) 
+        public LineSegmentIndex(IGeometryFactory<TCoordinate> geometryFactory)
         {
-            TaggedLineSegment[] segs = line.Segments;
-            for (int i = 0; i < segs.Length - 1; i++) 
+            _index = new Quadtree<TCoordinate, TaggedLineSegment<TCoordinate>>(geometryFactory);
+        }
+        
+        public void Add(TaggedLineString<TCoordinate> line)
+        {
+            foreach (TaggedLineSegment<TCoordinate> segment in line.Segments)
             {
-                TaggedLineSegment seg = segs[i];
-                Add(seg);
+                Add(segment);
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="seg"></param>
-        public void Add(LineSegment seg)
+        public void Add(TaggedLineSegment<TCoordinate> seg)
         {
-            index.Insert(new Envelope(seg.P0, seg.P1), seg);
+        
+            _index.Insert(seg);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="seg"></param>
-        public void Remove(LineSegment seg)
+        public void Remove(TaggedLineSegment<TCoordinate> seg)
         {
-            index.Remove(new Envelope(seg.P0, seg.P1), seg);
+            _index.Remove(seg);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="querySeg"></param>
-        /// <returns></returns>
-        public IList Query(LineSegment querySeg)
+        public IEnumerable<TaggedLineSegment<TCoordinate>> Query(TaggedLineSegment<TCoordinate> querySeg)
         {
-            Envelope env = new Envelope(querySeg.P0, querySeg.P1);
+            IExtents<TCoordinate> extents = querySeg.Bounds;
 
-            LineSegmentVisitor visitor = new LineSegmentVisitor(querySeg);
-            index.Query(env, visitor);
-            IList itemsFound = visitor.Items;        
+            Predicate<TaggedLineSegment<TCoordinate>> predicate =
+                delegate(TaggedLineSegment<TCoordinate> seg)
+                {
+                    return Extents<TCoordinate>.Intersects(
+                        seg.LineSegment.P0, seg.LineSegment.P1,
+                        querySeg.LineSegment.P0, querySeg.LineSegment.P1);
+                };
 
-            return itemsFound;
+            return _index.Query(extents, predicate);
         }
+
+        //public IGeometryFactory<TCoordinate> Factory
+        //{
+        //    get { return _index.Factory; }
+        //}
+
     }
 
-    /// <summary>
-    /// ItemVisitor subclass to reduce volume of query results.
-    /// </summary>
-    public class LineSegmentVisitor : IItemVisitor
-    {
-        // MD - only seems to make about a 10% difference in overall time.
-        private LineSegment querySeg;
-        private ArrayList items = new ArrayList();
+    ///// <summary>
+    ///// ItemVisitor subclass to reduce volume of query results.
+    ///// </summary>
+    //public class LineSegmentVisitor<TCoordinate> : IItemVisitor
+    //    where TCoordinate : ICoordinate, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+    //        IComputable<TCoordinate>, IConvertible
+    //{
+    //    // MD - only seems to make about a 10% difference in overall time.
+    //    private LineSegment<TCoordinate> querySeg;
+    //    private ArrayList items = new ArrayList();
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="querySeg"></param>
-        public LineSegmentVisitor(LineSegment querySeg) 
-        {
-            this.querySeg = querySeg;
-        }
+    //    public LineSegmentVisitor(LineSegment<TCoordinate> querySeg)
+    //    {
+    //        this.querySeg = querySeg;
+    //    }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="item"></param>
-        public void VisitItem(Object item)
-        {
-            LineSegment seg = (LineSegment) item;
-            if (Envelope.Intersects(seg.P0, seg.P1, querySeg.P0, querySeg.P1))
-                items.Add(item);
-        }
+    //    public void VisitItem(Object item)
+    //    {
+    //        LineSegment seg = (LineSegment) item;
+    //        if ()
+    //        {
+    //            items.Add(item);
+    //        }
+    //    }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public ArrayList Items 
-        {
-            get
-            {
-                return items;
-            }
-        }
-    }
+    //    public ArrayList Items
+    //    {
+    //        get { return items; }
+    //    }
+    //}
 }

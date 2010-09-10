@@ -1,85 +1,94 @@
-using System.Collections;
-using GisSharpBlog.NetTopologySuite.Planargraph;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using NPack.Interfaces;
+
+#if DOTNET35
+using System.Linq;
+#endif
 
 namespace GisSharpBlog.NetTopologySuite.Planargraph.Algorithm
 {
     /// <summary>
-    /// Finds all connected <see cref="Subgraph" />s of a <see cref="PlanarGraph" />.
+    /// Finds all connected <see cref="Subgraph{TCoordinate}" />s of a 
+    /// <see cref="PlanarGraph{TCoordinate}" />.
     /// </summary>
-    public class ConnectedSubgraphFinder
+    public class ConnectedSubgraphFinder<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private PlanarGraph graph;
+        private readonly PlanarGraph<TCoordinate> _graph;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConnectedSubgraphFinder"/> class.
+        /// Initializes a new instance of the 
+        /// <see cref="ConnectedSubgraphFinder{TCoordinate}"/> class.
         /// </summary>
-        /// <param name="graph">The <see cref="PlanarGraph" />.</param>
-        public ConnectedSubgraphFinder(PlanarGraph graph)
+        /// <param name="graph">The <see cref="PlanarGraph{TCoordinate}" />.</param>
+        public ConnectedSubgraphFinder(PlanarGraph<TCoordinate> graph)
         {
-            this.graph = graph;
+            _graph = graph;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public IList GetConnectedSubgraphs()
+        public IEnumerable<Subgraph<TCoordinate>> FindConnectedSubgraphs()
         {
-            IList subgraphs = new ArrayList();
+            List<Subgraph<TCoordinate>> subgraphs = new List<Subgraph<TCoordinate>>();
+            
+            IEnumerable<GraphComponent<TCoordinate>> components
+                = Caster.Upcast<GraphComponent<TCoordinate>, Node<TCoordinate>>(_graph.Nodes);
 
-            GraphComponent.SetVisited(graph.GetNodeEnumerator(), false);
-            IEnumerator ienum = graph.GetEdgeEnumerator();
-            while(ienum.MoveNext())
+            GraphComponent<TCoordinate>.SetVisited(components, false);
+
+            foreach (Edge<TCoordinate> edge in _graph.Edges)
             {
-                Edge e = ienum.Current as Edge;
-                Node node = e.GetDirEdge(0).FromNode;
+                Node<TCoordinate> node = edge.GetDirectedEdge(0).FromNode;
+
                 if (!node.IsVisited)
-                    subgraphs.Add(FindSubgraph(node));                
+                {
+                    subgraphs.Add(FindSubgraph(node));
+                }
             }
             return subgraphs;
         }
 
-        private Subgraph FindSubgraph(Node node)
+        private Subgraph<TCoordinate> FindSubgraph(Node<TCoordinate> node)
         {
-            Subgraph subgraph = new Subgraph(graph);
-            AddReachable(node, subgraph);
+            Subgraph<TCoordinate> subgraph = new Subgraph<TCoordinate>(_graph);
+            AddReachableToSubgraph(subgraph, node);
             return subgraph;
         }
 
-        /// <summary>
-        /// Adds all nodes and edges reachable from this node to the subgraph.
-        /// Uses an explicit stack to avoid a large depth of recursion.
-        /// </summary>
-        /// <param name="startNode"></param>
-        /// <param name="subgraph"></param>
-        private void AddReachable(Node startNode, Subgraph subgraph)
+        // Adds all nodes and edges reachable from this node to the subgraph.
+        // Uses an explicit stack to avoid a large depth of recursion.
+        private static void AddReachableToSubgraph(Subgraph<TCoordinate> subgraph, Node<TCoordinate> startNode)
         {
-            Stack nodeStack = new Stack();
+            Stack<Node<TCoordinate>> nodeStack = new Stack<Node<TCoordinate>>();
             nodeStack.Push(startNode);
+
             while (!(nodeStack.Count == 0))
             {
-                Node node = (Node)nodeStack.Pop();
-                AddEdges(node, nodeStack, subgraph);
+                Node<TCoordinate> node = nodeStack.Pop();
+                AddEdgesToSubgraph(subgraph, node, nodeStack);
             }
         }
 
-        /// <summary>
-        /// Adds the argument node and all its out edges to the subgraph.
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="nodeStack"></param>
-        /// <param name="subgraph"></param>
-        private void AddEdges(Node node, Stack nodeStack, Subgraph subgraph)
+        // Adds the argument node and all its out edges to the subgraph.
+        private static void AddEdgesToSubgraph(Subgraph<TCoordinate> subgraph, Node<TCoordinate> node,
+                                               Stack<Node<TCoordinate>> nodeStack)
         {
             node.Visited = true;
-            IEnumerator i = ((DirectedEdgeStar)node.OutEdges).GetEnumerator();
-            while(i.MoveNext())
+            IEnumerator<DirectedEdge<TCoordinate>> i = node.OutEdges.GetEnumerator();
+
+            while (i.MoveNext())
             {
-                DirectedEdge de = (DirectedEdge)i.Current;
+                DirectedEdge<TCoordinate> de = i.Current;
                 subgraph.Add(de.Edge);
-                Node toNode = de.ToNode;
-                if (!toNode.IsVisited) 
+                Node<TCoordinate> toNode = de.ToNode;
+                if (!toNode.IsVisited)
+                {
                     nodeStack.Push(toNode);
+                }
             }
         }
     }

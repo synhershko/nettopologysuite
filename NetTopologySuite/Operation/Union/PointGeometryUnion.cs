@@ -1,20 +1,29 @@
 #define Goletas
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using Goletas.Collections;
+using NPack.Interfaces;
+#if Goletas
+
+#else
+using C5;
+#endif
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Union
 {
-    public class PointGeometryUnion
+    public class PointGeometryUnion<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private readonly IGeometryFactory _geomFact;
-        private readonly IGeometry _otherGeom;
-        private readonly IGeometry _pointGeom;
+        private readonly IGeometryFactory<TCoordinate> _geomFact;
+        private readonly IGeometry<TCoordinate> _otherGeom;
+        private readonly IGeometry<TCoordinate> _pointGeom;
 
-        public PointGeometryUnion(IPoint pointGeom, IGeometry otherGeom)
+        public PointGeometryUnion(IPuntal<TCoordinate> pointGeom, IGeometry<TCoordinate> otherGeom)
         {
             _pointGeom = pointGeom;
             _otherGeom = otherGeom;
@@ -22,54 +31,51 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Union
         }
 
         ///<summary>
-        /// Computes the union of a <see cref="IPoint"/> geometry with 
-        /// another arbitrary <see cref="IGeometry"/>.
+        /// Computes the union of a <see cref="IPoint{TCoordinate}"/> geometry with 
+        /// another arbitrary <see cref="IGeometry{TCoordinate}"/>.
         /// Does not copy any component geometries.
         ///</summary>
         ///<param name="pointGeom"></param>
         ///<param name="otherGeom"></param>
         ///<returns></returns>
-        public static IGeometry Union(IPoint pointGeom, IGeometry otherGeom)
+        public static IGeometry<TCoordinate> Union(IPuntal<TCoordinate> pointGeom, IGeometry<TCoordinate> otherGeom)
         {
-            PointGeometryUnion unioner = new PointGeometryUnion(pointGeom, otherGeom);
+            PointGeometryUnion<TCoordinate> unioner = new PointGeometryUnion<TCoordinate>(pointGeom, otherGeom);
             return unioner.Union();
         }
 
-        public IGeometry Union()
+        public IGeometry<TCoordinate> Union()
         {
-            PointLocator locater = new PointLocator();
-
+            PointLocator<TCoordinate> locater = new PointLocator<TCoordinate>();
             // use a set to eliminate duplicates, as required for union
 #if Goletas
-            HashSet<ICoordinate> exteriorCoords = new HashSet<ICoordinate>();
+            SortedSet<TCoordinate> exteriorCoords = new SortedSet<TCoordinate>();
 #else
-            TreeSet exteriorCoords = new TreeSet();
+            TreeSet<TCoordinate> exteriorCoords = new TreeSet<TCoordinate>();
 #endif
 
-            foreach (IPoint point in PointExtracter.GetPoints(_pointGeom))
+            foreach (IPoint<TCoordinate> point in GeometryFilter.Filter<IPoint<TCoordinate>, TCoordinate>(_pointGeom))
             {
-                ICoordinate coord = point.Coordinate;
+                TCoordinate coord = point.Coordinate;
                 Locations loc = locater.Locate(coord, _otherGeom);
-
                 if (loc == Locations.Exterior)
-                {
                     exteriorCoords.Add(coord);
-                }
             }
 
             // if no points are in exterior, return the other geom
             if (exteriorCoords.Count == 0)
-            {
                 return _otherGeom;
-            }
 
             // make a puntal geometry of appropriate size
-            IGeometry ptComp = null;
-            ICoordinateSequence coords = _geomFact.CoordinateSequenceFactory.Create(exteriorCoords.ToArray());
-            ptComp = coords.Count == 1 ? (IGeometry)_geomFact.CreatePoint(coords.GetCoordinate(0)) : _geomFact.CreateMultiPoint(coords);
+            IGeometry<TCoordinate> ptComp = null;
+            ICoordinateSequence<TCoordinate> coords = _geomFact.CoordinateSequenceFactory.Create(exteriorCoords);
+            if (coords.Count == 1)
+                ptComp = _geomFact.CreatePoint(coords[0]);
+            else
+                ptComp = _geomFact.CreateMultiPoint(coords);
 
             // add point component to the other geometry
-            return GeometryCombiner.Combine(ptComp, _otherGeom);
+            return GeometryCombiner<TCoordinate>.Combine(ptComp, _otherGeom);
         }
     }
 }

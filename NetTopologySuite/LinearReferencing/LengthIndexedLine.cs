@@ -1,71 +1,103 @@
+using System;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.LinearReferencing
 {
     /// <summary>
-    /// Supports linear referencing along a linear <see cref="Geometry" />
+    /// Supports linear referencing along a linear <see cref="Geometry{TCoordinate}" />
     /// using the length along the line as the index.
+    /// </summary>
+    /// <remarks>
     /// Negative length values are taken as measured in the reverse direction
     /// from the end of the geometry.
     /// Out-of-range index values are handled by clamping
     /// them to the valid range of values.
     /// Non-simple lines (i.e. which loop back to cross or touch
     /// themselves) are supported.
-    /// </summary>
-    public class LengthIndexedLine
+    /// </remarks>
+    public class LengthIndexedLine<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        private IGeometry linearGeom = null;
- 
+        private readonly IGeometry<TCoordinate> _linearGeom;
+
         /// <summary>
-        /// Constructs an object which allows a linear <see cref="Geometry" />
+        /// Constructs an object which allows a linear <see cref="Geometry{TCoordinate}" />
         /// to be linearly referenced using length as an index.
         /// </summary>
         /// <param name="linearGeom">The linear geometry to reference along.</param>
-        public LengthIndexedLine(IGeometry linearGeom)
+        public LengthIndexedLine(IGeometry<TCoordinate> linearGeom)
         {
-            this.linearGeom = linearGeom;
+            _linearGeom = linearGeom;
         }
 
         /// <summary>
-        /// Computes the <see cref="Coordinate" /> for the point
+        /// Returns the index of the start of the line.
+        /// </summary>
+        public Double StartIndex
+        {
+            get { return 0; }
+        }
+
+        /// <summary>
+        /// Returns the index of the end of the line.
+        /// </summary>
+        public Double EndIndex
+        {
+            get { return LinearHelper.GetLength(_linearGeom); }
+        }
+
+        /// <summary>
+        /// Computes the <typeparamref name="TCoordinate"/> for the point
         /// on the line at the given index.
         /// If the index is out of range the first or last point on the
         /// line will be returned.
         /// </summary>
         /// <param name="index">The index of the desired point.</param>
-        /// <returns>The <see cref="Coordinate" /> at the given index.</returns>
-        public ICoordinate ExtractPoint(double index)
+        /// <returns>The <typeparamref name="TCoordinate" /> at the given index.</returns>
+        public TCoordinate ExtractPoint(Double index)
         {
-            LinearLocation loc = LengthLocationMap.GetLocation(linearGeom, index);
-            return loc.GetCoordinate(linearGeom);
+            LinearLocation<TCoordinate> loc = LengthLocationMap<TCoordinate>.GetLocation(_linearGeom, index);
+            return loc.GetCoordinate(_linearGeom);
         }
-        
+
+        ///<summary>
+        /// Computes the <see cref="TCoordinate"/> for the point
+        /// on the line at the given index, offset by the given distance.
+        /// If the index is out of range the first or last point on the
+        /// line will be returned.
+        /// The computed point is offset to the left of the line if the offset distance is
+        /// positive, to the right if negative.
+        /// 
+        /// The Z-ordinate of the computed point will be interpolated from
+        /// the Z-ordinates of the line segment containing it, if they exist.
+        ///</summary>
+        ///<param name="index">the index of the desired point</param>
+        ///<param name="offsetDistance">the distance the point is offset from the segment (positive is to the left, negative is to the right)</param>
+        ///<returns>the Coordinate at the given index</returns>
+        public TCoordinate ExtractPoint(Double index, Double offsetDistance)
+        {
+            LinearLocation<TCoordinate> loc = LengthLocationMap<TCoordinate>.GetLocation(_linearGeom, index);
+            return loc.GetSegment(_linearGeom).PointAlongOffset(
+                _linearGeom.Coordinates.CoordinateFactory,loc.SegmentFraction, offsetDistance);
+        }
+
         /// <summary>
-        /// Computes the <see cref="LineString" /> for the interval
+        /// Computes the <see cref="ILineString{TCoordinate}" /> for the interval
         /// on the line between the given indices.
         /// If the <paramref name="endIndex" /> lies before the <paramref name="startIndex" />,
         /// the computed geometry is reversed.
         /// </summary>
-        /// <param name="startIndex"></param>
-        /// <param name="endIndex"></param>
-        /// <returns></returns>
-        public IGeometry ExtractLine(double startIndex, double endIndex)
+        public IGeometry<TCoordinate> ExtractLine(Double startIndex, Double endIndex)
         {
-            LocationIndexedLine lil = new LocationIndexedLine(linearGeom);
-            LinearLocation startLoc = LocationOf(startIndex);
-            LinearLocation endLoc = LocationOf(endIndex);
-            return ExtractLineByLocation.Extract(linearGeom, startLoc, endLoc);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        private LinearLocation LocationOf(double index)
-        {
-            return LengthLocationMap.GetLocation(linearGeom, index);
+            //LocationIndexedLine<TCoordinate> lil = new LocationIndexedLine<TCoordinate>(_linearGeom);
+            LinearLocation<TCoordinate> startLoc = locationOf(startIndex);
+            LinearLocation<TCoordinate> endLoc = locationOf(endIndex);
+            return ExtractLineByLocation<TCoordinate>.Extract(_linearGeom, startLoc, endLoc);
         }
 
         /// <summary>
@@ -81,9 +113,9 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="pt">A point on the line.</param>
         /// <returns>The minimum index of the point.</returns>
-        public double IndexOf(ICoordinate pt)
+        public Double IndexOf(TCoordinate pt)
         {
-            return LengthIndexOfPoint.IndexOf(linearGeom, pt);
+            return LengthIndexOfPoint<TCoordinate>.IndexOf(_linearGeom, pt);
         }
 
         /// <summary>
@@ -104,9 +136,9 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// <param name="pt">A point on the line.</param>
         /// <param name="minIndex">The value the returned index must be greater than.</param>
         /// <returns>The index of the point greater than the given minimum index.</returns>
-        public double IndexOfAfter(ICoordinate pt, double minIndex)
+        public Double IndexOfAfter(TCoordinate pt, Double minIndex)
         {
-            return LengthIndexOfPoint.IndexOfAfter(linearGeom, pt, minIndex);
+            return LengthIndexOfPoint<TCoordinate>.IndexOfAfter(_linearGeom, pt, minIndex);
         }
 
         /// <summary>
@@ -117,14 +149,17 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="subLine">A subLine of the line.</param>
         /// <returns>A pair of indices for the start and end of the subline..</returns>
-        public double[] IndicesOf(IGeometry subLine)
+        public Double[] IndicesOf(IGeometry<TCoordinate> subLine)
         {
-            LinearLocation[] locIndex = LocationIndexOfLine.IndicesOf(linearGeom, subLine);
-            double[] index = new double[] 
-            {
-                LengthLocationMap.GetLength(linearGeom, locIndex[0]),
-                LengthLocationMap.GetLength(linearGeom, locIndex[1]), 
-            };
+            Pair<LinearLocation<TCoordinate>> locIndex
+                = LocationIndexOfLine<TCoordinate>.IndicesOf(_linearGeom, subLine);
+
+            Double[] index = new[]
+                                 {
+                                     LengthLocationMap<TCoordinate>.GetLength(_linearGeom, locIndex.First),
+                                     LengthLocationMap<TCoordinate>.GetLength(_linearGeom, locIndex.Second),
+                                 };
+
             return index;
         }
 
@@ -135,39 +170,17 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="pt"></param>
         /// <returns></returns>
-        public double Project(ICoordinate pt)
+        public Double Project(TCoordinate pt)
         {
-            return LengthIndexOfPoint.IndexOf(linearGeom, pt);
-        }
-
-        /// <summary>
-        /// Returns the index of the start of the line.
-        /// </summary>
-        public double StartIndex
-        {
-            get
-            {
-                return 0;
-            }
-        }
-
-        /// <summary>
-        /// Returns the index of the end of the line.
-        /// </summary>
-        public double EndIndex
-        {
-            get
-            {
-                return linearGeom.Length;
-            }
+            return LengthIndexOfPoint<TCoordinate>.IndexOf(_linearGeom, pt);
         }
 
         /// <summary>
         /// Tests whether an index is in the valid index range for the line.
         /// </summary>
         /// <param name="index">The index to test.</param>
-        /// <returns><c>true</c> if the index is in the valid range.</returns>
-        public bool IsValidIndex(double index)
+        /// <returns><see langword="true"/> if the index is in the valid range.</returns>
+        public Boolean IsValidIndex(Double index)
         {
             return (index >= StartIndex && index <= EndIndex);
         }
@@ -178,13 +191,24 @@ namespace GisSharpBlog.NetTopologySuite.LinearReferencing
         /// </summary>
         /// <param name="index"></param>
         /// <returns>A valid index value.</returns>
-        public double ClampIndex(double index)
-        {            
-            if (index < StartIndex) 
-                return StartIndex;            
-            if (index > EndIndex) 
+        public Double ClampIndex(Double index)
+        {
+            if (index < StartIndex)
+            {
+                return StartIndex;
+            }
+
+            if (index > EndIndex)
+            {
                 return EndIndex;
+            }
+
             return index;
+        }
+
+        private LinearLocation<TCoordinate> locationOf(Double index)
+        {
+            return LengthLocationMap<TCoordinate>.GetLocation(_linearGeom, index);
         }
     }
 }

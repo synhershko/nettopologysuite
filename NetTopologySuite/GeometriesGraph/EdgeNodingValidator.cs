@@ -1,5 +1,9 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Noding;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
@@ -7,30 +11,35 @@ namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
     /// Validates that a collection of SegmentStrings is correctly noded.
     /// Throws an appropriate exception if an noding error is found.
     /// </summary>
-    public class EdgeNodingValidator
-    {        
-        private static IList ToSegmentStrings(IEnumerable edges)
+    public class EdgeNodingValidator<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
+    {
+        public static void CheckValid(IGeometryFactory<TCoordinate> geoFactory, IEnumerable<Edge<TCoordinate>> edges)
         {
-            // convert Edges to SegmentStrings
-            IList segStrings = new ArrayList();
-            for (var i = edges.GetEnumerator(); i.MoveNext(); )
+            EdgeNodingValidator<TCoordinate> env = new EdgeNodingValidator<TCoordinate>(geoFactory,edges);
+            env.CheckValid();
+        }
+
+        private readonly FastNodingValidator<TCoordinate> _nodingValidator;
+
+        public EdgeNodingValidator(IGeometryFactory<TCoordinate> geoFactory, IEnumerable<Edge<TCoordinate>> edges)
+        {
+            _nodingValidator = new FastNodingValidator<TCoordinate>(geoFactory, toSegmentStrings(edges));
+        }
+
+        private static IEnumerable<ISegmentString<TCoordinate>> toSegmentStrings(
+            IEnumerable<Edge<TCoordinate>> edges)
+        {
+            foreach (Edge<TCoordinate> e in edges)
             {
-                var e = (Edge)i.Current;
-                segStrings.Add(new SegmentString(e.Coordinates, e));
+                yield return new BasicSegmentString<TCoordinate>(e.Coordinates, e);
             }
-            return segStrings;
         }
 
-        private readonly NodingValidator nv;
-
-        public EdgeNodingValidator(IEnumerable edges)
+        public void CheckValid()
         {
-            nv = new NodingValidator(ToSegmentStrings(edges));
-        }
-
-        public void checkValid()
-        {
-            nv.CheckValid();
+            _nodingValidator.CheckValid();
         }
     }
 }

@@ -1,54 +1,39 @@
 using System;
-using GeoAPI.Geometries;
+using GeoAPI.Coordinates;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
 {
     /// <summary> 
-    /// Indicates an invalid or inconsistent topological situation encountered during processing
+    /// Indicates an invalid or inconsistent topological 
+    /// situation encountered during processing.
     /// </summary>
-    public class TopologyException : ApplicationException
+    public class TopologyException : NtsException
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="msg"></param>
-        /// <param name="pt"></param>
-        /// <returns></returns>
-        private static string MsgWithCoord(string msg, ICoordinate pt)
+        private readonly ICoordinate _coordinate;
+
+        public TopologyException(string msg) : base(msg)
         {
-            if (pt != null)
-            return msg + " [ " + pt + " ]";
-            return msg;
         }
 
-        private ICoordinate pt = null;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="msg"></param>
-        public TopologyException(string msg) : base(msg) { }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="msg"></param>
-        /// <param name="pt"></param>
-        public TopologyException(string msg, ICoordinate pt) 
-            : base (MsgWithCoord(msg, pt))
-        {            
-            this.pt = new Coordinate(pt);
+        public TopologyException(string msg, ICoordinate pt)
+            : base(formatMessageAndCoordinate(msg, pt))
+        {
+            _coordinate = pt.Clone() as ICoordinate;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         public ICoordinate Coordinate
         {
-            get
+            get { return _coordinate; }
+        }
+
+        private static string formatMessageAndCoordinate(string msg, ICoordinate pt)
+        {
+            if (pt != null && !pt.IsEmpty)
             {
-                return pt;
+                return String.Format("{0} @ {1}", msg, pt);
             }
+
+            return msg;
         }
     }
 }

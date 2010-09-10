@@ -1,120 +1,120 @@
-using System.Collections;
-using GisSharpBlog.NetTopologySuite.Geometries;
-using Wintellect.PowerCollections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Noding
 {
-
     /// <summary>
-    /// Dissolves a noded collection of <see cref="SegmentString" />s to produce
+    /// Dissolves a noded collection of <see cref="NodedSegmentString{TCoordinate}" />s to produce
     /// a set of merged linework with unique segments.
+    /// </summary>
+    /// <remarks>
+    /// <para>
     /// A custom merging strategy can be applied when two identical (up to orientation)
     /// strings are dissolved together.
     /// The default merging strategy is simply to discard the merged string.
-    ///<para>
-    /// A common use for this class is to merge noded edges
-    /// while preserving topological labelling.
     /// </para>
-    /// </summary>
-    public class SegmentStringDissolver
+    /// <para>
+    /// A common use for this class is to merge noded edges
+    /// while preserving topological labeling.
+    /// </para>
+    /// </remarks>
+    public class SegmentStringDissolver<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        public interface ISegmentStringMerger
-        {
-            /// <summary>
-            /// Updates the context data of a <see cref="SegmentString" />
-            /// when an identical (up to orientation) one is found during dissolving.
-            /// </summary>
-            /// <param name="mergeTarget">The segment string to update.</param>
-            /// <param name="ssToMerge">The segment string being dissolved.</param>
-            /// <param name="isSameOrientation">
-            /// <c>true</c> if the strings are in the same direction,
-            /// <c>false</c> if they are opposite.
-            /// </param>
-            void Merge(SegmentString mergeTarget, SegmentString ssToMerge, bool isSameOrientation);
-        }
+        private readonly ISegmentStringMerger _merger;
 
-        private readonly ISegmentStringMerger merger;
-        private readonly IDictionary ocaMap = new OrderedDictionary<OrientedCoordinateArray, object>();
-        
+        private readonly SortedDictionary<ICoordinateSequence<TCoordinate>, NodedSegmentString<TCoordinate>>
+            _orientedCoordinateMap =
+                new SortedDictionary<ICoordinateSequence<TCoordinate>, NodedSegmentString<TCoordinate>>();
+
         /// <summary>
         /// Creates a dissolver with a user-defined merge strategy.
         /// </summary>
-        /// <param name="merger"></param>
         public SegmentStringDissolver(ISegmentStringMerger merger)
         {
-            this.merger = merger;
+            _merger = merger;
         }
 
         /// <summary>
         /// Creates a dissolver with the default merging strategy.
         /// </summary>
         public SegmentStringDissolver()
-            : this(null) { }
-
-        /// <summary>
-        /// Dissolve all <see cref="SegmentString" />s in the input <see cref="ICollection"/>.
-        /// </summary>
-        /// <param name="segStrings"></param>
-        public void Dissolve(ICollection segStrings)
+            : this(null)
         {
-            foreach(object obj in segStrings)
-                Dissolve((SegmentString)obj);
         }
 
         /// <summary>
-        /// 
+        /// Gets the collection of dissolved (i.e. unique) <see cref="NodedSegmentString{TCoordinate}" />s
         /// </summary>
-        /// <param name="oca"></param>
-        /// <param name="segString"></param>
-        private void Add(OrientedCoordinateArray oca, SegmentString segString)
+        public IEnumerable<NodedSegmentString<TCoordinate>> Dissolved
         {
-            ocaMap.Add(oca, segString);
+            get { return _orientedCoordinateMap.Values; }
         }
 
         /// <summary>
-        /// Dissolve the given <see cref="SegmentString" />.
+        /// Dissolve all <see cref="NodedSegmentString{TCoordinate}" />s 
+        /// in the input set.
+        /// </summary>
+        public void Dissolve(IEnumerable<NodedSegmentString<TCoordinate>> segStrings)
+        {
+            foreach (NodedSegmentString<TCoordinate> segmentString in segStrings)
+            {
+                Dissolve(segmentString);
+            }
+        }
+
+        /// <summary>
+        /// Dissolve the given <see cref="NodedSegmentString{TCoordinate}" />.
         /// </summary>
         /// <param name="segString"></param>
-        public void Dissolve(SegmentString segString)
+        public void Dissolve(NodedSegmentString<TCoordinate> segString)
         {
-            OrientedCoordinateArray oca = new OrientedCoordinateArray(segString.Coordinates);
-            SegmentString existing = FindMatching(oca, segString);
+            ICoordinateSequence<TCoordinate> orientedSequence = segString.Coordinates;
+            //OrientedCoordinateArray<TCoordinate> oca = new OrientedCoordinateArray<TCoordinate>(segString.Coordinates);
+
+            NodedSegmentString<TCoordinate> existing;
+            _orientedCoordinateMap.TryGetValue(orientedSequence, out existing);
+
             if (existing == null)
-                Add(oca, segString);            
+            {
+                add(orientedSequence, segString);
+            }
             else
             {
-                if (merger != null)
+                if (_merger != null)
                 {
-                    bool isSameOrientation = CoordinateArrays.Equals(existing.Coordinates, segString.Coordinates);
-                    merger.Merge(existing, segString, isSameOrientation);
+                    Boolean isSameOrientation = existing.Coordinates.Equals(segString.Coordinates);
+                    _merger.Merge(existing, segString, isSameOrientation);
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="oca"></param>
-        /// <param name="segString"></param>
-        /// <returns></returns>
-        private SegmentString FindMatching(OrientedCoordinateArray oca, SegmentString segString)
+        private void add(ICoordinateSequence<TCoordinate> oca, NodedSegmentString<TCoordinate> segString)
         {
-            return (SegmentString)ocaMap[oca];            
-        }        
-
-        /// <summary>
-        /// Gets the collection of dissolved (i.e. unique) <see cref="SegmentString" />s
-        /// </summary>
-        public ICollection Dissolved
-        {
-            get
-            {
-                return ocaMap.Values;
-            }
+            _orientedCoordinateMap.Add(oca, segString);
         }
 
+        #region Nested type: ISegmentStringMerger
+
+        public interface ISegmentStringMerger
+        {
+            /// <summary>
+            /// Updates the context data of a <see cref="NodedSegmentString{TCoordinate}" />
+            /// when an identical (up to orientation) one is found during dissolving.
+            /// </summary>
+            /// <param name="mergeTarget">The segment string to update.</param>
+            /// <param name="ssToMerge">The segment string being dissolved.</param>
+            /// <param name="isSameOrientation">
+            /// <see langword="true"/> if the strings are in the same direction,
+            /// <c>false</c> if they are opposite.
+            /// </param>
+            void Merge(NodedSegmentString<TCoordinate> mergeTarget, NodedSegmentString<TCoordinate> ssToMerge,
+                       Boolean isSameOrientation);
+        }
+
+        #endregion
     }
 }

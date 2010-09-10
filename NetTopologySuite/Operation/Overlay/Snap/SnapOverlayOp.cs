@@ -1,168 +1,128 @@
-using System.Diagnostics;
+using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Precision;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
 {
-    /// <summary>
-    /// Performs an overlay operation using snapping and enhanced precision
-    /// to improve the robustness of the result.
-    /// This class always uses snapping.  
-    /// This is less performant than the standard JTS overlay code, 
-    /// and may even introduce errors which were not present in the original data.
-    /// For this reason, this class should only be used 
-    /// if the standard overlay code fails to produce a correct result. 
-    /// </summary>
-    public class SnapOverlayOp
+    /**
+     * Performs an overlay operation using snapping and enhanced precision
+     * to improve the robustness of the result.
+     * This class <i>always</i> uses snapping.  
+     * This is less performant than the standard JTS overlay code, 
+     * and may even introduce errors which were not present in the original data.
+     * For this reason, this class should only be used 
+     * if the standard overlay code fails to produce a correct result. 
+     *  
+     * @author Martin Davis
+     * @version 1.7
+     */
+    ///<summary>
+    ///</summary>
+    ///<typeparam name="TCoordinate"></typeparam>
+    public class SnapOverlayOp<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <param name="opCode"></param>
-        /// <returns></returns>
-        public static IGeometry Overlay(IGeometry g0, IGeometry g1, SpatialFunction opCode)
+
+        public static IGeometry<TCoordinate> Overlay(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1, SpatialFunctions opCode)
         {
-            SnapOverlayOp op = new SnapOverlayOp(g0, g1);
+            SnapOverlayOp<TCoordinate> op = new SnapOverlayOp<TCoordinate>(g0, g1);
             return op.GetResultGeometry(opCode);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <returns></returns>
-        public static IGeometry Intersection(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Intersection(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Intersection);
+            return Overlay(g0, g1, SpatialFunctions.Intersection);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <returns></returns>
-        public static IGeometry Union(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Union(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Union);
+            return Overlay(g0, g1, SpatialFunctions.Union);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <returns></returns>
-        public static IGeometry Difference(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Difference(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Difference);
+            return Overlay(g0, g1, SpatialFunctions.Difference);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        /// <returns></returns>
-        public static IGeometry SymDifference(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> SymDifference(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.SymDifference);
+            return Overlay(g0, g1, SpatialFunctions.SymDifference);
         }
 
 
-        private IGeometry[] geom = new IGeometry[2];
-        private double tolerance;
+        private IGeometry<TCoordinate>[] _geom = new IGeometry<TCoordinate>[2];
+        private Double _snapTolerance;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g1"></param>
-        /// <param name="g2"></param>
-        public SnapOverlayOp(IGeometry g1, IGeometry g2)
+        public SnapOverlayOp(IGeometry<TCoordinate> g1, IGeometry<TCoordinate> g2)
         {
-            geom[0] = g1;
-            geom[1] = g2;
-            ComputeSnapTolerance();
+            _geom[0] = g1;
+            _geom[1] = g2;
+            computeSnapTolerance();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private void ComputeSnapTolerance()
+        private void computeSnapTolerance()
         {
-            tolerance = GeometrySnapper.ComputeOverlaySnapTolerance(geom[0], geom[1]);
+            _snapTolerance = GeometrySnapper<TCoordinate>.ComputeOverlaySnapTolerance(_geom[0], _geom[1]);
+
+            // System.out.println("Snap tol = " + snapTolerance);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="opCode"></param>
-        /// <returns></returns>
-        public IGeometry GetResultGeometry(SpatialFunction opCode)
+        public IGeometry<TCoordinate> GetResultGeometry(SpatialFunctions opCode)
         {
-            IGeometry[] prepGeom = Snap();
-            IGeometry result = OverlayOp.Overlay(prepGeom[0], prepGeom[1], opCode);
+            IGeometry<TCoordinate>[] prepGeom = Snap();
+            IGeometry<TCoordinate> result = OverlayOp<TCoordinate>.Overlay(prepGeom[0], prepGeom[1], opCode);
             return PrepareResult(result);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private IGeometry[] Snap()
+        private IGeometry<TCoordinate>[] Snap()
         {
-            IGeometry[] remGeom = RemoveCommonBits(geom);
+            IGeometry<TCoordinate>[] remGeom = RemoveCommonBits(_geom);
 
             // MD - testing only
-            // IGeometry[] remGeom = geom;
+            //  	IGeometry<TCoordinate>[] remGeom = geom;
 
-            IGeometry[] snapGeom = GeometrySnapper.Snap(remGeom[0], remGeom[1], tolerance);
+            IGeometry<TCoordinate>[] snapGeom = GeometrySnapper<TCoordinate>.Snap(remGeom[0], remGeom[1], _snapTolerance);
             // MD - may want to do this at some point, but it adds cycles
-            // CheckValid(snapGeom[0]);
-            // CheckValid(snapGeom[1]);
+            //    checkValid(snapGeom[0]);
+            //    checkValid(snapGeom[1]);
+
+            /*
+            System.out.println("Snapped geoms: ");
+            System.out.println(snapGeom[0]);
+            System.out.println(snapGeom[1]);
+            */
             return snapGeom;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        private IGeometry PrepareResult(IGeometry geom)
+        private IGeometry<TCoordinate> PrepareResult(IGeometry<TCoordinate> geom)
         {
-            cbr.AddCommonBits(geom);
-            return geom;
+            return _cbr.AddCommonBits(geom);
         }
 
-        private CommonBitsRemover cbr;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        private IGeometry[] RemoveCommonBits(IGeometry[] geom)
+        private CommonBitsRemover<TCoordinate> _cbr;
+
+        private IGeometry<TCoordinate>[] RemoveCommonBits(IGeometry<TCoordinate>[] geom)
         {
-            cbr = new CommonBitsRemover();
-            cbr.Add(geom[0]);
-            cbr.Add(geom[1]);
-            IGeometry[] remGeom = new IGeometry[2];
-            remGeom[0] = cbr.RemoveCommonBits((IGeometry) geom[0].Clone());
-            remGeom[1] = cbr.RemoveCommonBits((IGeometry) geom[1].Clone());
+            _cbr = new CommonBitsRemover<TCoordinate>(geom[0].Factory);
+            _cbr.Add(geom[0]);
+            _cbr.Add(geom[1]);
+            IGeometry<TCoordinate>[] remGeom = {
+                _cbr.RemoveCommonBits(geom[0].Clone()),
+                _cbr.RemoveCommonBits(geom[1].Clone()) };
+
             return remGeom;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g"></param>
-        private void CheckValid(IGeometry g)
+        private void checkValid(IGeometry<TCoordinate> g)
         {
-  	        if (! g.IsValid) 
-  		        Trace.WriteLine("Snapped geometry is invalid");
-          }
+            if (! g.IsValid) {
+                System.Diagnostics.Trace.WriteLine("Snapped geometry is invalid");
+        }
+        }
     }
 }

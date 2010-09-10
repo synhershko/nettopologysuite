@@ -1,126 +1,126 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
 using GisSharpBlog.NetTopologySuite.Algorithm;
-using GisSharpBlog.NetTopologySuite.Geometries;
 using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Predicate
 {
     /// <summary>
     /// Optimized implementation of spatial predicate "intersects"
-    /// for cases where the first {@link Geometry} is a rectangle.    
-    /// As a further optimization,
-    /// this class can be used directly to test many geometries against a single
-    /// rectangle.
+    /// for cases where the first <see cref="IGeometry{TCoordinate}"/> is a rectangle.    
+    /// As a further optimization, this class can be used directly 
+    /// to test many geometries against a single rectangle.
     /// </summary>
-    public class RectangleIntersects 
-    {        
+    public class RectangleIntersects<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
         /// <summary>     
         /// Crossover size at which brute-force intersection scanning
         /// is slower than indexed intersection detection.
         /// Must be determined empirically.  Should err on the
         /// safe side by making value smaller rather than larger.
         /// </summary>
-        public const int MaximumScanSegmentCount = 200;
+        public const Int32 MaximumScanSegmentCount = 200;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rectangle"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        public static bool Intersects(IPolygon rectangle, IGeometry b)
-        {
-            RectangleIntersects rp = new RectangleIntersects(rectangle);
-            return rp.Intersects(b);
-        }
-
-        private IPolygon rectangle;
-        private IEnvelope rectEnv;
+        private readonly IPolygon<TCoordinate> _rectangle;
+        private readonly IExtents<TCoordinate> _rectangleExtents;
 
         /// <summary>
         /// Create a new intersects computer for a rectangle.
         /// </summary>
         /// <param name="rectangle">A rectangular geometry.</param>
-        public RectangleIntersects(IPolygon rectangle) 
+        public RectangleIntersects(IPolygon<TCoordinate> rectangle)
         {
-            this.rectangle = rectangle;
-            rectEnv = rectangle.EnvelopeInternal;
+            _rectangle = rectangle;
+            _rectangleExtents = rectangle.Extents;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        public bool Intersects(IGeometry geom)
+        public static Boolean Intersects(IPolygon<TCoordinate> rectangle, IGeometry<TCoordinate> b)
         {
-            if (!rectEnv.Intersects(geom.EnvelopeInternal))
+            RectangleIntersects<TCoordinate> rp = new RectangleIntersects<TCoordinate>(rectangle);
+            return rp.Intersects(b);
+        }
+
+        public Boolean Intersects(IGeometry<TCoordinate> geom)
+        {
+            if (!_rectangleExtents.Intersects(geom.Extents))
+            {
                 return false;
+            }
+
             // test envelope relationships
-            EnvelopeIntersectsVisitor visitor = new EnvelopeIntersectsVisitor(rectEnv);
+            EnvelopeIntersectsVisitor<TCoordinate> visitor
+                = new EnvelopeIntersectsVisitor<TCoordinate>(_rectangleExtents);
+
             visitor.ApplyTo(geom);
-            if (visitor.Intersects())
+
+            if (visitor.Intersects)
+            {
                 return true;
+            }
 
             // test if any rectangle corner is contained in the target
-            ContainsPointVisitor ecpVisitor = new ContainsPointVisitor(rectangle);
+            ContainsPointVisitor<TCoordinate> ecpVisitor = new ContainsPointVisitor<TCoordinate>(_rectangle);
             ecpVisitor.ApplyTo(geom);
-            if (ecpVisitor.ContainsPoint())
+
+            if (ecpVisitor.ContainsPoint)
+            {
                 return true;
+            }
 
             // test if any lines intersect
-            LineIntersectsVisitor liVisitor = new LineIntersectsVisitor(rectangle);
+            LineIntersectsVisitor<TCoordinate> liVisitor = new LineIntersectsVisitor<TCoordinate>(_rectangle);
             liVisitor.ApplyTo(geom);
-            if (liVisitor.Intersects())
+
+            if (liVisitor.Intersects)
+            {
                 return true;
+            }
 
             return false;
         }
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    class EnvelopeIntersectsVisitor : ShortCircuitedGeometryVisitor
+    internal class EnvelopeIntersectsVisitor<TCoordinate> : ShortCircuitedGeometryVisitor<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private IEnvelope rectEnv;
-        private bool intersects = false;
+        private readonly IExtents<TCoordinate> _rectangleExtents;
+        private Boolean _intersects;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rectEnv"></param>
-        public EnvelopeIntersectsVisitor(IEnvelope rectEnv)
+        public EnvelopeIntersectsVisitor(IExtents<TCoordinate> rectEnv)
         {
-            this.rectEnv = rectEnv;
+            _rectangleExtents = rectEnv;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool Intersects() 
-        { 
-            return intersects; 
+        public Boolean Intersects
+        {
+            get { return _intersects; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="element"></param>
-        protected override void Visit(IGeometry element)
+        protected override void Visit(IGeometry<TCoordinate> element)
         {
-            IEnvelope elementEnv = element.EnvelopeInternal;
+            IExtents<TCoordinate> elementExtents = element.Extents;
+
             // disjoint
-            if (!rectEnv.Intersects(elementEnv))
-                return;            
-            // fully contained - must intersect
-            if (rectEnv.Contains(elementEnv)) 
+            if (!_rectangleExtents.Intersects(elementExtents))
             {
-                intersects = true;
                 return;
             }
+
+            // fully contained - must intersect
+            if (_rectangleExtents.Contains(elementExtents))
+            {
+                _intersects = true;
+                return;
+            }
+
             /*
             * Since the envelopes intersect and the test element is connected,
             * if its envelope is completely bisected by an edge of the rectangle
@@ -129,163 +129,150 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Predicate
             * if the test envelope is "on a corner" of the rectangle
             * envelope)
             */
-            if (elementEnv.MinX >= rectEnv.MinX && elementEnv.MaxX <= rectEnv.MaxX)
+
+            if (elementExtents.GetMin(Ordinates.X) >= _rectangleExtents.GetMin(Ordinates.X) &&
+                elementExtents.GetMax(Ordinates.X) <= _rectangleExtents.GetMax(Ordinates.X))
             {
-                intersects = true;
+                _intersects = true;
                 return;
             }
-            if (elementEnv.MinY >= rectEnv.MinY && elementEnv.MaxY <= rectEnv.MaxY)
+
+            if (elementExtents.GetMin(Ordinates.Y) >= _rectangleExtents.GetMin(Ordinates.Y) &&
+                elementExtents.GetMax(Ordinates.Y) <= _rectangleExtents.GetMax(Ordinates.Y))
             {
-                intersects = true;
+                _intersects = true;
                 return;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override bool IsDone() 
+        protected override Boolean IsDone()
         {
-            return intersects == true;
+            return _intersects;
         }
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    class ContainsPointVisitor : ShortCircuitedGeometryVisitor
-        {
-        private ICoordinateSequence rectSeq;
-        private IEnvelope rectEnv;
-        private bool containsPoint = false;
+    internal class ContainsPointVisitor<TCoordinate> : ShortCircuitedGeometryVisitor<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
+        private readonly IExtents<TCoordinate> _rectangleExtents;
+        private readonly ICoordinateSequence<TCoordinate> _rectSeq;
+        private Boolean _containsPoint;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rectangle"></param>
-        public ContainsPointVisitor(IPolygon rectangle)
+        public ContainsPointVisitor(IPolygon<TCoordinate> rectangle)
         {
-            this.rectSeq = rectangle.ExteriorRing.CoordinateSequence;
-            rectEnv = rectangle.EnvelopeInternal;
+            _rectSeq = rectangle.ExteriorRing.Coordinates;
+            _rectangleExtents = rectangle.Extents;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool ContainsPoint() { return containsPoint; }
+        public Boolean ContainsPoint
+        {
+            get { return _containsPoint; }
+        }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        protected override void Visit(IGeometry geom)
+        protected override void Visit(IGeometry<TCoordinate> geom)
         {
             if (!(geom is IPolygon))
-                return;
-            IEnvelope elementEnv = geom.EnvelopeInternal;
-            if (! rectEnv.Intersects(elementEnv))
-                return;
-            // test each corner of rectangle for inclusion
-            ICoordinate rectPt = new Coordinate();
-            for (int i = 0; i < 4; i++) 
             {
-                rectSeq.GetCoordinate(i, rectPt);
-                if (!elementEnv.Contains(rectPt))
-                    continue;
-                // check rect point in poly (rect is known not to touch polygon at this point)
-                if (SimplePointInAreaLocator.ContainsPointInPolygon(rectPt, (IPolygon) geom)) 
+                return;
+            }
+
+            IExtents<TCoordinate> elementExtents = geom.Extents;
+
+            if (!_rectangleExtents.Intersects(elementExtents))
+            {
+                return;
+            }
+
+            for (Int32 i = 0; i < 4; i++)
+            {
+                // test each corner of rectangle for inclusion
+                TCoordinate rectPt;
+
+                rectPt = _rectSeq[i];
+
+                if (!elementExtents.Contains(rectPt))
                 {
-                    containsPoint = true;
+                    continue;
+                }
+
+                // check rect point in poly (rect is known not to touch polygon at this point)
+                if (SimplePointInAreaLocator<TCoordinate>.ContainsPointInPolygon(rectPt, geom as IPolygon<TCoordinate>))
+                {
+                    _containsPoint = true;
                     return;
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override bool IsDone() 
+        protected override Boolean IsDone()
         {
-            return containsPoint == true;
+            return _containsPoint;
         }
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    class LineIntersectsVisitor : ShortCircuitedGeometryVisitor
+    internal class LineIntersectsVisitor<TCoordinate> : ShortCircuitedGeometryVisitor<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        private IPolygon rectangle;
-        private ICoordinateSequence rectSeq;
-        private IEnvelope rectEnv;
-        private bool intersects = false;
+        private readonly IPolygon<TCoordinate> _rectangle;
+        private readonly IExtents<TCoordinate> _rectangleExtents;
+        private readonly ICoordinateSequence<TCoordinate> _rectSeq;
+        private Boolean _intersects;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rectangle"></param>
-        public LineIntersectsVisitor(IPolygon rectangle)
+        public LineIntersectsVisitor(IPolygon<TCoordinate> rectangle)
         {
-            this.rectangle = rectangle;
-            this.rectSeq = rectangle.ExteriorRing.CoordinateSequence;
-            rectEnv = rectangle.EnvelopeInternal;
+            _rectangle = rectangle;
+            _rectSeq = rectangle.ExteriorRing.Coordinates;
+            _rectangleExtents = rectangle.Extents;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public bool Intersects() 
-        { 
-            return intersects; 
+        public Boolean Intersects
+        {
+            get { return _intersects; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        protected override void Visit(IGeometry geom)
+        protected override void Visit(IGeometry<TCoordinate> geom)
         {
-            IEnvelope elementEnv = geom.EnvelopeInternal;
-            if (!rectEnv.Intersects(elementEnv))
-                return;
-            // check if general relate algorithm should be used, since it's faster for large inputs
-            if (geom.NumPoints > RectangleIntersects.MaximumScanSegmentCount) 
+            IExtents<TCoordinate> elementEnv = geom.Extents;
+
+            if (!_rectangleExtents.Intersects(elementEnv))
             {
-                intersects = rectangle.Relate(geom).IsIntersects();
                 return;
             }
-            ComputeSegmentIntersection(geom);
+
+            // check if general relate algorithm should be used, since it's faster for large inputs
+            if (geom.PointCount > RectangleIntersects<TCoordinate>.MaximumScanSegmentCount)
+            {
+                _intersects = _rectangle.Relate(geom).IsIntersects();
+                return;
+            }
+
+            computeSegmentIntersection(geom);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        private void ComputeSegmentIntersection(IGeometry geom)
+        private void computeSegmentIntersection(IGeometry<TCoordinate> geom)
         {
             // check segment intersection
             // get all lines from geom (e.g. if it's a multi-ring polygon)
-            IList lines = LinearComponentExtracter.GetLines(geom);
-            SegmentIntersectionTester si = new SegmentIntersectionTester();
-            bool hasIntersection = si.HasIntersectionWithLineStrings(rectSeq, lines);
-            if (hasIntersection) 
+            IEnumerable<ILineString<TCoordinate>> lines =
+                GeometryFilter.Filter<ILineString<TCoordinate>, TCoordinate>(geom);
+
+            SegmentIntersectionTester<TCoordinate> si = new SegmentIntersectionTester<TCoordinate>(geom.Factory);
+            Boolean hasIntersection = si.HasIntersectionWithLineStrings(_rectSeq, lines);
+
+            if (hasIntersection)
             {
-                intersects = true;
+                _intersects = true;
                 return;
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        protected override bool IsDone() 
+        protected override Boolean IsDone()
         {
-            return intersects == true;
+            return _intersects;
         }
     }
 }

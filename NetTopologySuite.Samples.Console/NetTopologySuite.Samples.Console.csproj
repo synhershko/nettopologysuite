@@ -1,6 +1,6 @@
 ﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug_Net20</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
@@ -9,128 +9,76 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>GisSharpBlog.NetTopologySuite</RootNamespace>
     <AssemblyName>NetTopologySuite.Samples.Console</AssemblyName>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
-    <StartupObject>GisSharpBlog.NetTopologySuite.Samples.SimpleTests.Program</StartupObject>
-    <FileUpgradeFlags>
-    </FileUpgradeFlags>
+    <StartupObject>GisSharpBlog.NetTopologySuite.Samples.Operation.Poligonize.PolygonizeExample</StartupObject>
     <OldToolsVersion>2.0</OldToolsVersion>
-    <UpgradeBackupLocation>
-    </UpgradeBackupLocation>
-    <PublishUrl>publish\</PublishUrl>
-    <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
-    <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Net20|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>bin\Debug_Net20\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Net20|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>bin\Release_Net20\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Net35|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug_Net35\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;DOTNET35</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
+    <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Net35|AnyCPU' ">
+    <OutputPath>bin\Release_Net35\</OutputPath>
+    <DefineConstants>TRACE;DOTNET35</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
+    <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GeoAPI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=a1a0da7def465678, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ExternalReferences\GeoAPI.dll</HintPath>
-    </Reference>
     <Reference Include="nunit.framework, Version=2.2.7.0, Culture=neutral, PublicKeyToken=96d09a1eb7f44a77, processorArchitecture=MSIL" />
-    <Reference Include="ProjNET, Version=1.0.2794.16965, Culture=neutral, PublicKeyToken=a1f5bdcd9c6f5740, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ExternalReferences\ProjNET.dll</HintPath>
-    </Reference>
-    <Reference Include="QuickGraph, Version=3.2.40122.0, Culture=neutral, PublicKeyToken=f3fb40175eec2af3, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ExternalReferences\QuickGraph.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Core">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
-    </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Geometries\basicexample.cs" />
     <Compile Include="Geometries\constructionexample.cs" />
-    <Compile Include="Geometries\extendedcoordinate.cs" />
-    <Compile Include="Geometries\extendedcoordinateexample.cs" />
-    <Compile Include="Geometries\extendedcoordinatesequence.cs" />
-    <Compile Include="Geometries\extendedcoordinatesequencefactory.cs" />
     <Compile Include="Geometries\precisionmodelexample.cs" />
     <Compile Include="Geometries\simplemethodsexample.cs" />
+    <Compile Include="GeometryServices.cs" />
     <Compile Include="LinearReferencing\LinearReferencingExample.cs" />
-    <Compile Include="Tests\IO\PostGisTest.cs" />
-    <Compile Include="Tests\IO\ShapeFileReadTest.cs" />
-    <Compile Include="Tests\IO\ShapefileWriteTest.cs" />
-    <Compile Include="Tests\Performances\NodingValidatorFixture.cs" />
-    <Compile Include="Tests\Performances\SortedListsFixture.cs" />
     <Compile Include="Tests\Various\BufferTest.cs" />
-    <Compile Include="Tests\Various\CoordinateArraysTest.cs" />
-    <Compile Include="Tests\Various\CascadedPolygonUnionFixture.cs" />
     <Compile Include="Tests\Various\CoversTest.cs" />
-    <Compile Include="Tests\Various\DbfDateTest.cs" />
     <Compile Include="Tests\Various\FormattingTest.cs" />
-    <Compile Include="Tests\Various\GeomBinOpTest_Issue14_Simplified.cs" />
-    <Compile Include="Tests\Various\GoogleGroupTests.cs" />
-    <Compile Include="Tests\Various\GraphBuilder2.cs" />
-    <Compile Include="Tests\Various\GraphBuilder2Test.cs" />
     <Compile Include="Tests\Various\IntesectIterationTest.cs" />
-    <Compile Include="Tests\Various\Issue26Tests.cs" />
-    <Compile Include="Tests\Various\Issue35Tests.cs" />
-    <Compile Include="Tests\Various\Issue36Tests.cs" />
-    <Compile Include="Tests\Various\Issue37Test.cs" />
-    <Compile Include="Tests\Various\Issue56Test.cs" />
-    <Compile Include="Tests\Various\Issue58Tests.cs" />
     <Compile Include="Tests\Various\IsValidTest.cs" />
     <Compile Include="Tests\Operation\Linemerge\LineSequencerTest.cs" />
     <Compile Include="Tests\Various\NormalizeTest.cs" />
     <Compile Include="Tests\Various\OracleWKBTest.cs" />
-    <Compile Include="Tests\Various\PathFinder.cs" />
-    <Compile Include="Tests\Various\PathFinderTest.cs" />
-    <Compile Include="Tests\Various\PrecisionTest.cs" />
     <Compile Include="Tests\Various\ReverseTest.cs" />
     <Compile Include="Tests\Various\RobustLineIntersectorTest.cs" />
     <Compile Include="Tests\Various\OGCTests.cs" />
-    <Compile Include="Tests\Various\SRSConversionTest.cs" />
-    <Compile Include="Tests\Various\UnionAggregateTest.cs" />
     <Compile Include="Tests\Various\WKTTest.cs" />
-    <Compile Include="SimpleTests\Attributes\AttributesTest.cs" />
     <Compile Include="Operation\Distance\ClosestPointExample.cs" />
     <Compile Include="Operation\Linemerge\LineMergeExample.cs" />
     <Compile Include="Operation\Poligonize\PolygonizeExample.cs" />
-    <Compile Include="Precision\EnhancedPrecisionOpExample.cs" />
-    <Compile Include="ShapeTests\GMLTesting.cs" />
-    <Compile Include="ShapeTests\ShapeRead.cs" />
     <Compile Include="SimpleTests\BaseSamples.cs" />
     <Compile Include="SimpleTests\Geometries\LineStringSamples.cs" />
     <Compile Include="SimpleTests\Geometries\MultiPointSamples.cs" />
@@ -144,9 +92,25 @@
     <Compile Include="Technique\UnionUsingBuffer.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\GeoAPI\src\GeoAPI\GeoAPI.Net.csproj">
+      <Project>{FFB69466-79DE-466A-ADA7-5C47C5C5CA3A}</Project>
+      <Name>GeoAPI.Net</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ManagedBufferedCoordinate\ManagedBufferedCoordinate.csproj">
+      <Project>{8A1C8DC2-9E24-47E9-A51C-AA46E0B0260C}</Project>
+      <Name>ManagedBufferedCoordinate</Name>
+    </ProjectReference>
     <ProjectReference Include="..\NetTopologySuite\NetTopologySuite.csproj">
       <Project>{5770DAA9-84E5-4770-AF43-F6B815894368}</Project>
       <Name>NetTopologySuite</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\NPack\NPack\NPack.csproj">
+      <Project>{B139E1D5-091B-40D2-B7A2-7D7D82E13019}</Project>
+      <Name>NPack</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SimpleCoordinate\Coordinates.Simple.csproj">
+      <Project>{FA286D16-E405-4FCB-95EA-BE1F9A4A83A4}</Project>
+      <Name>Coordinates.Simple</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
@@ -155,31 +119,9 @@
     <Content Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework Client Profile</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.2.0">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 2.0 %28x86%29</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.0">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.0 %28x86%29</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
+    <Folder Include="Precision\" />
+    <Folder Include="ShapeTests\" />
+    <Folder Include="SimpleTests\Attributes\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

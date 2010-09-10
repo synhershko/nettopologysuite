@@ -1,58 +1,74 @@
+#define buffer110
+
 using System;
-using System.Collections;
-using System.Xml;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.CoordinateSystems;
+using GeoAPI.Diagnostics;
 using GeoAPI.Geometries;
+using GeoAPI.Indexing;
 using GeoAPI.Operations.Buffer;
 using GisSharpBlog.NetTopologySuite.Algorithm;
-using GisSharpBlog.NetTopologySuite.IO;
-using GisSharpBlog.NetTopologySuite.IO.GML2;
+using GisSharpBlog.NetTopologySuite.Geometries.Utilities;
 using GisSharpBlog.NetTopologySuite.Operation.Buffer;
 using GisSharpBlog.NetTopologySuite.Operation.Distance;
 using GisSharpBlog.NetTopologySuite.Operation.Overlay;
 using GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap;
 using GisSharpBlog.NetTopologySuite.Operation.Predicate;
 using GisSharpBlog.NetTopologySuite.Operation.Relate;
+using GisSharpBlog.NetTopologySuite.Operation.Union;
 using GisSharpBlog.NetTopologySuite.Operation.Valid;
-using GisSharpBlog.NetTopologySuite.Utilities;
+using NPack;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Geometries
-{   
+{
     /// <summary>  
-    /// Basic implementation of <c>Geometry</c>.
-    /// <c>Clone</c> returns a deep copy of the object.
+    /// Basic implementation of <see cref="IGeometry{TCoordinate}"/>, the fundamental
+    /// unit of spatial reasoning in NTS.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Clone"/> returns a deep copy of the object.
+    /// </para>
     /// <para>
     /// Binary Predicates: 
     /// Because it is not clear at this time what semantics for spatial
-    /// analysis methods involving <c>GeometryCollection</c>s would be useful,
-    /// <c>GeometryCollection</c>s are not supported as arguments to binary
-    /// predicates (other than <c>ConvexHull</c>) or the <c>Relate</c> method.
+    /// analysis methods involving <see cref="GeometryCollection{TCoordinate}" />s 
+    /// would be useful, <see cref="GeometryCollection{TCoordinate}" />s are not 
+    /// supported as arguments to binary predicates 
+    /// (other than <see cref="ConvexHull"/>) or the 
+    /// <see cref="Relate(IGeometry{TCoordinate})"/> family of methods.
     /// </para>
     /// <para>
     /// Set-Theoretic Methods: 
     /// The spatial analysis methods will
     /// return the most specific class possible to represent the result. If the
-    /// result is homogeneous, a <c>Point</c>, <c>LineString</c>, or
-    /// <c>Polygon</c> will be returned if the result contains a single
-    /// element; otherwise, a <c>MultiPoint</c>, <c>MultiLineString</c>,
-    /// or <c>MultiPolygon</c> will be returned. If the result is
-    /// heterogeneous a <c>GeometryCollection</c> will be returned.
+    /// result is homogeneous, a <see cref="Point{TCoordinate}"/>, 
+    /// <see cref="LineString{TCoordinate}"/>, or <see cref="Polygon{TCoordinate}" /> 
+    /// will be returned if the result contains a single element; 
+    /// otherwise, a <see cref="MultiPoint{TCoordinate}"/>, 
+    /// <see cref="MultiLineString{TCoordinate}"/>, or 
+    /// <see cref="MultiPolygon{TCoordinate}"/> 
+    /// will be returned. If the result is heterogeneous a 
+    /// <see cref="GeometryCollection{TCoordinate}" /> will be returned.
     /// </para>
     /// <para>
-    /// Representation of Computed Geometries:  
+    /// Representation of Computed Geometries:
     /// The SFS states that the result
     /// of a set-theoretic method is the "point-set" result of the usual
     /// set-theoretic definition of the operation (SFS 3.2.21.1). However, there are
-    /// sometimes many ways of representing a point set as a <c>Geometry</c>.
+    /// sometimes many ways of representing a point set as a <see cref="Geometry{TCoordinate}"/>.
     /// The SFS does not specify an unambiguous representation of a given point set
     /// returned from a spatial analysis method. One goal of NTS is to make this
     /// specification precise and unambiguous. NTS will use a canonical form for
-    /// <c>Geometry</c>s returned from spatial analysis methods. The canonical
-    /// form is a <c>Geometry</c> which is simple and noded:
+    /// <see cref="Geometry{TCoordinate}"/>s returned from spatial analysis methods. The canonical
+    /// form is a <see cref="Geometry{TCoordinate}"/> which is simple and noded:
     /// Simple means that the Geometry returned will be simple according to
-    /// the NTS definition of <c>IsSimple</c>.
-    /// Noded applies only to overlays involving <c>LineString</c>s. It
-    /// means that all intersection points on <c>LineString</c>s will be
-    /// present as endpoints of <c>LineString</c>s in the result.
+    /// the NTS definition of <see cref="IsSimple"/>.
+    /// Noded applies only to overlays involving <see cref="LineString{TCoordinate}"/>s. It
+    /// means that all intersection points on <see cref="LineString{TCoordinate}"/>s will be
+    /// present as endpoints of <see cref="LineString{TCoordinate}"/>s in the result.
     /// This definition implies that non-simple geometries which are arguments to
     /// spatial analysis methods must be subjected to a line-dissolve process to
     /// ensure that the results are simple.
@@ -60,434 +76,457 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
     /// <para>
     /// Constructed Points And The Precision Model: 
     /// The results computed by the set-theoretic methods may
-    /// contain constructed points which are not present in the input <c>Geometry</c>s. 
+    /// contain constructed points which are not present in the input <see cref="Geometry{TCoordinate}"/>s. 
     /// These new points arise from intersections between line segments in the
-    /// edges of the input <c>Geometry</c>s. In the general case it is not
+    /// edges of the input <see cref="Geometry{TCoordinate}"/>s. In the general case it is not
     /// possible to represent constructed points exactly. This is due to the fact
     /// that the coordinates of an intersection point may contain twice as many bits
     /// of precision as the coordinates of the input line segments. In order to
     /// represent these constructed points explicitly, NTS must truncate them to fit
-    /// the <c>PrecisionModel</c>. 
+    /// the <see cref="PrecisionModel{TCoordinate}"/>. 
     /// Unfortunately, truncating coordinates moves them slightly. Line segments
     /// which would not be coincident in the exact result may become coincident in
     /// the truncated representation. This in turn leads to "topology collapses" --
     /// situations where a computed element has a lower dimension than it would in
     /// the exact result. 
     /// When NTS detects topology collapses during the computation of spatial
-    /// analysis methods, it will throw an exception. If possible the exception will
-    /// report the location of the collapse. 
+    /// analysis methods, it will throw a <see cref="TopologyException"/>. 
+    /// If possible the exception will report the location of the collapse. 
     /// </para>
-    /// </summary>
-    /// <remarks>
-    /// <see cref="object.Equals(object)" /> and <see cref="object.GetHashCode" /> are not overridden, so that when two
-    /// topologically equal Geometries are added to Collections and Dictionaries, they
-    /// remain distinct. This behaviour is desired in many cases.
+    /// <para>
+    /// NOTE: <see cref="Object.Equals(object)" /> and <see cref="Object.GetHashCode" /> 
+    /// are overridden, so that when two topologically equal Geometries are added 
+    /// to collections and hash table implementations, they will collide. 
+    /// This behavior is <strong>not</strong> desired in many cases, and is
+    /// the opposite of JTS and previous versions of NTS. To get the desired behavior, 
+    /// use <see cref="GeometryReferenceEqualityComparer{TCoordinate}.Default"/> as 
+    /// the key equality comparer. The reasoning for this change is twofold. First, 
+    /// <see cref="ISpatialRelation{TCoordinate}"/> includes 
+    /// <see cref="IEquatable{IGeometry}"/> to derive the Equals method. 
+    /// The sematics for this interface imply that the type-specific equality is
+    /// value-based, since if it was reference equality, the interface would not 
+    /// be implemented. Given the semantics of spatial relations, where two 
+    /// <see cref="IGeometry"/> are equal if their coordinate-by-coordinate values are equal,
+    /// implementing this interface makes sense. Second, this version of NTS is moving
+    /// geometry objects toward immutability. This will allow greater ability to do
+    /// distributed spatial processing and use functional-programming constructs as NTS evolves.
+    /// If a geometry instance is immutable, value-type equality is more meaningful and more 
+    /// desired. The use of collections and hash table implementations which rely on reference
+    /// equality become more of an implementation detail which can be effectively hidden
+    /// in instances where it is needed by a 
+    /// <see cref="GeometryReferenceEqualityComparer{TCoordinate}"/>. 
+    /// </para>
+    /// <para>
+    /// DEVELOPER NOTE: should we implement a ReferenceGeometryCollection and ReferenceGeometryDictionary
+    /// to alleviate the increase burden on NTS users?
+    /// </para>
     /// </remarks>
-    [Serializable]    
-    public abstract class Geometry: IGeometry
-    {        
-        /// <summary>
-        /// 
-        /// </summary>
-        private static readonly Type[] SortedClasses = new Type[] 
-        {
-            typeof(Point),
-            typeof(MultiPoint),
-            typeof(LineString),
-            typeof(LinearRing),
-            typeof(MultiLineString),
-            typeof(Polygon),
-            typeof(MultiPolygon),
-            typeof(GeometryCollection),    
-        };                    
+    [Serializable]
+    public abstract class Geometry<TCoordinate> : IGeometry<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
+        private static readonly RuntimeTypeHandle[] _sortedClasses
+            = new[]
+                  {
+                      typeof (IPoint<TCoordinate>).TypeHandle,
+                      typeof (IMultiPoint<TCoordinate>).TypeHandle,
+                      typeof (ILineString<TCoordinate>).TypeHandle,
+                      typeof (ILinearRing<TCoordinate>).TypeHandle,
+                      typeof (IMultiLineString<TCoordinate>).TypeHandle,
+                      typeof (IPolygon<TCoordinate>).TypeHandle,
+                      typeof (IMultiPolygon<TCoordinate>).TypeHandle,
+                      typeof (IGeometryCollection<TCoordinate>).TypeHandle,
+                  };
 
-        private IGeometryFactory factory = null;
+        //private Dimensions _dimension;
+        private IGeometry<TCoordinate> _boundary;
+        private Dimensions _boundaryDimension;
+        private Extents<TCoordinate> _extents;
+        private IGeometryFactory<TCoordinate> _factory;
+        private ICoordinateSystem<TCoordinate> _spatialReference;
+        private String _srid;
+        private Object _userData;
 
-        /// <summary> 
-        /// Gets the factory which contains the context in which this point was created.
-        /// </summary>
-        /// <returns>The factory for this point.</returns>
-        public IGeometryFactory Factory
+        protected Geometry(IGeometryFactory<TCoordinate> factory)
         {
-            get 
-            { 
-                return factory; 
-            }
-        }
-
-        private object userData = null;
-        
-        /// <summary> 
-        /// Gets/Sets the user data object for this point, if any.
-        /// A simple scheme for applications to add their own custom data to a Geometry.
-        /// An example use might be to add an object representing a Coordinate Reference System.
-        /// Note that user data objects are not present in geometries created by
-        /// construction methods.
-        /// </summary>
-        public object UserData
-        {
-            get
-            {                
-                return userData;
-            }
-            set
+            if (factory == null)
             {
-                userData = value;
+                throw new ArgumentNullException("factory");
             }
-        }
-           
-        /// <summary>
-        /// The bounding box of this <c>Geometry</c>.
-        /// </summary>
-        protected IEnvelope envelope;
-       
-        // The ID of the Spatial Reference System used by this <c>Geometry</c>
-        private int srid;
 
-        /// <summary>  
-        /// Gets/Sets the ID of the Spatial Reference System used by the <c>Geometry</c>. 
-        /// NTS supports Spatial Reference System information in the simple way
-        /// defined in the SFS. A Spatial Reference System ID (SRID) is present in
-        /// each <c>Geometry</c> object. <c>Geometry</c> provides basic
-        /// accessor operations for this field, but no others. The SRID is represented
-        /// as an integer.
-        /// </summary>        
-        public int SRID
-        {
-            get 
-            { 
-                return srid; 
-            }
-            set 
-            {
-                srid = value;
-				IGeometryCollection collection = this as IGeometryCollection;
-				if (collection != null)
-				{
-					foreach (IGeometry geometry in collection.Geometries)
-					{
-						geometry.SRID = value;
-					}
-				}
-				factory = new GeometryFactory(factory.PrecisionModel, value, factory.CoordinateSequenceFactory);
-			}
+            _factory = factory;
+            _srid = factory.Srid;
+            _spatialReference = factory.SpatialReference;
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="factory"></param>
-        public Geometry(IGeometryFactory factory)
-        {
-            this.factory = factory;
-            srid = factory.SRID;
-        }
-
-        /// <summary>  
-        /// Returns the name of this object's interface.
-		/// </summary>
-		/// <returns>The name of this <c>Geometry</c>s most specific interface.</returns>
-        public abstract string GeometryType { get; }
-
-        /// <summary>  
-        /// Returns true if the array contains any non-empty <c>Geometry</c>s.
-		/// </summary>
-		/// <param name="geometries"> an array of <c>Geometry</c>s; no elements may be <c>null</c></param>
-		/// <returns>            
-        /// <c>true</c> if any of the <c>Geometry</c>s
-		/// <c>IsEmpty</c> methods return <c>false</c>.
-		/// </returns>
-        protected static bool HasNonEmptyElements(IGeometry[] geometries)
-        {
-            foreach (IGeometry g in geometries)
-                if(!g.IsEmpty)
-                    return true;                                        
-            return false;
-        }
-
-        /// <summary>  
-        /// Returns true if the array contains any <c>null</c> elements.
-        /// </summary>
-        /// <param name="array"> an array to validate.</param>
-        /// <returns><c>true</c> if any of <c>array</c>s elements are <c>null</c>.</returns>
-        public static bool HasNullElements(object[] array)
-        {
-            foreach (object o in array)
-                if (o == null)
-                    return true;
-            return false;            
-        }
-
-        /// <summary>  
-        /// Returns the <c>PrecisionModel</c> used by the <c>Geometry</c>.
-        /// </summary>
-        /// <returns>    
-        /// the specification of the grid of allowable points, for this
-        /// <c>Geometry</c> and all other <c>Geometry</c>s.
-        /// </returns>
-        public IPrecisionModel PrecisionModel
-        {
-            get
-            {
-                return Factory.PrecisionModel;
-            }
-        }
-
-        /// <summary>  
-        /// Returns a vertex of this <c>Geometry</c>.
-        /// </summary>
-        /// <returns>    
-        /// a Coordinate which is a vertex of this <c>Geometry</c>.
-        /// Returns <c>null</c> if this Geometry is empty.
-        /// </returns>
-        public abstract ICoordinate Coordinate { get; }
-
-        /// <summary>  
-        /// Returns this <c>Geometry</c> s vertices. If you modify the coordinates
-        /// in this array, be sure to call GeometryChanged afterwards.
-        /// The <c>Geometry</c>s contained by composite <c>Geometry</c>s
-        /// must be Geometry's; that is, they must implement <c>Coordinates</c>.
-        /// </summary>
-        /// <returns>The vertices of this <c>Geometry</c>.</returns>
-        public abstract ICoordinate[] Coordinates { get; }
-
-        /// <summary>  
-        /// Returns the count of this <c>Geometry</c>s vertices. The <c>Geometry</c>
-        /// s contained by composite <c>Geometry</c>s must be
-        /// Geometry's; that is, they must implement <c>NumPoints</c>.
-        /// </summary>
-        /// <returns>The number of vertices in this <c>Geometry</c>.</returns>
-        public abstract int NumPoints { get; }
-
-        /// <summary>
-        /// Returns the number of Geometryes in a GeometryCollection,
+        /// Returns the number of Geometries in a GeometryCollection,
         /// or 1, if the geometry is not a collection.
         /// </summary>
-        public virtual int NumGeometries
+        public virtual Int32 GeometryCount
         {
-            get
-            {
-                return 1;
-            }
-        }
-        
-        /// <summary>
-        /// Returns an element Geometry from a GeometryCollection,
-        /// or <code>this</code>, if the geometry is not a collection.
-        /// </summary>
-        /// <param name="n">The index of the geometry element.</param>
-        /// <returns>The n'th geometry contained in this geometry.</returns>
-        public virtual IGeometry GetGeometryN(int n)
-        {
-            return this;
-        }
-
-        /// <summary> 
-        /// Returns false if the <c>Geometry</c> not simple.
-        /// Subclasses provide their own definition of "simple". If
-        /// this <c>Geometry</c> is empty, returns <c>true</c>. 
-        /// In general, the SFS specifications of simplicity seem to follow the
-        /// following rule:
-        ///  A Geometry is simple if the only self-intersections are at boundary points.
-        /// For all empty <c>Geometry</c>s, <c>IsSimple==true</c>.
-        /// </summary>
-        /// <returns>    
-        /// <c>true</c> if this <c>Geometry</c> has any points of
-        /// self-tangency, self-intersection or other anomalous points.
-        /// </returns>
-        public abstract bool IsSimple { get; }
-
-        /// <summary>  
-        /// Tests the validity of this <c>Geometry</c>.
-        /// Subclasses provide their own definition of "valid".
-        /// </summary>
-        /// <returns><c>true</c> if this <c>Geometry</c> is valid.</returns>
-        public virtual bool IsValid
-        {
-            get
-            {
-                IsValidOp isValidOp = new IsValidOp(this);
-                return isValidOp.IsValid;
-            }
-        }
-
-        /// <summary> 
-        /// Returns whether or not the set of points in this <c>Geometry</c> is empty.
-        /// </summary>
-        /// <returns><c>true</c> if this <c>Geometry</c> equals the empty point.</returns>
-        public abstract bool IsEmpty { get; }
-
-        /// <summary>  
-        /// Returns the minimum distance between this <c>Geometry</c>
-        /// and the <c>Geometry</c> g.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> from which to compute the distance.</param>
-        public double Distance(IGeometry g)
-        {
-            return DistanceOp.Distance(this, g);
-        }
-
-        /// <summary> 
-        /// Tests whether the distance from this <c>Geometry</c>
-        /// to another is less than or equal to a specified value.
-        /// </summary>
-        /// <param name="geom">the Geometry to check the distance to.</param>
-        /// <param name="distance">the distance value to compare.</param>
-        /// <returns><c>true</c> if the geometries are less than <c>distance</c> apart.</returns>
-        public bool IsWithinDistance(IGeometry geom, double distance)
-        {
-            double envDist = EnvelopeInternal.Distance(geom.EnvelopeInternal);            
-            if (envDist > distance)
-                return false;
-            return DistanceOp.IsWithinDistance(this, geom, distance);            
+            get { return 1; }
         }
 
         /// <summary>  
-        /// Returns the area of this <c>Geometry</c>.
+        /// Returns the area of this <see cref="Geometry{TCoordinate}"/>.
         /// Areal Geometries have a non-zero area.
         /// They override this function to compute the area.
         /// Others return 0.0
         /// </summary>
         /// <returns>The area of the Geometry.</returns>
-        public virtual double Area
+        public virtual Double Area
         {
-            get
-            {
-                return 0.0;
-            }
+            get { return 0.0; }
         }
 
         /// <summary> 
-        /// Returns the length of this <c>Geometry</c>.
+        /// Returns the length of this <see cref="Geometry{TCoordinate}"/>.
         /// Linear geometries return their length.
         /// Areal geometries return their perimeter.
         /// They override this function to compute the length.
         /// Others return 0.0
         /// </summary>
         /// <returns>The length of the Geometry.</returns>
-        public virtual double Length
+        public virtual Double Length
         {
-            get
-            {
-                return 0.0;
-            }
-        }
-
-        /// <summary> 
-        /// Computes the centroid of this <c>Geometry</c>.
-        /// The centroid is equal to the centroid of the set of component Geometries of highest
-        /// dimension (since the lower-dimension geometries contribute zero "weight" to the centroid).
-        /// </summary>
-        /// <returns>A Point which is the centroid of this Geometry.</returns>
-        public IPoint Centroid
-        {
-            get
-            {
-                if (IsEmpty) 
-                    return null;
-
-                ICoordinate centPt = null;
-                Dimensions dim = Dimension;
-                if (dim == Dimensions.Point)
-                {
-                    CentroidPoint cent = new CentroidPoint();
-                    cent.Add(this);
-                    centPt = cent.Centroid;
-                }
-                else if (dim == Dimensions.Curve)
-                {
-                    CentroidLine cent = new CentroidLine();
-                    cent.Add(this);
-                    centPt = cent.Centroid;
-                }
-                else
-                {
-                    CentroidArea cent = new CentroidArea();
-                    cent.Add(this);
-                    centPt = cent.Centroid;
-                }
-                return CreatePointFromInternalCoord(centPt, this);
-            }
+            get { return 0.0; }
         }
 
         /// <summary>
-        /// Computes an interior point of this <c>Geometry</c>.
+        /// Computes an interior point of this <see cref="Geometry{TCoordinate}"/>.
         /// An interior point is guaranteed to lie in the interior of the Geometry,
         /// if it possible to calculate such a point exactly. Otherwise,
         /// the point may lie on the boundary of the point.
         /// </summary>
-        /// <returns>A <c>Point</c> which is in the interior of this Geometry.</returns>
-        public IPoint InteriorPoint
+        /// <returns>
+        /// An <see cref="IPoint{TCoordinate}"/> which is in the 
+        /// interior of this Geometry.
+        /// </returns>
+        public IPoint<TCoordinate> InteriorPoint
         {
             get
             {
-                ICoordinate interiorPt = null;
+                TCoordinate interiorPt;
                 Dimensions dim = Dimension;
-                if (dim == Dimensions.Point)
+
+                switch (dim)
                 {
-                    InteriorPointPoint intPt = new InteriorPointPoint(this);
-                    interiorPt = intPt.InteriorPoint;
+                    case Dimensions.Point:
+                        {
+                            InteriorPointPoint<TCoordinate> intPt
+                                = new InteriorPointPoint<TCoordinate>(this);
+                            interiorPt = intPt.InteriorPoint;
+                        }
+                        break;
+                    case Dimensions.Curve:
+                        {
+                            InteriorPointLine<TCoordinate> intPt
+                                = new InteriorPointLine<TCoordinate>(this);
+                            interiorPt = intPt.InteriorPoint;
+                        }
+                        break;
+                    default:
+                        {
+                            InteriorPointArea<TCoordinate> intPt
+                                = new InteriorPointArea<TCoordinate>(this);
+                            interiorPt = intPt.InteriorPoint;
+                        }
+                        break;
                 }
-                else if (dim == Dimensions.Curve)
-                {
-                    InteriorPointLine intPt = new InteriorPointLine(this);
-                    interiorPt = intPt.InteriorPoint;
-                }
-                else
-                {
-                    InteriorPointArea intPt = new InteriorPointArea(this);
-                    interiorPt = intPt.InteriorPoint;
-                }
-                return CreatePointFromInternalCoord(interiorPt, this);
+
+                return createPointFromInternalCoord(interiorPt, this);
             }
+        }
+
+        public IPoint<TCoordinate> PointOnSurface
+        {
+            get { return InteriorPoint; }
+        }
+
+        #region IGeometry<TCoordinate> Members
+
+        /// <summary>
+        /// Returns whether this <see cref="Geometry{TCoordinate}"/> is greater than, 
+        /// equal to, or less than another <see cref="Geometry{TCoordinate}"/>. 
+        /// </summary>
+        /// <param name="other">
+        /// A <see cref="Geometry{TCoordinate}"/> with which to 
+        /// compare this <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// A positive number, 0, or a negative number, depending on whether
+        /// this object is greater than, equal to, or less than <paramref name="other"/>, 
+        /// as defined in "Normal Form For Geometry" in the NTS Technical
+        /// Specifications.
+        /// </returns>
+        /// <remarks>
+        /// If their classes are different, they are compared using the following
+        /// ordering:
+        ///     <see cref="Point{TCoordinate}"/> (lowest),
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="LinearRing{TCoordinate}"/>,
+        ///     <see cref="MultiLineString{TCoordinate}"/>,
+        ///     <see cref="Polygon{TCoordinate}"/>,
+        ///     <see cref="MultiPolygon{TCoordinate}"/>,
+        ///     <see cref="GeometryCollection{TCoordinate}"/> (highest).
+        /// If the two <see cref="Geometry{TCoordinate}"/>s have the same class, their first
+        /// elements are compared. If those are the same, the second elements are
+        /// compared, etc.
+        /// </remarks>
+        public Int32 CompareTo(Object other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            IGeometry g = other as IGeometry;
+            return CompareTo(g);
         }
 
         /// <summary>
-        /// <see cref="InteriorPoint" />
+        /// Returns whether this <see cref="Geometry{TCoordinate}"/> is greater than, 
+        /// equal to, or less than another <see cref="Geometry{TCoordinate}"/>. 
         /// </summary>
-        public IPoint PointOnSurface
+        /// <param name="other">
+        /// A <see cref="Geometry{TCoordinate}"/> with which to 
+        /// compare this <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// A positive number, 0, or a negative number, depending on whether
+        /// this object is greater than, equal to, or less than <paramref name="other"/>, 
+        /// as defined in "Normal Form For Geometry" in the NTS Technical
+        /// Specifications.
+        /// </returns>
+        /// <remarks>
+        /// If their classes are different, they are compared using the following
+        /// ordering:
+        ///     <see cref="Point{TCoordinate}"/> (lowest),
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="LinearRing{TCoordinate}"/>,
+        ///     <see cref="MultiLineString{TCoordinate}"/>,
+        ///     <see cref="Polygon{TCoordinate}"/>,
+        ///     <see cref="MultiPolygon{TCoordinate}"/>,
+        ///     <see cref="GeometryCollection{TCoordinate}"/> (highest).
+        /// If the two <see cref="Geometry{TCoordinate}"/>s have the same class, their first
+        /// elements are compared. If those are the same, the second elements are
+        /// compared, etc.
+        /// </remarks>
+        public Int32 CompareTo(IGeometry<TCoordinate> other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            Int32 classSortIndex = getClassSortIndex(this);
+            Int32 otherClassSortIndex = getClassSortIndex(other);
+
+            if (classSortIndex != otherClassSortIndex)
+            {
+                return classSortIndex - otherClassSortIndex;
+            }
+
+            if (IsEmpty && other.IsEmpty)
+            {
+                return 0;
+            }
+
+            if (IsEmpty)
+            {
+                return -1;
+            }
+
+            if (other.IsEmpty)
+            {
+                return 1;
+            }
+
+            return CompareToSameClass(other);
+        }
+
+        public Boolean Equals(IGeometry<TCoordinate> g)
+        {
+            if (ReferenceEquals(g, this))
+                return true;
+
+            if (ReferenceEquals(g, null))
+            {
+                return false;
+            }
+
+            if (IsEmpty && g.IsEmpty)
+            {
+                return true;
+            }
+
+            // Short-circuit test
+            if (!ExtentsInternal.Intersects(g.Extents))
+            {
+                return false;
+            }
+
+            // We use an alternative method for compare GeometryCollections 
+            // (but not subclasses!), 
+            if (isGeometryCollection(this) || isGeometryCollection(g))
+            {
+                return compareGeometryCollections(this, g);
+            }
+
+            // Use RelateOp comparation method
+            return Relate(g).IsEquals(Dimension, g.Dimension);
+        }
+
+        public abstract IEnumerable<TCoordinate> GetVertexes(ITransformMatrix<DoubleComponent> transform);
+
+        public abstract IEnumerable<TCoordinate> GetVertexes();
+
+        /// <summary> 
+        /// Computes the centroid of this <see cref="Geometry{TCoordinate}"/>.
+        /// The centroid is equal to the centroid of the set of component Geometries of highest
+        /// dimension (since the lower-dimension geometries contribute zero "weight" to the centroid).
+        /// </summary>
+        /// <returns>A Point which is the centroid of this Geometry.</returns>
+        public IPoint<TCoordinate> Centroid
         {
             get
             {
-                return InteriorPoint;
+                if (IsEmpty)
+                {
+                    return null;
+                }
+
+                TCoordinate centPt;
+                Dimensions dim = Dimension;
+
+                switch (dim)
+                {
+                    case Dimensions.Point:
+                        {
+                            CentroidPoint<TCoordinate> cent
+                                = new CentroidPoint<TCoordinate>(Factory.CoordinateFactory);
+                            cent.Add(this);
+                            centPt = cent.Centroid;
+                        }
+                        break;
+                    case Dimensions.Curve:
+                        {
+                            CentroidLine<TCoordinate> cent
+                                = new CentroidLine<TCoordinate>(Factory.CoordinateFactory);
+                            cent.Add(this);
+                            centPt = cent.Centroid;
+                        }
+                        break;
+                    default:
+                        {
+                            CentroidArea<TCoordinate> cent
+                                = new CentroidArea<TCoordinate>(Factory.CoordinateFactory);
+                            cent.Add(this);
+                            centPt = cent.Centroid;
+                        }
+                        break;
+                }
+
+                return createPointFromInternalCoord(centPt, this);
             }
         }
 
-        private Dimensions dimension;
-
-        /// <summary> 
-        /// Returns the dimension of this <c>Geometry</c>.
-        /// </summary>
-        /// <returns>  
-        /// The dimension of the class implementing this interface, whether
-        /// or not this object is the empty point.
-        /// </returns>
-        public virtual Dimensions Dimension
+        public virtual IGeometry<TCoordinate> Clone()
         {
-            get { return dimension; }
-            set { dimension = value; }
+            Geometry<TCoordinate> clone = (Geometry<TCoordinate>)MemberwiseClone();
+
+            if (clone.ExtentsInternal != null)
+            {
+                clone.ExtentsInternal = (Extents<TCoordinate>)ExtentsInternal.Clone();
+            }
+
+            if (clone._boundary != null)
+            {
+                clone._boundary = _boundary.Clone();
+            }
+
+            ICloneable clonableUserData = _userData as ICloneable;
+
+            if (clonableUserData != null)
+            {
+                clone._userData = clonableUserData.Clone();
+            }
+
+            return clone;
         }
 
-
-        private IGeometry boundary;
+        public abstract ICoordinateSequence<TCoordinate> Coordinates { get; }
 
         /// <summary>  
-        /// Returns the boundary, or the empty point if this <c>Geometry</c>
-        /// is empty. For a discussion of this function, see the OpenGIS Simple
-        /// Features Specification. As stated in SFS Section 2.1.13.1, "the boundary
-        /// of a Geometry is a set of Geometries of the next lower dimension."
+        /// Returns this <see cref="Geometry{TCoordinate}"/>s bounding box. If this <see cref="Geometry{TCoordinate}"/>
+        /// is the empty point, returns an empty <c>Point</c>. If the <see cref="Geometry{TCoordinate}"/>
+        /// is a point, returns a non-empty <c>Point</c>. Otherwise, returns a
+        /// <see cref="Polygon{TCoordinate}" /> whose points are (minx, miny), (maxx, miny), (maxx,
+        /// maxy), (minx, maxy), (minx, miny).
         /// </summary>
-        /// <returns>The closure of the combinatorial boundary of this <c>Geometry</c>.</returns>
-        public virtual IGeometry Boundary
+        /// <returns>    
+        /// An empty <c>Point</c> (for empty <see cref="Geometry{TCoordinate}"/>s), a
+        /// <c>Point</c> (for <c>Point</c>s) or a <see cref="Polygon{TCoordinate}" />
+        /// (in all other cases).
+        /// </returns>
+        public IGeometry<TCoordinate> Envelope
         {
-            get { return boundary; }
-            set { boundary = value; }
+            get { return Factory.ToGeometry(ExtentsInternal); }
         }
 
-        private Dimensions boundaryDimension;
+        /// <summary>
+        /// Gets the bounding box of the <see cref="Geometry{TCoordinate}"/>.
+        /// </summary>
+        public IExtents<TCoordinate> Extents
+        {
+            get { return ExtentsInternal; }
+        }
 
         /// <summary> 
-        /// Returns the dimension of this <c>Geometry</c>s inherent boundary.
+        /// Gets the factory which contains the context in which this point was created.
+        /// </summary>
+        /// <returns>The factory for this point.</returns>
+        public IGeometryFactory<TCoordinate> Factory
+        {
+            get { return _factory; }
+        }
+
+        /// <summary>  
+        /// Returns the <see cref="PrecisionModel{TCoordinate}"/> 
+        /// used by the <see cref="Geometry{TCoordinate}"/>.
+        /// </summary>
+        /// <returns>    
+        /// The specification of the grid of allowable points, for this
+        /// <see cref="Geometry{TCoordinate}"/> and all other <see cref="Geometry{TCoordinate}"/>s.
+        /// </returns>
+        public IPrecisionModel<TCoordinate> PrecisionModel
+        {
+            get { return Factory.PrecisionModel; }
+        }
+
+        public IGeometry<TCoordinate> Project(ICoordinateSystem<TCoordinate> toCoordinateSystem)
+        {
+            if (toCoordinateSystem == null) throw new ArgumentNullException("toCoordinateSystem");
+            throw new NotImplementedException();
+        }
+
+        public ICoordinateSystem<TCoordinate> SpatialReference
+        {
+            get { return _spatialReference; }
+            set { _spatialReference = value; }
+        }
+
+        public Byte[] AsBinary()
+        {
+            return _factory.WkbWriter.Write(this);
+        }
+
+        public String AsText()
+        {
+            return _factory.WktWriter.Write(this);
+        }
+
+        /// <summary> 
+        /// Returns the dimension of this <see cref="Geometry{TCoordinate}"/>s inherent boundary.
         /// </summary>
         /// <returns>    
         /// The dimension of the boundary of the class implementing this
@@ -496,944 +535,1426 @@ namespace GisSharpBlog.NetTopologySuite.Geometries
         /// </returns>
         public virtual Dimensions BoundaryDimension
         {
-            get { return boundaryDimension; }
-            set { boundaryDimension = value; }
+            get { return _boundaryDimension; }
+            set { _boundaryDimension = value; }
         }
 
-        /// <summary>  
-        /// Returns this <c>Geometry</c>s bounding box. If this <c>Geometry</c>
-        /// is the empty point, returns an empty <c>Point</c>. If the <c>Geometry</c>
-        /// is a point, returns a non-empty <c>Point</c>. Otherwise, returns a
-        /// <c>Polygon</c> whose points are (minx, miny), (maxx, miny), (maxx,
-        /// maxy), (minx, maxy), (minx, miny).
+        IPoint IGeometry.Centroid
+        {
+            get { return Centroid; }
+        }
+
+        IGeometry IGeometry.Clone()
+        {
+            return Clone();
+        }
+
+        ICoordinateSequence IGeometry.Coordinates
+        {
+            get { return Coordinates; }
+        }
+
+        /// <summary> 
+        /// Gets the dimension of this <see cref="Geometry{TCoordinate}"/>.
         /// </summary>
-        /// <returns>    
-        /// An empty <c>Point</c> (for empty <c>Geometry</c>s), a
-        /// <c>Point</c> (for <c>Point</c>s) or a <c>Polygon</c>
-        /// (in all other cases).
+        /// <returns>  
+        /// The dimension of the class implementing this interface, whether
+        /// or not this object is the empty point.
         /// </returns>
-        public IGeometry Envelope
+        public abstract Dimensions Dimension { get; }
+
+        IGeometry IGeometry.Envelope
+        {
+            get { return Envelope; }
+        }
+
+        /// <summary>
+        /// Returns <see langword="true"/> if the DE-9IM intersection matrix for the two
+        /// <see cref="Geometry{TCoordinate}"/>s is T*F**FFF*.
+        /// </summary>
+        /// <param name="g">
+        /// The <see cref="Geometry{TCoordinate}"/> with which to compare this 
+        /// <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if the two <see cref="Geometry{TCoordinate}"/>s are equal.
+        /// </returns>
+        public Boolean Equals(IGeometry g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // TODO: this could be redone to relate the IGeometry 
+            // instance to this instance, using ICoordinate
+            return Equals(convertIGeometry(g));
+        }
+
+        IExtents IGeometry.Extents
+        {
+            get { return Extents; }
+        }
+
+        IGeometryFactory IGeometry.Factory
+        {
+            get { return Factory; }
+        }
+
+        public String GeometryTypeName
+        {
+            get { return GeometryType.ToString(); }
+        }
+
+        /// <summary> 
+        /// Returns whether or not the set of points in this <see cref="Geometry{TCoordinate}"/> is empty.
+        /// </summary>
+        /// <returns><see langword="true"/> if this <see cref="Geometry{TCoordinate}"/> equals the empty point.</returns>
+        public abstract Boolean IsEmpty { get; }
+
+        public virtual Boolean IsRectangle
         {
             get
             {
-                return Factory.ToGeometry(EnvelopeInternal);
+                // Polygon overrides to check for actual rectangle
+                if (Dimension == Dimensions.Surface)
+                {
+                    throw new InvalidOperationException("This method must be " +
+                                                        "overridden in 2D geometries.");
+                }
+
+                return false;
             }
         }
 
         /// <summary> 
-        /// Returns the minimum and maximum x and y values in this <c>Geometry</c>
-        /// , or a null <c>Envelope</c> if this <c>Geometry</c> is empty.
-        /// </summary>
-        /// <returns>    
-        /// This <c>Geometry</c>s bounding box; if the <c>Geometry</c>
-        /// is empty, <c>Envelope.IsNull</c> will return <c>true</c>.
-        /// </returns>
-        public IEnvelope EnvelopeInternal
-        {
-            get
-            {
-                if (envelope == null)
-                    envelope = ComputeEnvelopeInternal();                
-                return envelope;
-            }
-        }
-
-        private class GeometryChangedFilter : IGeometryComponentFilter
-        {
-            public void Filter(IGeometry geom)
-            {
-                geom.GeometryChangedAction();
-            }
-        };
-
-        /// <summary>
-        /// Notifies this Geometry that its Coordinates have been changed by an external
-        /// party (using a CoordinateFilter, for example). The Geometry will flush
-        /// and/or update any information it has cached (such as its Envelope).
-        /// </summary>
-        public void GeometryChanged()
-        {
-            Apply(new GeometryChangedFilter());
-        }
-
-        /// <summary> 
-        /// Notifies this Geometry that its Coordinates have been changed by an external
-        /// party. When GeometryChanged is called, this method will be called for
-        /// this Geometry and its component Geometries.
-        /// </summary>
-        public void GeometryChangedAction()
-        {
-            envelope = null;
-        }
-
-        /// <summary>  
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is FF*FF****.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns><c>true</c> if the two <c>Geometry</c>s are disjoint.</returns>
-        public bool Disjoint(IGeometry g)
-        {
-            // short-circuit test
-            if (! EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return true;
-            return Relate(g).IsDisjoint();
-        }
-
-        /// <summary>  
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is FT*******, F**T***** or F***T****.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns>
-        /// <c>true</c> if the two <c>Geometry</c>s touch;
-        /// Returns false if both <c>Geometry</c>s are points.
-        /// </returns>
-        public bool Touches(IGeometry g) 
-        {
-            // short-circuit test
-            if (! EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return false;
-            return Relate(g).IsTouches(Dimension, g.Dimension);
-        }
-
-        /// <summary>  
-        /// Returns <c>true</c> if <c>disjoint</c> returns false.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns><c>true</c> if the two <c>Geometry</c>s intersect.</returns>
-        public bool Intersects(IGeometry g) 
-        {
-            // short-circuit test
-            if (!EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return false;
-            // optimizations for rectangle arguments
-            if (IsRectangle)
-                return RectangleIntersects.Intersects((IPolygon) this, g);
-            if (g.IsRectangle)
-                return RectangleIntersects.Intersects((IPolygon) g, this);
-            return Relate(g).IsIntersects();
-        }
-
-        /// <summary>  
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is
-        ///  T*T****** (for a point and a curve, a point and an area or a line
-        /// and an area) 0******** (for two curves).
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns>
-        /// <c>true</c> if the two <c>Geometry</c>s cross.
-        /// For this function to return <c>true</c>, the <c>Geometry</c>
-        /// s must be a point and a curve; a point and a surface; two curves; or a
-        /// curve and a surface.
-        /// </returns>
-        public bool Crosses(IGeometry g) 
-        {
-            // short-circuit test
-            if (! EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return false;
-            return Relate(g).IsCrosses(Dimension, g.Dimension);
-        }
-
-        /// <summary>
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is T*F**F***.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns><c>true</c> if this <c>Geometry</c> is within <c>other</c>.</returns>
-        public bool Within(IGeometry g)
-        {
-            return g.Contains(this); ;
-        }
-
-        /// <summary>
-        /// Returns <c>true</c> if <c>other.within(this)</c> returns <c>true</c>.
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns><c>true</c> if this <c>Geometry</c> contains <c>other</c>.</returns>
-        public bool Contains(IGeometry g) 
-        {
-            // short-circuit test
-            if (!EnvelopeInternal.Contains(g.EnvelopeInternal))
-                return false;
-            // optimizations for rectangle arguments
-            if (IsRectangle)
-                return RectangleContains.Contains((IPolygon) this, g);
-            // general case
-            return Relate(g).IsContains();
-        }
-
-        /// <summary>
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is
-        ///  T*T***T** (for two points or two surfaces)
-        ///  1*T***T** (for two curves).
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns>
-        /// <c>true</c> if the two <c>Geometry</c>s overlap.
-        /// For this function to return <c>true</c>, the <c>Geometry</c>
-        /// s must be two points, two curves or two surfaces.
-        /// </returns>
-        public bool Overlaps(IGeometry g) 
-        {
-            // short-circuit test
-            if (! EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return false;
-            return Relate(g).IsOverlaps(Dimension, g.Dimension);
-        }
-
-        /// <summary>
-        /// Returns <c>true</c> if this geometry covers the specified geometry.
-        /// <para>
-        /// The <c>Covers</c> predicate has the following equivalent definitions:
-        ///     - Every point of the other geometry is a point of this geometry.
-        ///     - The DE-9IM Intersection Matrix for the two geometries is <c>T*****FF*</c> or <c>*T****FF*</c> or <c>***T**FF*</c> or <c>****T*FF*</c>.
-        ///     - <c>g.CoveredBy(this)</c> (<c>Covers</c> is the inverse of <c>CoveredBy</c>).
-        /// </para>
-        /// Note the difference between <c>Covers</c> and <c>Contains</c>: <c>Covers</c> is a more inclusive relation.
-        /// In particular, unlike <c>Contains</c> it does not distinguish between
-        /// points in the boundary and in the interior of geometries.        
+        /// Returns <see langword="false"/> if the <see cref="Geometry{TCoordinate}"/> not simple.
+        /// Subclasses provide their own definition of "simple". If
+        /// this <see cref="Geometry{TCoordinate}"/> is empty, returns <see langword="true"/>. 
         /// </summary>
         /// <remarks>
-        /// For most situations, <c>Covers</c> should be used in preference to <c>Contains</c>.
-        /// As an added benefit, <c>Covers</c> is more amenable to optimization, and hence should be more performant.
+        /// In general, the SFS specifications of simplicity seem to follow the
+        /// following rule:
+        ///  A Geometry is simple if the only self-intersections are at boundary points.
+        /// For all empty <see cref="Geometry{TCoordinate}"/>s, <c>IsSimple==true</c>.
         /// </remarks>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c></param>
-        /// <returns><c>true</c> if this <c>Geometry</c> covers <paramref name="g" /></returns>
-        /// <seealso cref="Geometry.Contains" />
-        /// <seealso cref="Geometry.CoveredBy" />
-        public bool Covers(IGeometry g)
-        {
-            // short-circuit test
-            if (!EnvelopeInternal.Contains(g.EnvelopeInternal))
-                return false;
-            
-            // optimization for rectangle arguments
-            if (IsRectangle)
-                return EnvelopeInternal.Contains(g.EnvelopeInternal);
-            
-            return Relate(g).IsCovers();
-        }
+        /// <returns>    
+        /// <see langword="true"/> if this <see cref="Geometry{TCoordinate}"/> has any points of
+        /// self-tangency, self-intersection or other anomalous points.
+        /// </returns>
+        public abstract Boolean IsSimple { get; }
 
-        /// <summary>
-        /// Returns <c>true</c> if this geometry is covered by the specified geometry.
-        /// <para>
-        /// The <c>CoveredBy</c> predicate has the following equivalent definitions:
-        ///     - Every point of this geometry is a point of the other geometry.
-        ///     - The DE-9IM Intersection Matrix for the two geometries is <c>T*F**F***</c> or <c>*TF**F***</c> or <c>**FT*F***</c> or <c>**F*TF***</c>.
-        ///     - <c>g.Covers(this)</c> (<c>CoveredBy</c> is the inverse of <c>Covers</c>).
-        /// </para>
-        /// Note the difference between <c>CoveredBy</c> and <c>Within</c>: <c>CoveredBy</c> is a more inclusive relation.
+        /// <summary>  
+        /// Tests the validity of this <see cref="Geometry{TCoordinate}"/>.
+        /// Subclasses provide their own definition of "valid".
         /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c></param>.
-        /// <returns><c>true</c> if this <c>Geometry</c> is covered by <paramref name="g" />.</returns>
-        /// <seealso cref="Geometry.Within" />
-        /// <seealso cref="Geometry.Covers" />
-        public bool CoveredBy(IGeometry g)
+        /// <returns><see langword="true"/> if this <see cref="Geometry{TCoordinate}"/> is valid.</returns>
+        public virtual Boolean IsValid
         {
-            return g.Covers(this);
+            get
+            {
+                IsValidOp<TCoordinate> isValidOp = new IsValidOp<TCoordinate>(this);
+                return isValidOp.IsValid;
+            }
         }
 
         /// <summary>  
-        /// Returns <c>true</c> if the elements in the DE-9IM intersection
-        /// matrix for the two <c>Geometry</c>s match the elements in <c>intersectionPattern</c>
-        /// , which may be:
-        ///  0
-        ///  1
-        ///  2
-        ///  T ( = 0, 1 or 2)
-        ///  F ( = -1)
-        ///  * ( = -1, 0, 1 or 2)
-        /// For more information on the DE-9IM, see the OpenGIS Simple Features
-        /// Specification.
+        /// Returns the count of this <see cref="Geometry{TCoordinate}"/>s vertices.
         /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <param name="intersectionPattern">The pattern against which to check the intersection matrix for the two <c>Geometry</c>s.</param>
-        /// <returns><c>true</c> if the DE-9IM intersection matrix for the two <c>Geometry</c>s match <c>intersectionPattern</c>.</returns>
-        public bool Relate(IGeometry g, string intersectionPattern)
-        {
-            return Relate(g).Matches(intersectionPattern);
-        }
+        /// <remarks>
+        /// The <see cref="Geometry{TCoordinate}"/>s contained by composite 
+        /// <see cref="Geometry{TCoordinate}"/>s must be 
+        /// <see cref="Geometry{TCoordinate}"/> instances; that is, 
+        /// they must implement <see cref="IGeometry{TCoordinate}.PointCount"/>.
+        /// </remarks>
+        /// <returns>The number of vertices in this <see cref="Geometry{TCoordinate}"/>.</returns>
+        public abstract Int32 PointCount { get; }
 
-        /// <summary>
-        /// Returns the DE-9IM intersection matrix for the two <c>Geometry</c>s.
+        /// <summary>  
+        /// Returns the name of this object's interface.
         /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c></param>
-        /// <returns>
-        /// A matrix describing the intersections of the interiors,
-        /// boundaries and exteriors of the two <c>Geometry</c>s.
-        /// </returns>
-        public IntersectionMatrix Relate(IGeometry g) 
-        {
-            CheckNotGeometryCollection(this);
-            CheckNotGeometryCollection(g);
+        /// <returns>The name of this <see cref="Geometry{TCoordinate}"/>s most specific interface.</returns>
+        public abstract OgcGeometryType GeometryType { get; }
 
-            return RelateOp.Relate(this, g);
-        }                    
-                
         /// <summary>
-        /// Returns <c>true</c> if the DE-9IM intersection matrix for the two
-        /// <c>Geometry</c>s is T*F**FFF*.
+        /// Converts this <see cref="Geometry{TCoordinate}"/> to normal form (or 
+        /// canonical form).
         /// </summary>
-        /// <param name="g">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns><c>true</c> if the two <c>Geometry</c>s are equal.</returns>
-        public bool Equals(IGeometry g)
-        {
-            if (ReferenceEquals(g, this))
-                return true;
-
-            // NOTE: Not in JTS!!!
-			if (IsEmpty && g.IsEmpty)
-				return true;
-
-            // Short-circuit test
-            if (!EnvelopeInternal.Intersects(g.EnvelopeInternal))
-                return false;
-
-            // NOTE: Not in JTS!!!
-            // We use an alternative method for compare GeometryCollections (but not subclasses!), 
-            if (isGeometryCollection(this) || isGeometryCollection(g))
-                return CompareGeometryCollections(this, g);
-            
-            // Use RelateOp comparation method
-            return Relate(g).IsEquals(Dimension, g.Dimension);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        private static bool CompareGeometryCollections(IGeometry obj1, IGeometry obj2)
-        {
-            IGeometryCollection coll1 = obj1 as IGeometryCollection;
-            IGeometryCollection coll2 = obj2 as IGeometryCollection;
-            if (coll1 == null || coll2 == null)
-                return false;
-
-            // Short-circuit test
-            if (coll1.NumGeometries != coll2.NumGeometries)
-                return false;
-
-            // Deep test
-            for (int i = 0; i < coll1.NumGeometries; i++)
-            {
-                IGeometry geom1 = coll1[i];
-                IGeometry geom2 = coll2[i];
-                if (!geom1.Equals(geom2))
-                    return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public override bool Equals(object obj)
-        {            
-            if (obj == null)
-                return false;
-            if (ReferenceEquals(obj, this))
-                return true;
-            if (GetType().Namespace != obj.GetType().Namespace)
-                return false;            
-            return Equals((IGeometry) obj);         
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator ==(Geometry obj1, IGeometry obj2)
-        {            
-            return Equals(obj1, obj2); 
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="obj1"></param>
-        /// <param name="obj2"></param>
-        /// <returns></returns>
-        public static bool operator !=(Geometry obj1, IGeometry obj2)
-        {
-            return !(obj1 == obj2);
-        }    
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public override int GetHashCode()
-        {
-            int result = 17;            
-            foreach (Coordinate coord in Coordinates)
-                result = 37 * result + coord.X.GetHashCode();                        
-            return result;
-        } 
-
-        /// <summary>
-        /// Returns the Well-known Text representation of this <c>Geometry</c>.
-        /// For a definition of the Well-known Text format, see the OpenGIS Simple
-        /// Features Specification.
-        /// </summary>
-        /// <returns>
-        /// The Well-known Text representation of this <c>Geometry</c>.
-        /// </returns>
-        public override string ToString() 
-        {
-            return ToText();
-        }
-
-        /// <summary>
-        /// Returns the Well-known Text representation of this <c>Geometry</c>.
-        /// For a definition of the Well-known Text format, see the OpenGIS Simple
-        /// Features Specification.
-        /// </summary>
-        /// <returns>
-        /// The Well-known Text representation of this <c>Geometry</c>.
-        /// </returns>
-        public string ToText() 
-        {         
-            WKTWriter writer = new WKTWriter();
-            return writer.Write(this);
-        }
-
-        /// <summary>
-        /// <see cref="ToText" />
-        /// </summary>
-        /// <returns></returns>
-        public string AsText()
-        {
-            return ToText();
-        }
-
-        /// <summary>
-        /// Returns the Well-known Binary representation of this <c>Geometry</c>.
-        /// For a definition of the Well-known Binary format, see the OpenGIS Simple
-        /// Features Specification.
-        /// </summary>
-        /// <returns>The Well-known Binary representation of this <c>Geometry</c>.</returns>
-        public byte[] ToBinary()
-        {
-            WKBWriter writer = new WKBWriter();
-            return writer.Write(this);
-        }
-
-        /// <summary>
-        /// <see cref="ToBinary" />
-        /// </summary>
-        /// <returns></returns>
-        public byte[] AsBinary()
-        {
-            return ToBinary();
-        }
-
-        /// <summary>
-        /// Returns the feature representation as GML 2.1.1 XML document.
-        /// This XML document is based on <c>Geometry.xsd</c> schema.
-        /// NO features or XLink are implemented here!
-        /// </summary>        
-        public XmlReader ToGMLFeature()
-        {            
-            GMLWriter writer = new GMLWriter();
-            return writer.Write(this);
-        }        
-
-        /// <summary>
-        /// Returns a buffer region around this <c>Geometry</c> having the given width.
-        /// The buffer of a Geometry is the Minkowski sum or difference of the Geometry with a disc of radius <c>distance</c>.
-        /// </summary>
-        /// <param name="distance">
-        /// The width of the buffer, interpreted according to the
-        /// <c>PrecisionModel</c> of the <c>Geometry</c>.
-        /// </param>
-        /// <returns>
-        /// All points whose distance from this <c>Geometry</c>
-        /// are less than or equal to <c>distance</c>.
-        /// </returns>
-        public IGeometry Buffer(double distance)
-        {
-            return BufferOp.Buffer(this, distance);
-        }
-
-        /// <summary>
-        /// Returns a buffer region around this <c>Geometry</c> having the given width.
-        /// The buffer of a Geometry is the Minkowski sum or difference of the Geometry with a disc of radius <c>distance</c>.
-        /// </summary>
-        /// <param name="distance">
-        /// The width of the buffer, interpreted according to the
-        /// <c>PrecisionModel</c> of the <c>Geometry</c>.
-        /// </param>
-        /// <param name="endCapStyle">Cap Style to use for compute buffer.</param>
-        /// <returns>
-        /// All points whose distance from this <c>Geometry</c>
-        /// are less than or equal to <c>distance</c>.
-        /// </returns>
-        public IGeometry Buffer(double distance, BufferStyle endCapStyle)
-        {
-            return BufferOp.Buffer(this, distance, endCapStyle);
-        }
-
-        /// <summary>
-        /// Returns a buffer region around this <c>Geometry</c> having the given
-        /// width and with a specified number of segments used to approximate curves.
-        /// The buffer of a Geometry is the Minkowski sum of the Geometry with
-        /// a disc of radius <c>distance</c>.  Curves in the buffer polygon are
-        /// approximated with line segments.  This method allows specifying the
-        /// accuracy of that approximation.
-        /// </summary>
-        /// <param name="distance">
-        /// The width of the buffer, interpreted according to the
-        /// <c>PrecisionModel</c> of the <c>Geometry</c>.
-        /// </param>
-        /// <param name="quadrantSegments">The number of segments to use to approximate a quadrant of a circle.</param>
-        /// <returns>
-        /// All points whose distance from this <c>Geometry</c>
-        /// are less than or equal to <c>distance</c>.
-        /// </returns>
-        public IGeometry Buffer(double distance, int quadrantSegments) 
-        {
-            return BufferOp.Buffer(this, distance, quadrantSegments);
-        }
-
-        /// <summary>
-        /// Returns a buffer region around this <c>Geometry</c> having the given
-        /// width and with a specified number of segments used to approximate curves.
-        /// The buffer of a Geometry is the Minkowski sum of the Geometry with
-        /// a disc of radius <c>distance</c>.  Curves in the buffer polygon are
-        /// approximated with line segments.  This method allows specifying the
-        /// accuracy of that approximation.
-        /// </summary>
-        /// <param name="distance">
-        /// The width of the buffer, interpreted according to the
-        /// <c>PrecisionModel</c> of the <c>Geometry</c>.
-        /// </param>
-        /// <param name="quadrantSegments">The number of segments to use to approximate a quadrant of a circle.</param>
-        /// <param name="endCapStyle">Cap Style to use for compute buffer.</param>
-        /// <returns>
-        /// All points whose distance from this <c>Geometry</c>
-        /// are less than or equal to <c>distance</c>.
-        /// </returns>
-        public IGeometry Buffer(double distance, int quadrantSegments, BufferStyle endCapStyle)
-        {
-            return BufferOp.Buffer(this, distance, quadrantSegments, endCapStyle);
-        } 
-
-        /// <summary>
-        /// Returns the smallest convex <c>Polygon</c> that contains all the
-        /// points in the <c>Geometry</c>. This obviously applies only to <c>Geometry</c>
-        /// s which contain 3 or more points.
-        /// </summary>
-        /// <returns>the minimum-area convex polygon containing this <c>Geometry</c>'s points.</returns>
-        public virtual IGeometry ConvexHull()
-        {            
-            return (new ConvexHull(this)).GetConvexHull();         
-        }
-
-        /// <summary>
-        /// Returns a <c>Geometry</c> representing the points shared by this
-        /// <c>Geometry</c> and <c>other</c>.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compute the intersection.</param>
-        /// <returns>The points common to the two <c>Geometry</c>s.</returns>
-        public IGeometry Intersection(IGeometry other) 
-        {
-            // Special case: if one input is empty ==> empty
-            if (IsEmpty) 
-                return Factory.CreateGeometryCollection(null);
-            if (other.IsEmpty) 
-                return Factory.CreateGeometryCollection(null);
-
-
-            CheckNotGeometryCollection(this);
-            CheckNotGeometryCollection(other);        
-            return SnapIfNeededOverlayOp.Overlay(this, other, SpatialFunction.Intersection);
-        }
-
-        /// <summary>
-        /// Returns a <c>Geometry</c> representing all the points in this <c>Geometry</c>
-        /// and <c>other</c>.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compute the union.</param>
-        /// <returns>A set combining the points of this <c>Geometry</c> and the points of <c>other</c>.</returns>
-        public IGeometry Union(IGeometry other) 
-        {
-            // Special case: if either input is empty ==> other input
-            if (IsEmpty) 
-                return (IGeometry) other.Clone();
-            if (other.IsEmpty) 
-                return (IGeometry) Clone();
-
-            CheckNotGeometryCollection(this);
-            CheckNotGeometryCollection(other);
-            return SnapIfNeededOverlayOp.Overlay(this, other, SpatialFunction.Union);
-        }
-
-        /// <summary>
-        /// Returns a <c>Geometry</c> representing the points making up this
-        /// <c>Geometry</c> that do not make up <c>other</c>. This method
-        /// returns the closure of the resultant <c>Geometry</c>.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compute the difference.</param>
-        /// <returns>The point set difference of this <c>Geometry</c> with <c>other</c>.</returns>
-        public IGeometry Difference(IGeometry other)
-        {
-            // Special case: if A.isEmpty ==> empty; if B.isEmpty ==> A
-            if (IsEmpty) 
-                return Factory.CreateGeometryCollection(null);
-            if (other.IsEmpty) 
-                return (IGeometry) Clone();
-
-            CheckNotGeometryCollection(this);
-            CheckNotGeometryCollection(other);
-            return SnapIfNeededOverlayOp.Overlay(this, other, SpatialFunction.Difference);
-         }
-
-        /// <summary>
-        /// Returns a set combining the points in this <c>Geometry</c> not in
-        /// <c>other</c>, and the points in <c>other</c> not in this
-        /// <c>Geometry</c>. This method returns the closure of the resultant
-        /// <c>Geometry</c>.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compute the symmetric difference.</param>
-        /// <returns>The point set symmetric difference of this <c>Geometry</c> with <c>other</c>.</returns>
-        public IGeometry SymmetricDifference(IGeometry other) 
-        {
-            // Special case: if either input is empty ==> other input
-            if (IsEmpty) 
-                return (IGeometry) other.Clone();
-            if (other.IsEmpty) 
-                return (IGeometry) Clone();
-
-            CheckNotGeometryCollection(this);
-            CheckNotGeometryCollection(other);
-            return SnapIfNeededOverlayOp.Overlay(this, other, SpatialFunction.SymDifference);
-        }
-
-        /// <summary>
-        /// Returns true if the two <c>Geometry</c>s are exactly equal,
-        /// up to a specified tolerance.
-        /// Two Geometries are exactly within a tolerance equal iff:
-        /// they have the same class,
-        /// they have the same values of Coordinates,
-        /// within the given tolerance distance, in their internal
-        /// Coordinate lists, in exactly the same order.
-        /// If this and the other <c>Geometry</c>s are
-        /// composites and any children are not <c>Geometry</c>s, returns
-        /// false.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compare this <c>Geometry</c></param>
-        /// <param name="tolerance">Distance at or below which two Coordinates will be considered equal.</param>
-        /// <returns>
-        /// <c>true</c> if this and the other <c>Geometry</c>
-        /// are of the same class and have equal internal data.
-        /// </returns>
-        public abstract bool EqualsExact(IGeometry other, double tolerance);
-
-        /// <summary>
-        /// Returns true if the two <c>Geometry</c>s are exactly equal.
-        /// Two Geometries are exactly equal iff:
-        /// they have the same class,
-        /// they have the same values of Coordinates in their internal
-        /// Coordinate lists, in exactly the same order.
-        /// If this and the other <c>Geometry</c>s are
-        /// composites and any children are not <c>Geometry</c>s, returns
-        /// false.
-        /// This provides a stricter test of equality than <c>equals</c>.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compare this <c>Geometry</c>.</param>
-        /// <returns>
-        /// <c>true</c> if this and the other <c>Geometry</c>
-        /// are of the same class and have equal internal data.
-        /// </returns>
-        public bool EqualsExact(IGeometry other) 
-        { 
-            return EqualsExact(other, 0); 
-        }
-
-        /// <summary>
-        /// Performs an operation with or on this <c>Geometry</c>'s
-        /// coordinates. If you are using this method to modify the point, be sure
-        /// to call GeometryChanged() afterwards. Note that you cannot use this
-        /// method to
-        /// modify this Geometry if its underlying CoordinateSequence's Get method
-        /// returns a copy of the Coordinate, rather than the actual Coordinate stored
-        /// (if it even stores Coordinates at all).
-        /// </summary>
-        /// <param name="filter">The filter to apply to this <c>Geometry</c>'s coordinates</param>
-        public abstract void Apply(ICoordinateFilter filter);
-
-        /// <summary>
-        /// Performs an operation with or on this <c>Geometry</c> and its
-        /// subelement <c>Geometry</c>s (if any).
-        /// Only GeometryCollections and subclasses
-        /// have subelement Geometry's.
-        /// </summary>
-        /// <param name="filter">
-        /// The filter to apply to this <c>Geometry</c> (and
-        /// its children, if it is a <c>GeometryCollection</c>).
-        /// </param>
-        public abstract void Apply(IGeometryFilter filter);
-
-        /// <summary>
-        /// Performs an operation with or on this Geometry and its
-        /// component Geometry's. Only GeometryCollections and
-        /// Polygons have component Geometry's; for Polygons they are the LinearRings
-        /// of the shell and holes.
-        /// </summary>
-        /// <param name="filter">The filter to apply to this <c>Geometry</c>.</param>
-        public abstract void Apply(IGeometryComponentFilter filter);
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public virtual object Clone() 
-        {            
-            Geometry clone = (Geometry) MemberwiseClone();
-            if (clone.envelope != null) 
-                clone.envelope = new Envelope(clone.envelope);                 
-            return clone;         
-        }
-
-        /// <summary>
-        /// Converts this <c>Geometry</c> to normal form (or 
-        /// canonical form ). Normal form is a unique representation for <c>Geometry</c>
-        /// s. It can be used to test whether two <c>Geometry</c>s are equal
+        /// <remarks>
+        /// Normal form is a unique representation for 
+        /// <see cref="Geometry{TCoordinate}"/>s. It can be used to test whether two <see cref="Geometry{TCoordinate}"/>s are equal
         /// in a way that is independent of the ordering of the coordinates within
         /// them. Normal form equality is a stronger condition than topological
         /// equality, but weaker than pointwise equality. The definitions for normal
         /// form use the standard lexicographical ordering for coordinates. "Sorted in
         /// order of coordinates" means the obvious extension of this ordering to
         /// sequences of coordinates.
-        /// </summary>
+        /// </remarks>
         public abstract void Normalize();
 
-        /// <summary>
-        /// Returns whether this <c>Geometry</c> is greater than, equal to,
-        /// or less than another <c>Geometry</c>. 
-        /// If their classes are different, they are compared using the following
-        /// ordering:
-        ///     Point (lowest),
-        ///     MultiPoint,
-        ///     LineString,
-        ///     LinearRing,
-        ///     MultiLineString,
-        ///     Polygon,
-        ///     MultiPolygon,
-        ///     GeometryCollection (highest).
-        /// If the two <c>Geometry</c>s have the same class, their first
-        /// elements are compared. If those are the same, the second elements are
-        /// compared, etc.
-        /// </summary>
-        /// <param name="o">A <c>Geometry</c> with which to compare this <c>Geometry</c></param>
-        /// <returns>
-        /// A positive number, 0, or a negative number, depending on whether
-        /// this object is greater than, equal to, or less than <c>o</c>, as
-        /// defined in "Normal Form For Geometry" in the NTS Technical
-        /// Specifications.
-        /// </returns>
-        public int CompareTo(object o) 
+        IPrecisionModel IGeometry.PrecisionModel
         {
-            return CompareTo((IGeometry) o);
+            get { return PrecisionModel; }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geom"></param>
-        /// <returns></returns>
-        public int CompareTo(IGeometry geom)
+        /// <summary>  
+        /// Gets or sets the ID of the Spatial Reference System used by the 
+        /// <see cref="Geometry{TCoordinate}"/>.
+        /// </summary>   
+        /// <remarks>
+        /// NTS supports Spatial Reference System information in the simple way
+        /// defined in the SFS. A Spatial Reference System ID (SRID) is present in
+        /// each <see cref="Geometry{TCoordinate}"/> object. 
+        /// <see cref="Geometry{TCoordinate}"/> provides basic
+        /// accessor operations for this field, but no others. 
+        /// <para>
+        /// The SRID is represented as a nullable <see cref="Int32"/>.
+        /// </para>
+        /// </remarks>     
+        public String Srid
         {
-            Geometry other = (Geometry) geom;
-            if (ClassSortIndex != other.ClassSortIndex)
-                return ClassSortIndex - other.ClassSortIndex;
-            if (IsEmpty && other.IsEmpty)
-                return 0;
-            if (IsEmpty)
-                return -1;
-            if (other.IsEmpty)
-                return 1;
-            return CompareToSameClass(geom);
-        }
-
-        /// <summary>
-        /// Returns whether the two <c>Geometry</c>s are equal, from the point
-        /// of view of the <c>EqualsExact</c> method. Called by <c>EqualsExact</c>
-        /// . In general, two <c>Geometry</c> classes are considered to be
-        /// "equivalent" only if they are the same class. An exception is <c>LineString</c>
-        /// , which is considered to be equivalent to its subclasses.
-        /// </summary>
-        /// <param name="other">The <c>Geometry</c> with which to compare this <c>Geometry</c> for equality.</param>
-        /// <returns>
-        /// <c>true</c> if the classes of the two <c>Geometry</c>
-        /// s are considered to be equal by the <c>equalsExact</c> method.
-        /// </returns>
-        protected bool IsEquivalentClass(IGeometry other) 
-        {
-            return GetType().FullName == other.GetType().FullName;
-        }
-
-        /// <summary>
-        /// Throws an exception if <c>g</c>'s class is <c>GeometryCollection</c>. 
-        /// (its subclasses do not trigger an exception).
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> to check.</param>
-        /// <exception cref="ArgumentException">
-        /// if <c>g</c> is a <c>GeometryCollection</c>, but not one of its subclasses.
-        /// </exception>
-        protected void CheckNotGeometryCollection(IGeometry g) 
-        {
-            if (isGeometryCollection(g)) 
-                throw new ArgumentException("This method does not support GeometryCollection arguments");                            
-        }
-
-        /// <summary>
-        /// Returns <c>true</c> if <c>g</c>'s class is <c>GeometryCollection</c>. 
-        /// (its subclasses do not trigger an exception).
-        /// </summary>
-        /// <param name="g">The <c>Geometry</c> to check.</param>
-        /// <exception cref="ArgumentException">
-        /// If <c>g</c> is a <c>GeometryCollection</c>, but not one of its subclasses.
-        /// </exception>        
-        private bool isGeometryCollection(IGeometry g)
-        {
-            return g.GetType().Name == "GeometryCollection" && g.GetType().Namespace == GetType().Namespace;
-        }
-
-        /// <summary>
-        /// Returns the minimum and maximum x and y values in this <c>Geometry</c>
-        /// , or a null <c>Envelope</c> if this <c>Geometry</c> is empty.
-        /// Unlike <c>EnvelopeInternal</c>, this method calculates the <c>Envelope</c>
-        /// each time it is called; <c>EnvelopeInternal</c> caches the result
-        /// of this method.        
-        /// </summary>
-        /// <returns>
-        /// This <c>Geometry</c>s bounding box; if the <c>Geometry</c>
-        /// is empty, <c>Envelope.IsNull</c> will return <c>true</c>.
-        /// </returns>
-        protected abstract IEnvelope ComputeEnvelopeInternal();
-
-        /// <summary>
-        /// Returns whether this <c>Geometry</c> is greater than, equal to,
-        /// or less than another <c>Geometry</c> having the same class.
-        /// </summary>
-        /// <param name="o">A <c>Geometry</c> having the same class as this <c>Geometry</c>.</param>
-        /// <returns>
-        /// A positive number, 0, or a negative number, depending on whether
-        /// this object is greater than, equal to, or less than <c>o</c>, as
-        /// defined in "Normal Form For Geometry" in the NTS Technical
-        /// Specifications.
-        /// </returns>
-        protected internal abstract int CompareToSameClass(object o);
-
-        /// <summary>
-        /// Returns the first non-zero result of <c>CompareTo</c> encountered as
-        /// the two <c>Collection</c>s are iterated over. If, by the time one of
-        /// the iterations is complete, no non-zero result has been encountered,
-        /// returns 0 if the other iteration is also complete. If <c>b</c>
-        /// completes before <c>a</c>, a positive number is returned; if a
-        /// before b, a negative number.
-        /// </summary>
-        /// <param name="a">A <c>Collection</c> of <c>IComparable</c>s.</param>
-        /// <param name="b">A <c>Collection</c> of <c>IComparable</c>s.</param>
-        /// <returns>The first non-zero <c>compareTo</c> result, if any; otherwise, zero.</returns>
-        protected int Compare(ArrayList a, ArrayList b) 
-        {
-            IEnumerator i = a.GetEnumerator();
-            IEnumerator j = b.GetEnumerator();
-
-            while (i.MoveNext() && j.MoveNext()) 
+            get { return _srid; }
+            set
             {
-                IComparable aElement = (IComparable) i.Current;
-                IComparable bElement = (IComparable) j.Current;
-                int comparison = aElement.CompareTo(bElement);            
-                if (comparison != 0)                 
-                    return comparison;                
+                if (_srid == value)
+                {
+                    return;
+                }
+
+                _srid = value;
+                _factory = new GeometryFactory<TCoordinate>(value,
+                                                            _factory.CoordinateSequenceFactory);
+
+                IGeometryCollection collection = this as IGeometryCollection;
+
+                if (collection != null)
+                {
+                    foreach (Geometry<TCoordinate> geometry in collection)
+                    {
+                        geometry._srid = value;
+                        geometry._factory = _factory;
+                    }
+                }
+            }
+        }
+
+        /// <summary> 
+        /// Gets or sets the user data object for this point, if any.
+        /// </summary>
+        /// <remarks>
+        /// A simple scheme for applications to add their own custom data to a Geometry.
+        /// Note that user data objects are not present in geometries created by
+        /// construction methods.
+        /// </remarks>
+        public Object UserData
+        {
+            get { return _userData; }
+            set { _userData = value; }
+        }
+
+        Object ICloneable.Clone()
+        {
+            return Clone();
+        }
+
+        /// <summary>  
+        /// Gets the boundary, or the empty point if this <see cref="Geometry{TCoordinate}"/>
+        /// is empty. For a discussion of this function, see the OpenGIS Simple
+        /// Features Specification. As stated in SFS Section 2.1.13.1, "the boundary
+        /// of a Geometry is a set of Geometries of the next lower dimension."
+        /// </summary>
+        /// <returns>The closure of the combinatorial boundary of this <see cref="Geometry{TCoordinate}"/>.</returns>
+        public virtual IGeometry<TCoordinate> Boundary
+        {
+            get { return _boundary; }
+        }
+
+        /// <summary>  
+        /// Returns the minimum distance between this <see cref="Geometry{TCoordinate}"/>
+        /// and the <see cref="Geometry{TCoordinate}"/> g.
+        /// </summary>
+        /// <param name="g">The <see cref="Geometry{TCoordinate}"/> from which to compute the distance.</param>
+        public Double Distance(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return DistanceOp<TCoordinate>.FindDistance(this, g);
+        }
+
+        /// <summary>
+        /// Returns a buffer region around this <see cref="Geometry{TCoordinate}"/> having the given width.
+        /// The buffer of a Geometry is the Minkowski sum or difference of the Geometry with a disc of radius <c>distance</c>.
+        /// </summary>
+        /// <param name="distance">
+        /// The width of the buffer, interpreted according to the
+        /// <see cref="PrecisionModel{TCoordinate}"/> of the <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// All points whose distance from this <see cref="Geometry{TCoordinate}"/>
+        /// are less than or equal to <c>distance</c>.
+        /// </returns>
+        public IGeometry<TCoordinate> Buffer(Double distance)
+        {
+#if buffer110
+            return BufferOp_110<TCoordinate>.Buffer(this, distance);
+#else
+            return BufferOp<TCoordinate>.Buffer(this, distance);
+#endif
+        }
+
+        /// <summary>
+        /// Returns a buffer region around this <see cref="Geometry{TCoordinate}"/> having the given
+        /// width and with a specified number of segments used to approximate curves.
+        /// The buffer of a Geometry is the Minkowski sum of the Geometry with
+        /// a disc of radius <c>distance</c>.  Curves in the buffer polygon are
+        /// approximated with line segments.  This method allows specifying the
+        /// accuracy of that approximation.
+        /// </summary>
+        /// <param name="distance">
+        /// The width of the buffer, interpreted according to the
+        /// <see cref="PrecisionModel{TCoordinate}"/> of the <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <param name="quadrantSegments">The number of segments to use to approximate a quadrant of a circle.</param>
+        /// <returns>
+        /// All points whose distance from this <see cref="Geometry{TCoordinate}"/>
+        /// are less than or equal to <c>distance</c>.
+        /// </returns>
+        public IGeometry<TCoordinate> Buffer(Double distance, Int32 quadrantSegments)
+        {
+#if buffer110
+            return BufferOp_110<TCoordinate>.Buffer(this, distance, quadrantSegments);
+#else
+            return BufferOp<TCoordinate>.Buffer(this, distance, quadrantSegments);
+#endif
+        }
+
+        /// <summary>
+        /// Returns a buffer region around this <see cref="Geometry{TCoordinate}"/> having the given width.
+        /// The buffer of a Geometry is the Minkowski sum or difference of the Geometry with a disc of radius <c>distance</c>.
+        /// </summary>
+        /// <param name="distance">
+        /// The width of the buffer, interpreted according to the
+        /// <see cref="PrecisionModel{TCoordinate}"/> of the <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <param name="endCapStyle">Cap Style to use for compute buffer.</param>
+        /// <returns>
+        /// All points whose distance from this <see cref="Geometry{TCoordinate}"/>
+        /// are less than or equal to <c>distance</c>.
+        /// </returns>
+        public IGeometry<TCoordinate> Buffer(Double distance, BufferStyle endCapStyle)
+        {
+#if buffer110
+            BufferParameters bp = new BufferParameters(BufferParameters.DefaultQuadrantSegments, (BufferParameters.BufferEndCapStyle)endCapStyle);
+            return BufferOp_110<TCoordinate>.Buffer(this, distance, bp);
+#else
+            return BufferOp<TCoordinate>.Buffer(this, distance, endCapStyle);
+#endif
+        }
+
+        /// <summary>
+        /// Returns a buffer region around this <see cref="Geometry{TCoordinate}"/> having the given
+        /// width and with a specified number of segments used to approximate curves.
+        /// The buffer of a Geometry is the Minkowski sum of the Geometry with
+        /// a disc of radius <c>distance</c>.  Curves in the buffer polygon are
+        /// approximated with line segments.  This method allows specifying the
+        /// accuracy of that approximation.
+        /// </summary>
+        /// <param name="distance">
+        /// The width of the buffer, interpreted according to the
+        /// <see cref="PrecisionModel{TCoordinate}"/> of the <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <param name="quadrantSegments">
+        /// The number of segments to use to approximate a quadrant of a circle.
+        /// </param>
+        /// <param name="endCapStyle">Cap Style to use for compute buffer.</param>
+        /// <returns>
+        /// All points whose distance from this <see cref="Geometry{TCoordinate}"/>
+        /// are less than or equal to <c>distance</c>.
+        /// </returns>
+        public IGeometry<TCoordinate> Buffer(Double distance,
+                                             Int32 quadrantSegments,
+                                             BufferStyle endCapStyle)
+        {
+#if buffer110
+            return BufferOp_110<TCoordinate>.Buffer(this, distance, quadrantSegments, endCapStyle);
+#else
+            return BufferOp<TCoordinate>.Buffer(this, distance, quadrantSegments, endCapStyle);
+#endif
+        }
+        public IGeometry<TCoordinate> Buffer(Double distance, BufferParameters bufferParameters)
+        {
+#if buffer110
+            return BufferOp_110<TCoordinate>.Buffer(this, distance, bufferParameters);
+#else
+            throw new NotSupportedException();
+#endif
+        }
+
+        /// <summary>
+        /// Returns a <see cref="Geometry{TCoordinate}"/> representing the points shared by this
+        /// <see cref="Geometry{TCoordinate}"/> and <c>other</c>.
+        /// </summary>
+        /// <param name="other">The <see cref="Geometry{TCoordinate}"/> with which to compute the intersection.</param>
+        /// <returns>The points common to the two <see cref="Geometry{TCoordinate}"/>s.</returns>
+        public IGeometry<TCoordinate> Intersection(IGeometry<TCoordinate> other)
+        {
+            // special case: if one input is empty ==> empty
+            if (IsEmpty) return _factory.CreateGeometryCollection();
+            if (other.IsEmpty) return _factory.CreateGeometryCollection();
+
+            CheckNotNonEmptyGeometryCollection(this);
+            CheckNotNonEmptyGeometryCollection(other);
+
+            return SnapIfNeededOverlayOp<TCoordinate>.Overlay(this, other, SpatialFunctions.Intersection);
+        }
+
+        /// <summary>
+        /// Returns a <see cref="Geometry{TCoordinate}"/> representing all the points in this <see cref="Geometry{TCoordinate}"/>
+        /// and <c>other</c>.
+        /// </summary>
+        /// <param name="other">The <see cref="Geometry{TCoordinate}"/> with which to compute the union.</param>
+        /// <returns>A set combining the points of this <see cref="Geometry{TCoordinate}"/> and the points of <c>other</c>.</returns>
+        public IGeometry<TCoordinate> Union(IGeometry<TCoordinate> other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            // special case: if either input is empty ==> other input
+            if (IsEmpty) return other.Clone();
+            if (other.IsEmpty) return Clone();
+
+            CheckNotNonEmptyGeometryCollection(this);
+            CheckNotNonEmptyGeometryCollection(other);
+
+            //return UnaryUnionOp<TCoordinate>.Union(other);
+            return SnapIfNeededOverlayOp<TCoordinate>.Overlay(this, other, SpatialFunctions.Union);
+        }
+
+        /// <summary>
+        /// Returns a <see cref="Geometry{TCoordinate}"/> representing the points making up this
+        /// <see cref="Geometry{TCoordinate}"/> that do not make up <c>other</c>. This method
+        /// returns the closure of the resultant <see cref="Geometry{TCoordinate}"/>.
+        /// </summary>
+        /// <param name="other">The <see cref="Geometry{TCoordinate}"/> with which to compute the difference.</param>
+        /// <returns>The point set difference of this <see cref="Geometry{TCoordinate}"/> with <c>other</c>.</returns>
+        public IGeometry<TCoordinate> Difference(IGeometry<TCoordinate> other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            // special case: if A.isEmpty ==> empty; if B.isEmpty ==> A
+            if (IsEmpty) return _factory.CreateGeometryCollection();
+            if (other.IsEmpty) return Clone();
+
+            CheckNotNonEmptyGeometryCollection(this);
+            CheckNotNonEmptyGeometryCollection(other);
+
+            return SnapIfNeededOverlayOp<TCoordinate>.Overlay(this, other, SpatialFunctions.Difference);
+        }
+
+        /// <summary>
+        /// Returns a set combining the points in this <see cref="Geometry{TCoordinate}"/> not in
+        /// <c>other</c>, and the points in <c>other</c> not in this
+        /// <see cref="Geometry{TCoordinate}"/>. This method returns the closure of the resultant
+        /// <see cref="Geometry{TCoordinate}"/>.
+        /// </summary>
+        /// <param name="other">The <see cref="Geometry{TCoordinate}"/> with which to compute the symmetric difference.</param>
+        /// <returns>The point set symmetric difference of this <see cref="Geometry{TCoordinate}"/> with <c>other</c>.</returns>
+        public IGeometry<TCoordinate> SymmetricDifference(IGeometry<TCoordinate> other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            // special case: if either input is empty ==> other input
+            if (IsEmpty) return other.Clone();
+            if (other.IsEmpty) return Clone();
+
+            CheckNotNonEmptyGeometryCollection(this);
+            CheckNotNonEmptyGeometryCollection(other);
+
+            return SnapIfNeededOverlayOp<TCoordinate>.Overlay(this, other, SpatialFunctions.SymDifference);
+        }
+
+        /// <summary>
+        /// Returns the smallest convex <see cref="Polygon{TCoordinate}" /> that contains all the
+        /// points in the <see cref="Geometry{TCoordinate}"/>. This obviously applies only to <see cref="Geometry{TCoordinate}"/>
+        /// s which contain 3 or more points.
+        /// </summary>
+        /// <returns>the minimum-area convex polygon containing this <see cref="Geometry{TCoordinate}"/>'s points.</returns>
+        public virtual IGeometry<TCoordinate> ConvexHull()
+        {
+            return (new ConvexHull<TCoordinate>(this)).GetConvexHull();
+        }
+
+        public Boolean Contains(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            if (!ExtentsInternal.Contains(g.Extents))
+            {
+                return false;
             }
 
-            if (i.MoveNext())             
-                return 1;            
+            // optimizations for rectangle arguments
+            if (IsRectangle)
+            {
+                return RectangleContains<TCoordinate>.Contains(this as IPolygon<TCoordinate>, g);
+            }
 
-            if (j.MoveNext())             
-                return -1;            
-
-            return 0;
+            // general case
+            return Relate(g).IsContains();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        protected bool Equal(ICoordinate a, ICoordinate b, double tolerance) 
+        public Boolean Contains(IGeometry<TCoordinate> g, Tolerance tolerance)
         {
-            if (tolerance == 0)             
-                return a.Equals(b);             
+            if (g == null) throw new ArgumentNullException("g");
 
-            return a.Distance(b) <= tolerance;
+            throw new NotImplementedException();
         }
 
-        /// <summary>
-        /// 
+        public Boolean CoveredBy(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return g.Covers(this);
+        }
+
+        public Boolean CoveredBy(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return g.Covers(this, tolerance);
+        }
+
+        public Boolean Covers(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            if (!ExtentsInternal.Contains(g.Extents))
+            {
+                return false;
+            }
+
+            // optimization for rectangle arguments
+            if (IsRectangle)
+            {
+                return ExtentsInternal.Contains(g.Extents);
+            }
+
+            return Relate(g).IsCovers();
+        }
+
+        public Boolean Covers(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        public Boolean Crosses(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            return ExtentsInternal.Intersects(g.Extents) &&
+                   Relate(g).IsCrosses(Dimension, g.Dimension);
+        }
+
+        public Boolean Crosses(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        public Boolean Disjoint(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            if (!ExtentsInternal.Intersects(g.Extents))
+            {
+                return true;
+            }
+
+            return Relate(g).IsDisjoint();
+        }
+
+        public Boolean Disjoint(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+            throw new NotImplementedException();
+        }
+
+        public abstract Boolean Equals(IGeometry<TCoordinate> g, Tolerance tolerance);
+
+        public Boolean EqualsExact(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+            return EqualsExact(g, Tolerance.Zero);
+        }
+
+        public abstract Boolean EqualsExact(IGeometry<TCoordinate> g, Tolerance tolerance);
+
+        public Boolean Intersects(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            if (!ExtentsInternal.Intersects(g.Extents))
+            {
+                return false;
+            }
+
+            // optimizations for rectangle arguments
+            if (IsRectangle)
+            {
+                return RectangleIntersects<TCoordinate>.Intersects(this as IPolygon<TCoordinate>, g);
+            }
+
+            if (g.IsRectangle)
+            {
+                return RectangleIntersects<TCoordinate>.Intersects(g as IPolygon<TCoordinate>, this);
+            }
+
+            return Relate(g).IsIntersects();
+        }
+
+        public Boolean Intersects(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+            throw new NotImplementedException();
+        }
+
+        public Boolean IsWithinDistance(IGeometry<TCoordinate> g, Double distance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+            return IsWithinDistance(g, distance, Tolerance.Global);
+        }
+
+        public Boolean IsWithinDistance(IGeometry<TCoordinate> g, Double distance, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            Double envDist = ExtentsInternal.Distance(g.Extents);
+
+            if (envDist > distance)
+            {
+                return false;
+            }
+
+            return DistanceOp<TCoordinate>.IsWithinDistance(this, g, distance, tolerance);
+        }
+
+        public Boolean Overlaps(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            return ExtentsInternal.Intersects(g.Extents) &&
+                   Relate(g).IsOverlaps(Dimension, g.Dimension);
+        }
+
+        public Boolean Overlaps(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        public Boolean Relate(IGeometry<TCoordinate> g, IntersectionMatrix intersectionPattern)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return Relate(g).Equals(intersectionPattern);
+        }
+
+        public Boolean Relate(IGeometry<TCoordinate> g,
+                              IntersectionMatrix intersectionPattern,
+                              Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return Relate(g).Equals(intersectionPattern);
+        }
+
+        public Boolean Relate(IGeometry<TCoordinate> g, String intersectionPattern)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return Relate(g).Matches(intersectionPattern);
+        }
+
+        public Boolean Relate(IGeometry<TCoordinate> g,
+                              String intersectionPattern,
+                              Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        public IntersectionMatrix Relate(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            CheckNotNonEmptyGeometryCollection(this);
+            CheckNotNonEmptyGeometryCollection(g);
+
+            return RelateOp<TCoordinate>.Relate(this, g);
+        }
+
+        public Boolean Touches(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            // short-circuit test
+            return ExtentsInternal.Intersects(g.Extents) &&
+                   Relate(g).IsTouches(Dimension, g.Dimension);
+        }
+
+        public Boolean Touches(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        public Boolean Within(IGeometry<TCoordinate> g)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            return g.Contains(this);
+        }
+
+        public Boolean Within(IGeometry<TCoordinate> g, Tolerance tolerance)
+        {
+            if (g == null) throw new ArgumentNullException("g");
+
+            throw new NotImplementedException();
+        }
+
+        IGeometry ISpatialOperator.Boundary
+        {
+            get { return Boundary; }
+        }
+
+        IGeometry ISpatialOperator.Buffer(Double distance)
+        {
+            return Buffer(distance);
+        }
+
+        IGeometry ISpatialOperator.Buffer(Double distance, Int32 quadrantSegments)
+        {
+            return Buffer(distance, quadrantSegments);
+        }
+
+        IGeometry ISpatialOperator.Buffer(Double distance, BufferStyle endCapStyle)
+        {
+            return Buffer(distance, endCapStyle);
+        }
+
+        IGeometry ISpatialOperator.Buffer(Double distance,
+                                          Int32 quadrantSegments,
+                                          BufferStyle endCapStyle)
+        {
+            return Buffer(distance, quadrantSegments, endCapStyle);
+        }
+
+        IGeometry ISpatialOperator.Buffer(Double distance,
+                                          BufferParameters bufferParameters )
+        {
+            return Buffer(distance, bufferParameters);
+        }
+
+        IGeometry ISpatialOperator.ConvexHull()
+        {
+            return ConvexHull();
+        }
+
+        IGeometry ISpatialOperator.Difference(IGeometry other)
+        {
+            return Difference(convertIGeometry(other));
+        }
+
+        Double ISpatialOperator.Distance(IGeometry other)
+        {
+            return Distance(convertIGeometry(other));
+        }
+
+        IGeometry ISpatialOperator.Intersection(IGeometry other)
+        {
+            return Intersection(convertIGeometry(other));
+        }
+
+        IGeometry ISpatialOperator.SymmetricDifference(IGeometry other)
+        {
+            return SymmetricDifference(convertIGeometry(other));
+        }
+
+        IGeometry ISpatialOperator.Union(IGeometry other)
+        {
+            return Union(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Contains(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Contains(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Contains(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Contains(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.CoveredBy(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return other.Covers(this);
+        }
+
+        Boolean ISpatialRelation.CoveredBy(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return other.Covers(this, tolerance);
+        }
+
+        Boolean ISpatialRelation.Covers(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Covers(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Covers(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Covers(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Crosses(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Crosses(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Crosses(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Crosses(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Disjoint(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Disjoint(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Disjoint(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Disjoint(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Equals(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Equals(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.EqualsExact(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return EqualsExact(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.EqualsExact(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return EqualsExact(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Intersects(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Intersects(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Intersects(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Intersects(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.IsWithinDistance(IGeometry other, Double distance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return IsWithinDistance(convertIGeometry(other), distance);
+        }
+
+        Boolean ISpatialRelation.IsWithinDistance(IGeometry other, Double distance, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return IsWithinDistance(convertIGeometry(other), distance, tolerance);
+        }
+
+        Boolean ISpatialRelation.Overlaps(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Overlaps(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Overlaps(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Overlaps(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Relate(IGeometry other, IntersectionMatrix intersectionPattern)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Relate(convertIGeometry(other), intersectionPattern);
+        }
+
+        Boolean ISpatialRelation.Relate(IGeometry other,
+                                        IntersectionMatrix intersectionPattern,
+                                        Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Relate(convertIGeometry(other), intersectionPattern, tolerance);
+        }
+
+        Boolean ISpatialRelation.Relate(IGeometry other, String intersectionPattern)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Relate(convertIGeometry(other), intersectionPattern);
+        }
+
+        Boolean ISpatialRelation.Relate(IGeometry other,
+                                        String intersectionPattern,
+                                        Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Relate(convertIGeometry(other), intersectionPattern, tolerance);
+        }
+
+        IntersectionMatrix ISpatialRelation.Relate(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Relate(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Touches(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Touches(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Touches(IGeometry other, Tolerance tolerance)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Touches(convertIGeometry(other), tolerance);
+        }
+
+        Boolean ISpatialRelation.Within(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            return Within(convertIGeometry(other));
+        }
+
+        Boolean ISpatialRelation.Within(IGeometry other, Tolerance tolerance)
+        {
+            return Within(convertIGeometry(other), tolerance);
+        }
+
+        IExtents<TCoordinate> IBoundable<IExtents<TCoordinate>>.Bounds
+        {
+            get { return Extents; }
+        }
+
+        public Boolean Intersects(IExtents<TCoordinate> bounds)
+        {
+            return Extents.Intersects(bounds);
+        }
+
+        ICoordinateSystem IGeometry.SpatialReference
+        {
+            get { return SpatialReference; }
+        }
+
+        #endregion
+
+        #region Protected helper members
+
+        /// <summary> 
+        /// Returns the minimum and maximum x and y values in this 
+        /// <see cref="Geometry{TCoordinate}"/>, or a null 
+        /// <see cref="Extents{TCoordinate}"/> if this 
+        /// <see cref="Geometry{TCoordinate}"/> is empty.
         /// </summary>
-        private int ClassSortIndex 
+        /// <returns>    
+        /// This <see cref="Geometry{TCoordinate}"/>s bounding box; 
+        /// if the <see cref="Geometry{TCoordinate}"/>
+        /// is empty, <c>Envelope.IsNull</c> will return <see langword="true"/>.
+        /// </returns>
+        protected Extents<TCoordinate> ExtentsInternal
         {
             get
             {
-                for (int i = 0; i < SortedClasses.Length; i++)                
-                    if (GetType().Equals(SortedClasses[i]))                                        
-                        return i;                                    
-                Assert.ShouldNeverReachHere(String.Format("Class not supported: {0}", GetType().FullName));
-                return -1;
+                if (_extents == null)
+                {
+                    _extents = ComputeExtentsInternal();
+                }
+
+                return _extents;
+            }
+            set { _extents = value; }
+        }
+
+        protected static Boolean Equal(TCoordinate a, TCoordinate b, Tolerance tolerance)
+        {
+            return tolerance == Tolerance.Zero
+                       ? a.Equals(b)
+                       : tolerance.Equal(0, a.Distance(b));
+        }
+
+        /// <summary>
+        /// Returns whether the two <see cref="Geometry{TCoordinate}"/>s are equal, 
+        /// from the point of view of the <see cref="EqualsExact"/> method. 
+        /// Called by <c>EqualsExact</c>. In general, two 
+        /// <see cref="Geometry{TCoordinate}"/> classes are considered to be
+        /// "equivalent" only if they are the same class. 
+        /// An exception is <c>LineString</c>, which is considered to be 
+        /// equivalent to its subclasses.
+        /// </summary>
+        /// <param name="other">
+        /// The <see cref="Geometry{TCoordinate}"/> with which to compare 
+        /// this <see cref="Geometry{TCoordinate}"/> for equality.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if the classes of the two 
+        /// <see cref="Geometry{TCoordinate}"/>s are considered 
+        /// to be equal by the <see cref="EqualsExact"/> method.
+        /// </returns>
+        protected virtual Boolean IsEquivalentClass(IGeometry other)
+        {
+            return GetType() == other.GetType();
+        }
+
+        /// <summary>
+        /// Throws an exception if <paramref name="g"/> 's type is 
+        /// <see cref="IGeometryCollection{TCoordinate}" /> 
+        /// (its subclasses do not trigger an exception).
+        /// </summary>
+        /// <param name="g">The <see cref="Geometry{TCoordinate}"/> to check.</param>
+        /// <exception cref="ArgumentException">
+        /// if <paramref name="g"/> is a <see cref="GeometryCollection{TCoordinate}" />, 
+        /// but not one of its subclasses.
+        /// </exception>
+        protected static void CheckNotNonEmptyGeometryCollection(IGeometry<TCoordinate> g)
+        {
+            if (isGeometryCollection(g) && !g.IsEmpty)//jd:allowing empty collections to pass 
+            {
+                throw new ArgumentException("This method does not support " +
+                                            "GeometryCollection arguments");
             }
         }
 
         /// <summary>
-        /// 
+        /// Returns the minimum and maximum x and y values in this 
+        /// <see cref="Geometry{TCoordinate}"/>, or a null <see cref="Extents{TCoordinate}"/> 
+        /// if this <see cref="Geometry{TCoordinate}"/> is empty.
         /// </summary>
-        /// <param name="coord"></param>
-        /// <param name="exemplar"></param>
-        /// <returns></returns>
-        private IPoint CreatePointFromInternalCoord(ICoordinate coord, IGeometry exemplar)
+        /// <remarks>
+        /// Unlike <see cref="Extents"/> or <see cref="ExtentsInternal"/>, this method 
+        /// calculates the <see cref="Extents{TCoordinate}"/>
+        /// each time it is called; <see cref="Extents"/> caches the result
+        /// of this method.        
+        /// </remarks>
+        /// <returns>
+        /// This <see cref="Geometry{TCoordinate}"/>s bounding box; 
+        /// if the <see cref="Geometry{TCoordinate}"/>
+        /// is empty, <see cref="Extents{TCoordinate}.IsEmpty"/> will return <see langword="true"/>.
+        /// </returns>
+        protected abstract Extents<TCoordinate> ComputeExtentsInternal();
+
+        protected static IGeometryFactory<TCoordinate> ExtractGeometryFactory(
+            IEnumerable<IGeometry<TCoordinate>> geometries)
+        {
+            foreach (IGeometry<TCoordinate> geometry in geometries)
+            {
+                if (geometry != null && geometry.Factory != null)
+                {
+                    return geometry.Factory;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns whether this <see cref="Geometry{TCoordinate}"/> is greater than, equal to,
+        /// or less than another <see cref="IGeometry{TCoordinate}"/> having the same class.
+        /// </summary>
+        /// <param name="other">
+        /// A <see cref="Geometry{TCoordinate}"/> having the same class as this 
+        /// <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// A positive number, 0, or a negative number, depending on whether
+        /// this object is greater than, equal to, or less than <c>o</c>, as
+        /// defined in "Normal Form For Geometry" in the NTS Technical
+        /// Specifications.
+        /// </returns>
+        protected internal abstract Int32 CompareToSameClass(IGeometry<TCoordinate> other);
+
+        #endregion
+
+        #region Private helper members
+
+        private static IGeometry<TCoordinate> convertIGeometry(IGeometry other)
+        {
+            return GenericInterfaceConverter<TCoordinate>.Convert(other);
+        }
+
+        /// <summary>
+        /// Returns <see langword="true"/> if <c>g</c>'s class is <see cref="GeometryCollection{TCoordinate}" />. 
+        /// (its subclasses do not trigger an exception).
+        /// </summary>
+        /// <param name="g">The <see cref="Geometry{TCoordinate}"/> to check.</param>
+        /// <exception cref="ArgumentException">
+        /// If <c>g</c> is a <see cref="GeometryCollection{TCoordinate}" />, but not one of its subclasses.
+        /// </exception>        
+        private static Boolean isGeometryCollection(IGeometry<TCoordinate> g)
+        {
+            return g is IGeometryCollection<TCoordinate> &&
+                   !(g is IMultiPoint<TCoordinate>) &&
+                   !(g is IMultiCurve<TCoordinate>) &&
+                   !(g is IMultiSurface<TCoordinate>);
+        }
+
+        private static IPoint<TCoordinate> createPointFromInternalCoord(TCoordinate coord,
+                                                                        IGeometry<TCoordinate> exemplar)
         {
             exemplar.PrecisionModel.MakePrecise(coord);
             return exemplar.Factory.CreatePoint(coord);
-        }        
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public virtual bool IsRectangle
-        {
-            get
-            {
-                // Polygon overrides to check for actual rectangle
-                return false;
-            }
         }
 
-        /* BEGIN ADDED BY MPAUL42: monoGIS team */
+        private static Int32 getClassSortIndex(IGeometry<TCoordinate> geometry)
+        {
+            for (Int32 i = 0; i < _sortedClasses.Length; i++)
+            {
+                Type interfaceType = Type.GetTypeFromHandle(_sortedClasses[i]);
+
+                if (interfaceType.IsInstanceOfType(geometry))
+                {
+                    return i;
+                }
+            }
+
+            Assert.ShouldNeverReachHere("Geometry type not supported: " + geometry.GetType());
+            return -1;
+        }
+
+        private static Boolean compareGeometryCollections(IGeometry<TCoordinate> obj1, IGeometry<TCoordinate> obj2)
+        {
+            IGeometryCollection coll1 = obj1 as IGeometryCollection;
+            IGeometryCollection coll2 = obj2 as IGeometryCollection;
+
+            if (coll1 == null || coll2 == null)
+            {
+                return false;
+            }
+
+            // Short-circuit test
+            if (coll1.Count != coll2.Count)
+            {
+                return false;
+            }
+
+            // Deep test
+            for (Int32 i = 0; i < coll1.Count; i++)
+            {
+                IGeometry geom1 = coll1[i];
+                IGeometry geom2 = coll2[i];
+
+                if (!geom1.Equals(geom2))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        #endregion
+
+        #region Deprecated
+
+        /*
+         * [codekaizen 2008-04-15]  I'm considering these harmful at the moment, given that
+         *                          .Net provides ReferenceEquals.
+         */
+        //public static Boolean operator ==(Geometry<TCoordinate> left, IGeometry<TCoordinate> right)
+        //{
+        //    return Equals(left, right);
+        //}
+
+        //public static Boolean operator !=(Geometry<TCoordinate> left, IGeometry<TCoordinate> right)
+        //{
+        //    return !(left == right);
+        //}
+
+        /*
+         * [codekaizen 2008-01-14]  replaced the following external notification methods
+         *                          with an event on ICoordinateSequence.
+         */
+        ///// <summary>
+        ///// Notifies this Geometry that its Coordinates have been changed by an external
+        ///// party (using a CoordinateFilter, for example). The Geometry will flush
+        ///// and/or update any information it has cached (such as its Envelope).
+        ///// </summary>
+        //public void GeometryChanged()
+        //{
+        //    Apply(new GeometryChangedFilter());
+        //}
+
+        ///// <summary> 
+        ///// Notifies this Geometry that its Coordinates have been changed by an external
+        ///// party. When GeometryChanged is called, this method will be called for
+        ///// this Geometry and its component Geometries.
+        ///// </summary>
+        //public void GeometryChangedAction()
+        //{
+        //    ExtentsInternal = null;
+        //}
+
+        /*
+         * [codekaizen 2008-01-14]  Removed this method due to the removal of 
+         *                          IO implementation. Use specific external IO 
+         *                          libraries to encode geometry instances.
+         */
+
+        ///// <summary>
+        ///// Returns the feature representation as GML 2.1.1 XML document.
+        ///// This XML document is based on <c>Geometry.xsd</c> schema.
+        ///// NO features or XLink are implemented here!
+        ///// </summary>        
+        //public XmlReader ToGMLFeature()
+        //{
+        //    GMLWriter writer = new GMLWriter();
+        //    return writer.Write(this);
+        //}
+
+        /*
+         * [codekaizen 2008-01-14]  replaced the following visitor pattern methods
+         *                          with enumeration / query pattern methods which 
+         *                          accept a Func<T, TResult> method.
+         */
+
+        ///// <summary>
+        ///// Performs an operation with or on this <see cref="Geometry{TCoordinate}"/>'s
+        ///// coordinates. If you are using this method to modify the point, be sure
+        ///// to call GeometryChanged() afterwards. Note that you cannot use this
+        ///// method to
+        ///// modify this Geometry if its underlying CoordinateSequence's Get method
+        ///// returns a copy of the Coordinate, rather than the actual Coordinate stored
+        ///// (if it even stores Coordinates at all).
+        ///// </summary>
+        ///// <param name="filter">The filter to apply to this <see cref="Geometry{TCoordinate}"/>'s coordinates</param>
+        //public abstract void Apply(ICoordinateFilter<TCoordinate> filter);
+
+        ///// <summary>
+        ///// Performs an operation with or on this <see cref="Geometry{TCoordinate}"/> and its
+        ///// subelement <see cref="Geometry{TCoordinate}"/>s (if any).
+        ///// Only GeometryCollections and subclasses
+        ///// have subelement Geometry's.
+        ///// </summary>
+        ///// <param name="filter">
+        ///// The filter to apply to this <see cref="Geometry{TCoordinate}"/> (and
+        ///// its children, if it is a <see cref="GeometryCollection{TCoordinate}" />).
+        ///// </param>
+        //public abstract void Apply(IGeometryFilter<TCoordinate> filter);
+
+        ///// <summary>
+        ///// Performs an operation with or on this Geometry and its
+        ///// component Geometry's. Only GeometryCollections and
+        ///// Polygons have component Geometriess; for Polygons they are the LinearRings
+        ///// of the shell and holes.
+        ///// </summary>
+        ///// <param name="filter">The filter to apply to this <see cref="Geometry{TCoordinate}"/>.</param>
+        //public abstract void Apply(IGeometryComponentFilter<TCoordinate> filter);
+
+        ///// <summary>
+        ///// Returns the first non-zero result of <c>CompareTo</c> encountered as
+        ///// the two <c>Collection</c>s are iterated over. If, by the time one of
+        ///// the iterations is complete, no non-zero result has been encountered,
+        ///// returns 0 if the other iteration is also complete. If <c>b</c>
+        ///// completes before <c>a</c>, a positive number is returned; if a
+        ///// before b, a negative number.
+        ///// </summary>
+        ///// <param name="a">A <c>Collection</c> of <c>IComparable</c>s.</param>
+        ///// <param name="b">A <c>Collection</c> of <c>IComparable</c>s.</param>
+        ///// <returns>The first non-zero <c>compareTo</c> result, if any; otherwise, zero.</returns>
+        //protected Int32 Compare(ArrayList a, ArrayList b)
+        //{
+        //    IEnumerator i = a.GetEnumerator();
+        //    IEnumerator j = b.GetEnumerator();
+
+        //    while (i.MoveNext() && j.MoveNext())
+        //    {
+        //        IComparable aElement = (IComparable)i.Current;
+        //        IComparable bElement = (IComparable)j.Current;
+        //        Int32 comparison = aElement.CompareTo(bElement);
+
+        //        if (comparison != 0)
+        //        {
+        //            return comparison;
+        //        }
+        //    }
+
+        //    if (i.MoveNext())
+        //    {
+        //        return 1;
+        //    }
+
+        //    if (j.MoveNext())
+        //    {
+        //        return -1;
+        //    }
+
+        //    return 0;
+        //}
+
+        /*
+         * [codekaizen 2008-01-14] removed when replaced visitor patterns with
+         *                         enumeration / query patterns
+         */
+        //private class GeometryChangedFilter : IGeometryComponentFilter<TCoordinate>
+        //{
+        //    public void Filter(IGeometry<TCoordinate> geom)
+        //    {
+        //        geom.GeometryChangedAction();
+        //    }
+        //}
+
+        // ============= BEGIN ADDED BY MPAUL42: monoGIS team
+
+        ///// <summary>
+        ///// A predefined <see cref="GeometryFactory{TCoordinate}" /> 
+        ///// with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModelType.Fixed" />.
+        ///// </summary>
+        ///// <seealso cref="GeometryFactory{TCoordinate}.CreateFixedPrecision"/>
+        //public static readonly IGeometryFactory<TCoordinate> DefaultFactory = GeometryFactory<TCoordinate>.Default;
+
+        // ============= END ADDED BY MPAUL42: monoGIS team
+
+        #endregion
+
+        public override Boolean Equals(Object obj)
+        {
+            IGeometry<TCoordinate> other = obj as IGeometry<TCoordinate>;
+            return Equals(other);
+        }
 
         /// <summary>
-        /// A predefined <see cref="GeometryFactory" /> with <see cref="PrecisionModel" /> <c> == </c> <see cref="PrecisionModels.Fixed" />.
+        /// Returns the Well-Known Text representation of this 
+        /// <see cref="Geometry{TCoordinate}"/>.
         /// </summary>
-        /// <seealso cref="GeometryFactory.Default" />
-        /// <seealso cref="GeometryFactory.Fixed"/>
-        public static readonly IGeometryFactory DefaultFactory = GeometryFactory.Default;
-        
-        /* END ADDED BY MPAUL42: monoGIS team */
+        /// <remarks>
+        /// For a definition of the Well-Known Text format, see the OpenGIS Simple
+        /// Features Specification.
+        /// </remarks>
+        /// <returns>
+        /// The Well-Known Text representation of this 
+        /// <see cref="Geometry{TCoordinate}"/>.
+        /// </returns>
+        public override String ToString()
+        {
+            return AsText();
+        }
 
+        public override Int32 GetHashCode()
+        {
+            Int32 result = 17;
+
+            foreach (TCoordinate coord in Coordinates)
+            {
+                result = 37 * result ^ coord.GetHashCode();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns whether this <see cref="Geometry{TCoordinate}"/> is greater than, 
+        /// equal to, or less than another <see cref="Geometry{TCoordinate}"/>. 
+        /// </summary>
+        /// <param name="other">
+        /// A <see cref="Geometry{TCoordinate}"/> with which to 
+        /// compare this <see cref="Geometry{TCoordinate}"/>.
+        /// </param>
+        /// <returns>
+        /// A positive number, 0, or a negative number, depending on whether
+        /// this object is greater than, equal to, or less than <paramref name="other"/>, 
+        /// as defined in "Normal Form For Geometry" in the NTS Technical
+        /// Specifications.
+        /// </returns>
+        /// <remarks>
+        /// If their classes are different, they are compared using the following
+        /// ordering:
+        ///     <see cref="Point{TCoordinate}"/> (lowest),
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="MultiPoint{TCoordinate}"/>,
+        ///     <see cref="LinearRing{TCoordinate}"/>,
+        ///     <see cref="MultiLineString{TCoordinate}"/>,
+        ///     <see cref="Polygon{TCoordinate}"/>,
+        ///     <see cref="MultiPolygon{TCoordinate}"/>,
+        ///     <see cref="GeometryCollection{TCoordinate}"/> (highest).
+        /// If the two <see cref="Geometry{TCoordinate}"/>s have the same class, their first
+        /// elements are compared. If those are the same, the second elements are
+        /// compared, etc.
+        /// </remarks>
+        public Int32 CompareTo(IGeometry other)
+        {
+            if (other == null) throw new ArgumentNullException("other");
+
+            IGeometry<TCoordinate> g = other as IGeometry<TCoordinate>;
+            return CompareTo(g);
+        }
+
+        #region IGeometry Members
+
+
+        IPoint IGeometry.PointOnSurface
+        {
+            get { return PointOnSurface; }
+        }
+
+        #endregion
     }
 }

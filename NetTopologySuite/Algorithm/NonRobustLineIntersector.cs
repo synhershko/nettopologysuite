@@ -1,226 +1,230 @@
 using System;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Algorithm
 {
     /// <summary> 
-    /// A non-robust version of <c>LineIntersector</c>.
+    /// A non-robust version of <see cref="LineIntersector{TCoordinate}"/>.
     /// </summary>   
-    public class NonRobustLineIntersector : LineIntersector
+    /// <typeparam name="TCoordinate">The coordinate type to use.</typeparam>
+    public class NonRobustLineIntersector<TCoordinate> : LineIntersector<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns> 
-        /// <c>true</c> if both numbers are positive or if both numbers are negative, 
-        /// <c>false</c> if both numbers are zero.
-        /// </returns>
-        public static bool IsSameSignAndNonZero(double a, double b) 
+        protected NonRobustLineIntersector(IGeometryFactory<TCoordinate> factory)
+            : base(factory)
         {
-            if (a == 0 || b == 0)             
-                return false;            
-            return (a < 0 && b < 0) || (a > 0 && b > 0);
         }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        public NonRobustLineIntersector() { }
 
         /// <summary>
-        /// 
+        /// Checks two numbers to determine if they have the same sign and are non-zero.
         /// </summary>
-        /// <param name="p"></param>
-        /// <param name="p1"></param>
-        /// <param name="p2"></param>
-        public override void ComputeIntersection(ICoordinate p, ICoordinate p1, ICoordinate p2) 
+        /// <param name="a">First number.</param>
+        /// <param name="b">Second number.</param>
+        /// <returns> 
+        /// <see langword="true"/> if both numbers are positive or if both numbers are negative, 
+        /// <see langword="false" /> if both numbers are zero.
+        /// </returns>
+        public static Boolean IsSameSignAndNonZero(Double a, Double b)
         {
-            double a1;
-            double b1;
-            double c1;
-            /*
-            *  Coefficients of line eqns.
-            */
+            return a != 0 && b != 0 &&
+                   ((a < 0 && b < 0) || (a > 0 && b > 0));
+        }
 
-            double r;
+        public override Intersection<TCoordinate> ComputeIntersection(TCoordinate p, TCoordinate p1, TCoordinate p2)
+        {
+            Pair<TCoordinate> line = new Pair<TCoordinate>(p1, p2);
             /*
-            *  'Sign' values
-            */
-
-            isProper = false;
-
-            /*
-            *  Compute a1, b1, c1, where line joining points 1 and 2
-            *  is "a1 x  +  b1 y  +  c1  =  0".
-            */
-            a1 = p2.Y - p1.Y;
-            b1 = p1.X - p2.X;
-            c1 = p2.X * p1.Y - p1.X * p2.Y;
+             *  Compute a1, b1, c1, where line joining points 1 and 2
+             *  is "a1 x  +  b1 y  +  c1  =  0".
+             */
+            Double a1 = p2[Ordinates.Y] - p1[Ordinates.Y];
+            Double b1 = p1[Ordinates.X] - p2[Ordinates.X];
+            Double c1 = p2[Ordinates.X] * p1[Ordinates.Y] - p1[Ordinates.X] * p2[Ordinates.Y];
 
             /*
-            *  Compute r3 and r4.
-            */
-            r = a1 * p.X + b1 * p.Y + c1;
+             *  Compute r3 and r4.
+             */
+            Double r = a1 * p[Ordinates.X] + b1 * p[Ordinates.Y] + c1;
 
             // if r != 0 the point does not lie on the line
-            if (r != 0) 
+            if (r != 0)
             {
-                result = DontIntersect;
-                return;
+                return new Intersection<TCoordinate>(new Pair<TCoordinate>(p, p), line);
             }
 
             // Point lies on line - check to see whether it lies in line segment.
 
-            double dist = RParameter(p1, p2, p);
+            Double dist = rParameter(line, p);
+
             if (dist < 0.0 || dist > 1.0)
             {
-                result = DontIntersect;
-                return;
+                return new Intersection<TCoordinate>(new Pair<TCoordinate>(p, p), line);
             }
 
-            isProper = true;
-            if (p.Equals(p1) || p.Equals(p2))             
+            Boolean isProper = true;
+
+            if (p.Equals(p1) || p.Equals(p2))
+            {
                 isProper = false;
-            
-            result = DoIntersect;
+            }
+
+            return new Intersection<TCoordinate>(p, new Pair<TCoordinate>(p, p), line, false, false, isProper);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p1"></param>
-        /// <param name="p2"></param>
-        /// <param name="p3"></param>
-        /// <param name="p4"></param>
-        /// <returns></returns>
-        public override int ComputeIntersect(ICoordinate p1, ICoordinate p2, ICoordinate p3, ICoordinate p4) 
+        public override Intersection<TCoordinate> ComputeIntersection(TCoordinate p, Pair<TCoordinate> line)
         {
-            double a1;
-            double b1;
-            double c1;            
+            return ComputeIntersection(p, line.First, line.Second);
+        }
 
-            double a2;            
-            double b2;            
-            double c2;
+        protected override Intersection<TCoordinate> ComputeIntersectInternal(Pair<TCoordinate> line0,
+                                                                              Pair<TCoordinate> line1)
+        {
+            Double a1;
+            Double b1;
+            Double c1;
+
+            Double a2;
+            Double b2;
+            Double c2;
             /*
             *  Coefficients of line eqns.
             */
 
-            double r1;
-            double r2;
-            double r3;
-            double r4;
+            Double r1;
+            Double r2;
+            Double r3;
+            Double r4;
             /*
             *  'Sign' values
             */
-            
-            isProper = false;
+
+            Boolean isProper;
+
+            TCoordinate p1 = line0.First;
+            TCoordinate p2 = line0.Second;
+
+            TCoordinate p3 = line1.First;
+            TCoordinate p4 = line1.Second;
 
             /*
             *  Compute a1, b1, c1, where line joining points 1 and 2
             *  is "a1 x  +  b1 y  +  c1  =  0".
             */
-            a1 = p2.Y - p1.Y;
-            b1 = p1.X - p2.X;
-            c1 = p2.X * p1.Y - p1.X * p2.Y;
+            a1 = p2[Ordinates.Y] - p1[Ordinates.Y];
+            b1 = p1[Ordinates.X] - p2[Ordinates.X];
+            c1 = p2[Ordinates.X]*p1[Ordinates.Y] - p1[Ordinates.X]*p2[Ordinates.Y];
 
             /*
             *  Compute r3 and r4.
             */
-            r3 = a1 * p3.X + b1 * p3.Y + c1;
-            r4 = a1 * p4.X + b1 * p4.Y + c1;
+            r3 = a1*p3[Ordinates.X] + b1*p3[Ordinates.Y] + c1;
+            r4 = a1*p4[Ordinates.X] + b1*p4[Ordinates.Y] + c1;
 
             /*
             *  Check signs of r3 and r4.  If both point 3 and point 4 lie on
             *  same side of line 1, the line segments do not intersect.
             */
-            if (r3 != 0 && r4 != 0 && IsSameSignAndNonZero(r3, r4))             
-                return DontIntersect;           
+            if (r3 != 0 && r4 != 0 && IsSameSignAndNonZero(r3, r4))
+            {
+                return new Intersection<TCoordinate>(line0, line1);
+            }
 
             /*
             *  Compute a2, b2, c2
             */
-            a2 = p4.Y - p3.Y;
-            b2 = p3.X - p4.X;
-            c2 = p4.X * p3.Y - p3.X * p4.Y;
+            a2 = p4[Ordinates.Y] - p3[Ordinates.Y];
+            b2 = p3[Ordinates.X] - p4[Ordinates.X];
+            c2 = p4[Ordinates.X]*p3[Ordinates.Y] - p3[Ordinates.X]*p4[Ordinates.Y];
 
             /*
             *  Compute r1 and r2
             */
-            r1 = a2 * p1.X + b2 * p1.Y + c2;
-            r2 = a2 * p2.X + b2 * p2.Y + c2;
+            r1 = a2*p1[Ordinates.X] + b2*p1[Ordinates.Y] + c2;
+            r2 = a2*p2[Ordinates.X] + b2*p2[Ordinates.Y] + c2;
 
             /*
             *  Check signs of r1 and r2.  If both point 1 and point 2 lie
             *  on same side of second line segment, the line segments do
             *  not intersect.
             */
-            if (r1 != 0 && r2 != 0 && IsSameSignAndNonZero(r1, r2)) 
-                return DontIntersect;            
+            if (r1 != 0 && r2 != 0 && IsSameSignAndNonZero(r1, r2))
+            {
+                return new Intersection<TCoordinate>(line0, line1);
+            }
 
             /*
             *  Line segments intersect: compute intersection point.
             */
-            double denom = a1 * b2 - a2 * b1;
-            if (denom == 0) 
-                return ComputeCollinearIntersection(p1, p2, p3, p4);
-            
-            double numX = b1 * c2 - b2 * c1;
-            pa.X = numX / denom;
+            Double denom = a1*b2 - a2*b1;
 
-            double numY = a2 * c1 - a1 * c2;
-            pa.Y = numY / denom;
+            if (denom == 0)
+            {
+                return computeCollinearIntersection(line0, line1);
+            }
+
+            Double x = (b1*c2 - b2*c1)/denom;
+            Double y = (a2*c1 - a1*c2)/denom;
+
+            TCoordinate intersection = CoordinateFactory.Create(x, y);
 
             // check if this is a proper intersection BEFORE truncating values,
             // to avoid spurious equality comparisons with endpoints
             isProper = true;
-            if (pa.Equals(p1) || pa.Equals(p2) || pa.Equals(p3) || pa.Equals(p4))             
-                isProper = false;            
+
+            if (intersection.Equals(p1) || intersection.Equals(p2)
+                || intersection.Equals(p3) || intersection.Equals(p4))
+            {
+                isProper = false;
+            }
 
             // truncate computed point to precision grid            
-            if (precisionModel != null) 
-                precisionModel.MakePrecise(pa);
-            
-            return DoIntersect;
+            if (PrecisionModel != null)
+            {
+                PrecisionModel.MakePrecise(intersection);
+            }
+
+            return new Intersection<TCoordinate>(intersection, line0, line1, false, false, isProper);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="p1"></param>
-        /// <param name="p2"></param>
-        /// <param name="p3"></param>
-        /// <param name="p4"></param>
-        /// <returns></returns>
-        private int ComputeCollinearIntersection(ICoordinate p1, ICoordinate p2, ICoordinate p3, ICoordinate p4) 
+        private static Intersection<TCoordinate> computeCollinearIntersection(Pair<TCoordinate> line0,
+                                                                              Pair<TCoordinate> line1)
         {
-            double r1;
-            double r2;
-            double r3;
-            double r4;
+            TCoordinate p1 = line0.First;
+            TCoordinate p2 = line0.Second;
 
-            ICoordinate q3;
-            ICoordinate q4;
-            
-            double t3;
-            double t4;
-            
+            TCoordinate p3 = line1.First;
+            TCoordinate p4 = line1.Second;
+
+            Double r1;
+            Double r2;
+            Double r3;
+            Double r4;
+
+            TCoordinate q3;
+            TCoordinate q4;
+
+            Double t3;
+            Double t4;
+
             r1 = 0;
             r2 = 1;
-            r3 = RParameter(p1, p2, p3);
-            r4 = RParameter(p1, p2, p4);
+            r3 = rParameter(line0, p3);
+            r4 = rParameter(line0, p4);
 
             // make sure p3-p4 is in same direction as p1-p2
-            if (r3 < r4) 
+            if (r3 < r4)
             {
                 q3 = p3;
                 t3 = r3;
                 q4 = p4;
                 t4 = r4;
             }
-            else 
+            else
             {
                 q3 = p4;
                 t3 = r4;
@@ -229,29 +233,41 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
             }
 
             // check for no intersection
-            if (t3 > r2 || t4 < r1) 
-                return DontIntersect;
-            
-            // check for single point intersection
-            if (q4 == p1) 
+            if (t3 > r2 || t4 < r1)
             {
-                pa.CoordinateValue = p1;
-                return DoIntersect;
+                return new Intersection<TCoordinate>(line0, line1);
             }
-            if (q3 == p2)
+
+            TCoordinate intersection0, intersection1;
+
+            // check for single point intersection
+            if (q4.Equals(p1))
             {
-                pa.CoordinateValue = p2;
-                return DoIntersect;
+                return new Intersection<TCoordinate>(p1, line0, line1, false, false, false);
+            }
+
+            if (q3.Equals(p2))
+            {
+                return new Intersection<TCoordinate>(p2, line0, line1, false, false, false);
             }
 
             // intersection MUST be a segment - compute endpoints
-            pa.CoordinateValue = p1;
-            if (t3 > r1) pa.CoordinateValue = q3;
+            intersection0 = p1;
 
-            pb.CoordinateValue = p2;
-            if (t4 < r2) pb.CoordinateValue = q4;
-            
-            return Collinear;
+            if (t3 > r1)
+            {
+                intersection0 = q3;
+            }
+
+            intersection1 = p2;
+
+            if (t4 < r2)
+            {
+                intersection1 = q4;
+            }
+
+            return new Intersection<TCoordinate>(intersection0, intersection1,
+                                                 line0, line1, false, false, false);
         }
 
         /// <summary> 
@@ -260,17 +276,25 @@ namespace GisSharpBlog.NetTopologySuite.Algorithm
         /// of the line from p1 to p2.
         /// This is equal to the 'distance' of p along p1-p2.
         /// </summary>
-        private double RParameter(ICoordinate p1, ICoordinate p2, ICoordinate p)
+        private static Double rParameter(Pair<TCoordinate> line, TCoordinate p)
         {
+            TCoordinate p1 = line.First;
+            TCoordinate p2 = line.Second;
+
             // compute maximum delta, for numerical stability
             // also handle case of p1-p2 being vertical or horizontal
-            double r;            
-            double dx = Math.Abs(p2.X - p1.X);
-            double dy = Math.Abs(p2.Y - p1.Y);
+            Double r;
+            Double dx = Math.Abs(p2[Ordinates.X] - p1[Ordinates.X]);
+            Double dy = Math.Abs(p2[Ordinates.Y] - p1[Ordinates.Y]);
 
-            if (dx > dy) 
-                 r = (p.X - p1.X) / (p2.X - p1.X);            
-            else r = (p.Y - p1.Y) / (p2.Y - p1.Y);            
+            if (dx > dy)
+            {
+                r = (p[Ordinates.X] - p1[Ordinates.X])/(p2[Ordinates.X] - p1[Ordinates.X]);
+            }
+            else
+            {
+                r = (p[Ordinates.Y] - p1[Ordinates.Y])/(p2[Ordinates.Y] - p1[Ordinates.Y]);
+            }
 
             return r;
         }

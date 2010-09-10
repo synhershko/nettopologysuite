@@ -1,6 +1,4 @@
-﻿using NetTopologySuite.Tests.Vivid.XUnit;
-
-namespace NetTopologySuite.Tests.XUnit
+namespace NetTopologySuite.Tests.Vivid.XUnit
 {
     public class TestBoundary : XUnitRunner
     {
@@ -50,7 +48,6 @@ namespace NetTopologySuite.Tests.XUnit
         }
     }
 
-
     public class TestFunctionLA : XUnitRunner
     {
         public TestFunctionLA()
@@ -66,7 +63,6 @@ namespace NetTopologySuite.Tests.XUnit
         {
         }
     }
-
 
     public class TestFunctionLL : XUnitRunner
     {
@@ -115,6 +111,7 @@ namespace NetTopologySuite.Tests.XUnit
         {
         }
     }
+
 
     public class TestInteriorPoint : XUnitRunner
     {

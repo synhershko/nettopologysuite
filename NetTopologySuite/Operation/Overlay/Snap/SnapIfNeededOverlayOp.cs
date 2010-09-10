@@ -1,78 +1,73 @@
 using System;
-using System.Diagnostics;
+using GeoAPI.Coordinates;
+using NPack.Interfaces;
 using GeoAPI.Geometries;
-using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Overlay.Snap
 {
-    /// <summary>
-    /// Performs an overlay operation using snapping and enhanced precision
-    /// to improve the robustness of the result.
-    /// This class only uses snapping
-    /// if an error is detected when running the standard JTS overlay code.
-    /// Errors detected include thrown exceptions 
-    /// (in particular, <see cref="TopologyException" />)
-    /// and invalid overlay computations.
-    /// </summary>
-    public class SnapIfNeededOverlayOp
+    public class SnapIfNeededOverlayOp<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        public static IGeometry Overlay(IGeometry g0, IGeometry g1, SpatialFunction opCode)
+        public static IGeometry<TCoordinate> Overlay(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1, SpatialFunctions opCode)
         {
-            var op = new SnapIfNeededOverlayOp(g0, g1);
+            SnapIfNeededOverlayOp<TCoordinate> op = new SnapIfNeededOverlayOp<TCoordinate>(g0, g1);
             return op.GetResultGeometry(opCode);
         }
 
-        public static IGeometry intersection(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Intersection(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Intersection);
+            return Overlay(g0, g1, SpatialFunctions.Intersection);
         }
 
-        public static IGeometry union(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Union(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Union);
+            return Overlay(g0, g1, SpatialFunctions.Union);
         }
 
-        public static IGeometry difference(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Difference(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.Difference);
+            return Overlay(g0, g1, SpatialFunctions.Difference);
         }
 
-        public static IGeometry symDifference(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> SymDifference(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            return Overlay(g0, g1, SpatialFunction.SymDifference);
+            return Overlay(g0, g1, SpatialFunctions.SymDifference);
         }
 
-        private readonly IGeometry[] geom = new IGeometry[2];
+        private IGeometry<TCoordinate>[] geom = new IGeometry<TCoordinate>[2];
 
-        public SnapIfNeededOverlayOp(IGeometry g1, IGeometry g2)
+        public SnapIfNeededOverlayOp(IGeometry<TCoordinate> g1, IGeometry<TCoordinate> g2)
         {
             geom[0] = g1;
             geom[1] = g2;
         }
 
-        public IGeometry GetResultGeometry(SpatialFunction opCode)
+        public IGeometry<TCoordinate> GetResultGeometry(SpatialFunctions opCode)
         {
-            IGeometry result = null;
-            var isSuccess = false;
+            IGeometry<TCoordinate> result = null;
+            Boolean isSuccess = false;
             try
             {
-                result = OverlayOp.Overlay(geom[0], geom[1], opCode);
-                var isValid = true;
+                result = OverlayOp<TCoordinate>.Overlay(geom[0], geom[1], opCode);
+                Boolean isValid = true;
                 // not needed if noding validation is used
                 //      boolean isValid = OverlayResultValidator.isValid(geom[0], geom[1], OverlayOp.INTERSECTION, result);
-                // if (isValid)
+                if (isValid)
                     isSuccess = true;
 
             }
             catch (Exception ex)
             {
-                // Ignore this exception, since the operation will be rerun                
-                Debug.WriteLine(ex);
+                // ignore this exception, since the operation will be rerun
+                //    	System.out.println(ex.getMessage());
+                //    	ex.printStackTrace();
             }
             if (!isSuccess)
             {
-                // This may still throw an exception - just let it go if it does
-                result = SnapOverlayOp.Overlay(geom[0], geom[1], opCode);
+                // this may still throw an exception - just let it go if it does
+                result = SnapOverlayOp<TCoordinate>.Overlay(geom[0], geom[1], opCode);
             }
             return result;
         }

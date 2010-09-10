@@ -1,4 +1,9 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
+using GeoAPI.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Simplify
 {
@@ -6,48 +11,47 @@ namespace GisSharpBlog.NetTopologySuite.Simplify
     /// Simplifies a collection of TaggedLineStrings, preserving topology
     /// (in the sense that no new intersections are introduced).
     /// </summary>
-    public class TaggedLinesSimplifier
+    public class TaggedLinesSimplifier<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+                            IComparable<TCoordinate>, IConvertible,
+                            IComputable<Double, TCoordinate>
     {
-        private LineSegmentIndex inputIndex = new LineSegmentIndex();
-        private LineSegmentIndex outputIndex = new LineSegmentIndex();
-        private double distanceTolerance = 0.0;
+        private LineSegmentIndex<TCoordinate> _inputIndex;//= new LineSegmentIndex<TCoordinate>();
+        private LineSegmentIndex<TCoordinate> _outputIndex;// = new LineSegmentIndex<TCoordinate>();
+        private Double _distanceTolerance;
 
         /// <summary>
-        /// 
-        /// </summary>
-        public TaggedLinesSimplifier() { }
-
-        /// <summary>
-        /// Gets/Sets the distance tolerance for the simplification.
+        /// Gets or sets the distance tolerance for the simplification.
         /// Points closer than this tolerance to a simplified segment may
         /// be removed.
         /// </summary>        
-        public double DistanceTolerance
+        public Double DistanceTolerance
         {
-            get
-            {
-                return distanceTolerance;
-            }
-            set
-            {
-                distanceTolerance = value;
-            }
+            get { return _distanceTolerance; }
+            set { _distanceTolerance = value; }
         }
 
         /// <summary>
-        /// Simplify a collection of <c>TaggedLineString</c>s.
+        /// Simplify a collection of <see cref="TaggedLineString{TCoordinate}"/>s.
         /// </summary>
         /// <param name="taggedLines">The collection of lines to simplify.</param>
-        public void Simplify(IList taggedLines)
+        public void Simplify(IEnumerable<TaggedLineString<TCoordinate>> taggedLines)
         {
-            for (IEnumerator i = taggedLines.GetEnumerator(); i.MoveNext(); )            
-                inputIndex.Add((TaggedLineString)i.Current);
-            for (IEnumerator i = taggedLines.GetEnumerator(); i.MoveNext(); )
+            //TaggedLineString<TCoordinate> first = Slice.GetFirst(taggedLines);
+            _inputIndex = new LineSegmentIndex<TCoordinate>(TopologyPreservingSimplifier<TCoordinate>.GeometryFactory);
+            _outputIndex = new LineSegmentIndex<TCoordinate>(TopologyPreservingSimplifier<TCoordinate>.GeometryFactory);    
+
+            foreach (TaggedLineString<TCoordinate> taggedLine in taggedLines)
             {
-                TaggedLineStringSimplifier tlss
-                              = new TaggedLineStringSimplifier(inputIndex, outputIndex);
-                tlss.DistanceTolerance = distanceTolerance;
-                tlss.Simplify((TaggedLineString)i.Current);
+                _inputIndex.Add(taggedLine);
+            }
+
+            foreach (TaggedLineString<TCoordinate> taggedLine in taggedLines)
+            {
+                TaggedLineStringSimplifier<TCoordinate> tlss
+                    = new TaggedLineStringSimplifier<TCoordinate>(_inputIndex, _outputIndex);
+                tlss.DistanceTolerance = _distanceTolerance;
+                tlss.Simplify(taggedLine);
             }
         }
     }

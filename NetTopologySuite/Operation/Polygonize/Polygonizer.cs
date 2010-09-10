@@ -1,98 +1,147 @@
-using System.Collections;
+using System;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Polygonize
 {
     /// <summary>
     /// Polygonizes a set of Geometrys which contain linework that
     /// represents the edges of a planar graph.
+    /// </summary>
+    /// <remarks>
+    /// <para>
     /// Any dimension of Geometry is handled - the constituent linework is extracted
     /// to form the edges.
+    /// </para>
+    /// <para>
     /// The edges must be correctly noded; that is, they must only meet
     /// at their endpoints.  The Polygonizer will still run on incorrectly noded input
     /// but will not form polygons from incorrected noded edges.
+    /// </para>
     /// The Polygonizer reports the follow kinds of errors:
-    /// Dangles - edges which have one or both ends which are not incident on another edge endpoint
-    /// Cut Edges - edges which are connected at both ends but which do not form part of polygon
-    /// Invalid Ring Lines - edges which form rings which are invalid
-    /// (e.g. the component lines contain a self-intersection).
-    /// </summary>
-    public class Polygonizer
+    /// <list type="table">
+    /// <item>
+    /// <term>Dangles</term>
+    /// <description>Edges which have one or both ends which are not incident on another edge endpoint.</description>
+    /// </item>
+    /// <item>
+    /// <term>Cut Edges</term>
+    /// <description>Edges which are connected at both ends but which do not form part of polygon.</description>
+    /// </item>
+    /// <item>
+    /// <term>Invalid Ring Lines</term>
+    /// <description>Edges which form rings which are invalid (e.g. the component lines contain a self-intersection).</description>
+    /// </item>
+    /// </list>
+    /// </remarks>
+    public class Polygonizer<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>, IComparable<TCoordinate>,
+            IComputable<Double, TCoordinate>, IConvertible
     {
-        /// <summary>
-        /// Add every linear element in a point into the polygonizer graph.
-        /// </summary>
-        private class LineStringAdder : IGeometryComponentFilter
-        {
-            private readonly Polygonizer container;
+        /*
+         * [codekaizen 2008-01-14]  removed during translation of visitor patterns
+         *                          to enumeration / query patterns.
+         */
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="container"></param>
-            public LineStringAdder(Polygonizer container)
-            {
-                this.container = container;
-            }
+        ///// <summary>
+        ///// Add every linear element in a point into the polygonizer graph.
+        ///// </summary>
+        //private class LineStringAdder : IGeometryComponentFilter<TCoordinate>
+        //{
+        //    private readonly Polygonizer<TCoordinate> _container = null;
 
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="g"></param>
-            public void Filter(IGeometry g) 
-            {
-                if (g is ILineString)
-					container.Add((ILineString)g);
-            }
-        }
+        //    public LineStringAdder(Polygonizer<TCoordinate> container)
+        //    {
+        //        _container = container;
+        //    }
 
-        /// <summary>
-        /// Default factory.
-        /// </summary>
-        private readonly LineStringAdder lineStringAdder;
+        //    public void Filter(IGeometry<TCoordinate> g)
+        //    {
+        //        if (g is ILineString<TCoordinate>)
+        //        {
+        //            _container.Add((ILineString<TCoordinate>)g);
+        //        }
+        //    }
+        //}
 
-        /// <summary>
-        /// 
-        /// </summary>
-        protected PolygonizeGraph graph;
+        //private readonly LineStringAdder _lineStringAdder = null;
+
+        private readonly List<EdgeRing<TCoordinate>> _holeList = new List<EdgeRing<TCoordinate>>();
+        private readonly List<ILineString<TCoordinate>> _invalidRingLines = new List<ILineString<TCoordinate>>();
+        private readonly List<IPolygon<TCoordinate>> _polyList = new List<IPolygon<TCoordinate>>();
+        private readonly List<EdgeRing<TCoordinate>> _shellList = new List<EdgeRing<TCoordinate>>();
+        private IEnumerable<ILineString<TCoordinate>> _cutEdges;
 
         /// <summary>
         /// Initialized with empty collections, in case nothing is computed
         /// </summary>
-        protected IList dangles = new ArrayList();
+        private IEnumerable<ILineString<TCoordinate>> _dangles;
+
+        private Boolean _doneComputing;
+        private PolygonizeGraph<TCoordinate> _graph;
+
+        /*
+         * [codekaizen 2008-01-14]  removed during translation of visitor patterns
+         *                          to enumeration / query patterns.
+         */
+        ///// <summary>
+        ///// Create a polygonizer with the same {GeometryFactory}
+        ///// as the input <see cref="Geometry{TCoordinate}"/>s.
+        ///// </summary>
+        //public Polygonizer()
+        //{
+        //    _lineStringAdder = new LineStringAdder(this);
+        //}
 
         /// <summary>
-        /// 
-        /// </summary>
-        protected IList cutEdges = new ArrayList();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        protected IList invalidRingLines = new ArrayList();
-
-        /// <summary>
-        /// 
-        /// </summary>
-        protected IList holeList;
-        
-        /// <summary>
-        /// 
+        /// Compute and returns the list of polygons formed by the polygonization.
         /// </summary>        
-        protected IList shellList;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        protected IList polyList;
-
-        /// <summary>
-        /// Create a polygonizer with the same {GeometryFactory}
-        /// as the input <c>Geometry</c>s.
-        /// </summary>
-        public Polygonizer() 
+        public IList<IPolygon<TCoordinate>> Polygons
         {
-            lineStringAdder = new LineStringAdder(this);
+            get
+            {
+                polygonize();
+                return _polyList;
+            }
+        }
+
+        /// <summary> 
+        /// Compute and returns the list of dangling lines found during polygonization.
+        /// </summary>
+        public IEnumerable<ILineString<TCoordinate>> Dangles
+        {
+            get
+            {
+                polygonize();
+                return _dangles;
+            }
+        }
+
+        /// <summary>
+        /// Compute and returns the list of cut edges found during polygonization.
+        /// </summary>
+        public IEnumerable<ILineString<TCoordinate>> CutEdges
+        {
+            get
+            {
+                polygonize();
+                return _cutEdges;
+            }
+        }
+
+        /// <summary>
+        /// Compute and returns the list of lines forming invalid rings found during polygonization.
+        /// </summary>
+        public IEnumerable<ILineString<TCoordinate>> InvalidRingLines
+        {
+            get
+            {
+                polygonize();
+                return _invalidRingLines;
+            }
         }
 
         /// <summary>
@@ -101,12 +150,11 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Polygonize
         /// Any dimension of Geometry may be added;
         /// the constituent linework will be extracted and used.
         /// </summary>
-        /// <param name="geomList">A list of <c>Geometry</c>s with linework to be polygonized.</param>
-        public void Add(IList geomList)
+        /// <param name="geomList">A list of <see cref="Geometry{TCoordinate}"/>s with linework to be polygonized.</param>
+        public void Add(IEnumerable<IGeometry<TCoordinate>> geomList)
         {
-            for (var i = geomList.GetEnumerator(); i.MoveNext(); ) 
+            foreach (IGeometry<TCoordinate> geometry in geomList)
             {
-				var geometry = (IGeometry)i.Current;
                 Add(geometry);
             }
         }
@@ -117,133 +165,134 @@ namespace GisSharpBlog.NetTopologySuite.Operation.Polygonize
         /// Any dimension of Geometry may be added;
         /// the constituent linework will be extracted and used
         /// </summary>
-        /// <param name="g">A <c>Geometry</c> with linework to be polygonized.</param>
-		public void Add(IGeometry g)
+        /// <param name="g">
+        /// A <see cref="Geometry{TCoordinate}"/> with linework to be polygonized.
+        /// </param>
+        public void Add(IGeometry<TCoordinate> g)
         {
-            g.Apply(lineStringAdder);
+            if (g == null)
+            {
+                throw new ArgumentNullException("g");
+            }
+
+            if (g is IHasGeometryComponents<TCoordinate>)
+            {
+                IHasGeometryComponents<TCoordinate> container
+                    = g as IHasGeometryComponents<TCoordinate>;
+
+                foreach (ILineString<TCoordinate> s in container.Components)
+                {
+                    if (s != null)
+                    {
+                        addLine(s);
+                    }
+                }
+            }
+            else if (g is ILineString<TCoordinate>)
+            {
+                addLine(g as ILineString<TCoordinate>);
+            }
         }
 
         /// <summary>
         /// Add a linestring to the graph of polygon edges.
         /// </summary>
         /// <param name="line">The <c>LineString</c> to add.</param>
-        private void Add(ILineString line)
+        private void addLine(ILineString<TCoordinate> line)
         {
             // create a new graph using the factory from the input Geometry
-            if (graph == null)
-				graph = new PolygonizeGraph(line.Factory);
-            graph.AddEdge(line);
-        }
-
-        /// <summary>
-        /// Compute and returns the list of polygons formed by the polygonization.
-        /// </summary>        
-        public IList GetPolygons()
-        {
-            Polygonize();
-            return polyList;
-        }
-
-        /// <summary> 
-        /// Compute and returns the list of dangling lines found during polygonization.
-        /// </summary>
-        public IList GetDangles()
-        {
-            Polygonize();
-            return dangles;
-        }
-
-        /// <summary>
-        /// Compute and returns the list of cut edges found during polygonization.
-        /// </summary>
-        public IList GetCutEdges()
-        {
-            Polygonize();
-            return cutEdges;
-        }
-
-        /// <summary>
-        /// Compute and returns the list of lines forming invalid rings found during polygonization.
-        /// </summary>
-        public IList GetInvalidRingLines()
-        {
-            Polygonize();
-            return invalidRingLines;
+            if (_graph == null)
+            {
+                _graph = new PolygonizeGraph<TCoordinate>(line.Factory);
+            }
+            _graph.AddEdge(line);
         }
 
         /// <summary>
         /// Perform the polygonization, if it has not already been carried out.
         /// </summary>
-        private void Polygonize()
+        private void polygonize()
         {
             // check if already computed
-            if (polyList != null) 
+            if (_doneComputing)
+            {
                 return;
-
-            polyList = new ArrayList();
+            }
 
             // if no geometries were supplied it's possible graph could be null
-            if (graph == null) 
+            if (_graph == null)
+            {
                 return;
+            }
 
-            dangles = graph.DeleteDangles();
-            cutEdges = graph.DeleteCutEdges();
-            var edgeRingList = graph.GetEdgeRings();
+            _dangles = _graph.DeleteDangles();
+            _cutEdges = _graph.DeleteCutEdges();
+            IEnumerable<EdgeRing<TCoordinate>> edgeRingList = _graph.GetEdgeRings();
 
-            IList validEdgeRingList = new ArrayList();
-            invalidRingLines = new ArrayList();
-            FindValidRings(edgeRingList, validEdgeRingList, invalidRingLines);
+            List<EdgeRing<TCoordinate>> validEdgeRingList = new List<EdgeRing<TCoordinate>>();
+            findValidRings(edgeRingList, validEdgeRingList, _invalidRingLines);
 
-            FindShellsAndHoles(validEdgeRingList);
-            AssignHolesToShells(holeList, shellList);
+            findShellsAndHoles(validEdgeRingList);
+            assignHolesToShells(_holeList, _shellList);
 
-            polyList = new ArrayList();
-            for (var i = shellList.GetEnumerator(); i.MoveNext(); ) 
+            foreach (EdgeRing<TCoordinate> ring in _shellList)
             {
-                var er = (EdgeRing) i.Current;
-                polyList.Add(er.Polygon);
+                _polyList.Add(ring.Polygon);
+            }
+
+            _doneComputing = true;
+        }
+
+        // in Ruby: valid, invalid = edgeRingList.partition{|ring| ring.IsValid?}
+        private static void findValidRings(IEnumerable<EdgeRing<TCoordinate>> edgeRingList,
+                                           ICollection<EdgeRing<TCoordinate>> validEdgeRingList,
+                                           ICollection<ILineString<TCoordinate>> invalidRingList)
+        {
+            foreach (EdgeRing<TCoordinate> ring in edgeRingList)
+            {
+                if (ring.IsValid)
+                {
+                    validEdgeRingList.Add(ring);
+                }
+                else
+                {
+                    invalidRingList.Add(ring.LineString);
+                }
             }
         }
 
-        private static void FindValidRings(IList edgeRingList, IList validEdgeRingList, IList invalidRingList)
+        private void findShellsAndHoles(IEnumerable<EdgeRing<TCoordinate>> edgeRingList)
         {
-            for (var i = edgeRingList.GetEnumerator(); i.MoveNext(); ) 
+            foreach (EdgeRing<TCoordinate> ring in edgeRingList)
             {
-                var er = (EdgeRing) i.Current;
-                if (er.IsValid)
-                     validEdgeRingList.Add(er);
-                else invalidRingList.Add(er.LineString);
+                if (ring.IsHole)
+                {
+                    _holeList.Add(ring);
+                }
+                else
+                {
+                    _shellList.Add(ring);
+                }
             }
         }
 
-        private void FindShellsAndHoles(IList edgeRingList)
+        private static void assignHolesToShells(IEnumerable<EdgeRing<TCoordinate>> holeList,
+                                                IEnumerable<EdgeRing<TCoordinate>> shellList)
         {
-            holeList = new ArrayList();
-            shellList = new ArrayList();
-            for (var i = edgeRingList.GetEnumerator(); i.MoveNext(); ) 
+            foreach (EdgeRing<TCoordinate> hole in holeList)
             {
-                var er = (EdgeRing) i.Current;
-                if (er.IsHole)
-                     holeList.Add(er);
-                else shellList.Add(er);
-
+                AssignHoleToShell(hole, shellList);
             }
         }
 
-        private static void AssignHolesToShells(IList holeList, IList shellList)
+        private static void AssignHoleToShell(EdgeRing<TCoordinate> holeER, IEnumerable<EdgeRing<TCoordinate>> shellList)
         {
-            for (var i = holeList.GetEnumerator(); i.MoveNext(); ) 
-            {
-                var holeER = (EdgeRing) i.Current;
-                AssignHoleToShell(holeER, shellList);
-            }
-        }
+            EdgeRing<TCoordinate> shell = EdgeRing<TCoordinate>.FindEdgeRingContaining(holeER, shellList);
 
-        private static void AssignHoleToShell(EdgeRing holeER, IList shellList)
-        {
-            var shell = EdgeRing.FindEdgeRingContaining(holeER, shellList);
             if (shell != null)
+            {
                 shell.AddHole(holeER.Ring);
+            }
         }
     }
 }

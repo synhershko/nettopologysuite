@@ -1,101 +1,93 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.Diagnostics;
+using GisSharpBlog.NetTopologySuite;
+using NPack.Interfaces;
 
-namespace Open.Topology.TestRunner
+namespace GisSharpBlog.NetTopologySuite
 {
-	/// <summary>
-	/// Summary description for XmlTestCollection.
-	/// </summary>
-	public class XmlTestCollection : CollectionBase
-	{
+    /// <summary>
+    /// Summary description for XmlTestCollection.
+    /// </summary>
+    public class XmlTestCollection<TCoordinate> : List<XmlTest<TCoordinate>>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
+    {
         #region Private Members
 
-        private string m_strCollectionName;
-        
+        private String m_strCollectionName;
+
         #endregion
 
         #region Events
 
-        public event XmlTextEventHandler TestEvent;
-       
+        public event XmlTextEventHandler<TCoordinate> TestEvent;
+
         #endregion
 
         #region Constructors and Destructors
-		
-        public XmlTestCollection() : base()
-		{
+
+        public XmlTestCollection()
+        {
             m_strCollectionName = String.Empty;
-		}
+        }
 
         #endregion
 
         #region Public Properties
-        
-        public XmlTest this[int index]  
+
+        //public XmlTest<TCoordinate> this[Int32 index]
+        //{
+        //    get { return (XmlTest<TCoordinate>)List[index]; }
+
+        //    set { List[index] = value; }
+        //}
+
+        public String Name
         {
-            get  
-            {
-                return (XmlTest)List[index];
-            }
+            get { return m_strCollectionName; }
 
-            set  
-            {
-                List[index] = value;
-            }
-        }
-
-        public string Name
-        {
-            get
-            {
-                return m_strCollectionName;
-            }
-
-            set
-            {
-                m_strCollectionName = value;
-            }
+            set { m_strCollectionName = value; }
         }
 
         #endregion
 
         #region Public Methods
 
-        public int Add(XmlTest value)  
-        {
-            return List.Add(value);
-        }
+        //public Int32 Add(XmlTest<TCoordinate> value)
+        //{
+        //    return List.Add(value);
+        //}
 
-        public int IndexOf(XmlTest value)  
-        {
-            return List.IndexOf(value);
-        }
+        //public Int32 IndexOf(XmlTest<TCoordinate> value)
+        //{
+        //    return List.IndexOf(value);
+        //}
 
-        public void Insert(int index, XmlTest value)  
-        {
-            List.Insert(index, value);
-        }
+        //public void Insert(Int32 index, XmlTest<TCoordinate> value)
+        //{
+        //    List.Insert(index, value);
+        //}
 
-        public void Remove(XmlTest value)  
-        {
-            List.Remove(value);
-        }
+        //public void Remove(XmlTest<TCoordinate> value)
+        //{
+        //    List.Remove(value);
+        //}
 
-        public bool RunTests()
+        public Boolean RunTests()
         {
-            if (List.Count > 0)
+            if (Count > 0)
             {
-                for (int i = 0; i < List.Count; i++)
+                for (Int32 i = 0; i < Count; i++)
                 {
-                    XmlTest testItem = (XmlTest) List[i];
+                    XmlTest<TCoordinate> testItem = this[i];
 
                     if (testItem != null)
                     {
-                        XmlTestEventArgs args = 
-                            new XmlTestEventArgs(i, testItem.Run(), testItem);
-
-                        if (TestEvent != null)
-                            TestEvent(this, args);
+                        RunTest(i);
                     }
                 }
 
@@ -105,6 +97,30 @@ namespace Open.Topology.TestRunner
             return false;
         }
 
-        #endregion 
-	}
+        public bool RunTest(int index)
+        {
+            if (Count > index)
+            {
+                XmlTest<TCoordinate> testItem = this[index];
+
+                if (testItem != null)
+                {
+                    Boolean succeeded = testItem.Run();
+
+
+                    XmlTestEventArgs<TCoordinate> args = new XmlTestEventArgs<TCoordinate>(index, succeeded, testItem);
+
+                    if (TestEvent != null)
+                    {
+                        TestEvent(this, args);
+                    }
+
+                    return succeeded;
+                }
+            }
+            return false;
+        }
+
+        #endregion
+    }
 }

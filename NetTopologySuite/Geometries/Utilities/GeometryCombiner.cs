@@ -1,83 +1,91 @@
+using System;
 using System.Collections.Generic;
+using GeoAPI.Coordinates;
+using GeoAPI.DataStructures;
 using GeoAPI.Geometries;
+using NPack.Interfaces;
+//using GeoAPI.
 
 namespace GisSharpBlog.NetTopologySuite.Geometries.Utilities
 {
-    public class GeometryCombiner
+    public class GeometryCombiner<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
-        public static IGeometry Combine(ICollection<IGeometry> geoms)
+        private const bool _skipEmpty = false;
+        private readonly IGeometryFactory<TCoordinate> _geomFactory;
+        private readonly IEnumerable<IGeometry<TCoordinate>> _inputGeoms;
+
+        public GeometryCombiner(IEnumerable<IGeometry<TCoordinate>> geoms)
         {
-            var combiner = new GeometryCombiner(geoms);
+            _geomFactory = ExtractFactory(geoms);
+            _inputGeoms = geoms;
+        }
+
+        public static IGeometry<TCoordinate> Combine(IEnumerable<IGeometry<TCoordinate>> geoms)
+        {
+            GeometryCombiner<TCoordinate> combiner = new GeometryCombiner<TCoordinate>(geoms);
             return combiner.Combine();
         }
 
-        public static IGeometry Combine(IGeometry g0, IGeometry g1)
+        public static IGeometry<TCoordinate> Combine(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
         {
-            var combiner = new GeometryCombiner(CreateList(g0, g1));
+            GeometryCombiner<TCoordinate> combiner = new GeometryCombiner<TCoordinate>(CreateList(g0, g1));
             return combiner.Combine();
         }
 
-        public static IGeometry Combine(IGeometry g0, IGeometry g1, IGeometry g2)
+        public static IGeometry<TCoordinate> Combine(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1,
+                                                     IGeometry<TCoordinate> g2)
         {
-            var combiner = new GeometryCombiner(CreateList(g0, g1, g2));
+            GeometryCombiner<TCoordinate> combiner = new GeometryCombiner<TCoordinate>(CreateList(g0, g1, g2));
             return combiner.Combine();
         }
 
-        private static List<IGeometry> CreateList(IGeometry obj0, IGeometry obj1)
+        private static IList<IGeometry<TCoordinate>> CreateList(IGeometry<TCoordinate> obj0, IGeometry<TCoordinate> obj1)
         {
-            return new List<IGeometry> {obj0, obj1};
+            return new List<IGeometry<TCoordinate>> {obj0, obj1};
         }
 
-        private static List<IGeometry> CreateList(IGeometry obj0, IGeometry obj1, IGeometry obj2)
+        private static IList<IGeometry<TCoordinate>> CreateList(IGeometry<TCoordinate> obj0, IGeometry<TCoordinate> obj1,
+                                                                IGeometry<TCoordinate> obj2)
         {
-            return new List<IGeometry> {obj0, obj1, obj2};
+            return new List<IGeometry<TCoordinate>> {obj0, obj1, obj2};
         }
 
-        private readonly IGeometryFactory geomFactory;
-        private const bool skipEmpty = false;
-        private readonly ICollection<IGeometry> inputGeoms;
-
-        public GeometryCombiner(ICollection<IGeometry> geoms)
+        public static IGeometryFactory<TCoordinate> ExtractFactory(IEnumerable<IGeometry<TCoordinate>> geoms)
         {
-            geomFactory = ExtractFactory(geoms);
-            inputGeoms = geoms;
+            IGeometry<TCoordinate> geom = Slice.GetFirst(geoms);
+            return geom.Factory;
         }
 
-       public static IGeometryFactory ExtractFactory(ICollection<IGeometry> geoms)
+        public IGeometry<TCoordinate> Combine()
         {
-            if (geoms.Count == 0)
-                return null;
+            List<IGeometry<TCoordinate>> elems = new List<IGeometry<TCoordinate>>();
+            foreach (IGeometry<TCoordinate> geom in _inputGeoms)
+                elems.AddRange(ExtractElements(geom));
 
-            var geomenumerator = geoms.GetEnumerator();
-            geomenumerator.MoveNext();
-
-            return geomenumerator.Current.Factory;
+            if (!Slice.CountGreaterThan(_inputGeoms, 0))
+                return _geomFactory != null ? _geomFactory.CreateGeometryCollection(null) : null;
+            return _geomFactory.BuildGeometry(elems);
         }
 
-        public IGeometry Combine()
-        {
-            var elems = new List<IGeometry>();
-            foreach (var geom in inputGeoms)
-                ExtractElements(geom, elems);
-
-            if (elems.Count == 0)
-                return geomFactory != null ? geomFactory.CreateGeometryCollection(null) : null;
-            return geomFactory.BuildGeometry(elems);
-        }
-
-        private static void ExtractElements(IGeometry geom, ICollection<IGeometry> elems)
+        private static IEnumerable<IGeometry<TCoordinate>> ExtractElements(IGeometry<TCoordinate> geom)
         {
             if (geom == null)
-                return;
+                yield break;
 
-            for (var i = 0; i < geom.NumGeometries; i++)
-            {
-                var elemGeom = geom.GetGeometryN(i);
-                if (skipEmpty && elemGeom.IsEmpty)
-                    continue;
-                elems.Add(elemGeom);
-            }
+            IGeometryCollection<TCoordinate> geomcoll = geom as IGeometryCollection<TCoordinate>;
+
+            if (geomcoll == null)
+                yield return geom;
+            else
+                foreach (IGeometry<TCoordinate> elemGeom in geomcoll)
+                {
+                    if (_skipEmpty && elemGeom.IsEmpty)
+                        continue;
+                    yield return elemGeom;
+                }
         }
-
     }
 }

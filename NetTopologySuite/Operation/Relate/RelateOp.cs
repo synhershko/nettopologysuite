@@ -1,46 +1,68 @@
+using System;
+using GeoAPI.Coordinates;
 using GeoAPI.Geometries;
+using GisSharpBlog.NetTopologySuite.Algorithm;
+using GisSharpBlog.NetTopologySuite.Geometries;
+using NPack.Interfaces;
 
 namespace GisSharpBlog.NetTopologySuite.Operation.Relate
 {
     /// <summary>
-    /// Implements the <c>Relate()</c> operation on <c>Geometry</c>s.
+    /// Implements the <see cref="Geometry{TCoordinate}.Relate"/> operations
+    /// on <see cref="Geometry{TCoordinate}"/>s.
     /// </summary>
-    public class RelateOp : GeometryGraphOperation
+    public class RelateOp<TCoordinate> : GeometryGraphOperation<TCoordinate>
+        where TCoordinate : ICoordinate<TCoordinate>, IEquatable<TCoordinate>,
+            IComparable<TCoordinate>, IConvertible,
+            IComputable<Double, TCoordinate>
     {
+        private readonly RelateComputer<TCoordinate> _relate;
+
         /// <summary>
-        /// 
+        /// Creates a new <see cref="RelateOp{TCoordinate}"/> for the given input
+        /// geometries.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        public static IntersectionMatrix Relate(IGeometry a, IGeometry b)
+        /// <param name="g0">The first geometry to relate.</param>
+        /// <param name="g1">The second geometry to relate.</param>
+        public RelateOp(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1)
+            : base(g0, g1)
         {
-            RelateOp relOp = new RelateOp(a, b);
+            _relate = new RelateComputer<TCoordinate>(Argument1, Argument2);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="RelateOp{TCoordinate}"/> for the given input
+        /// geometries.
+        /// </summary>
+        /// <param name="g0">The first geometry to relate.</param>
+        /// <param name="g1">The second geometry to relate.</param>
+        /// <param name="boundaryNodeRule"></param>
+        public RelateOp(IGeometry<TCoordinate> g0, IGeometry<TCoordinate> g1, IBoundaryNodeRule boundaryNodeRule)
+            : base(g0, g1, boundaryNodeRule)
+        {
+            _relate = new RelateComputer<TCoordinate>(Argument1, Argument2);
+        }
+
+        /// <summary>
+        /// Gets the computed intersection matrix for the input geometries.
+        /// </summary>
+        public IntersectionMatrix IntersectionMatrix
+        {
+            get { return _relate.ComputeIntersectionMatrix(); }
+        }
+
+        public static IntersectionMatrix Relate(IGeometry<TCoordinate> a, IGeometry<TCoordinate> b)
+        {
+            RelateOp<TCoordinate> relOp = new RelateOp<TCoordinate>(a, b);
             IntersectionMatrix im = relOp.IntersectionMatrix;
             return im;
         }
 
-        private RelateComputer relate = null;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="g0"></param>
-        /// <param name="g1"></param>
-        public RelateOp(IGeometry g0, IGeometry g1) : base(g0, g1)
-        {            
-            relate = new RelateComputer(arg);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public IntersectionMatrix IntersectionMatrix
+        public static IntersectionMatrix Relate(IGeometry<TCoordinate> a, IGeometry<TCoordinate> b, IBoundaryNodeRule boundaryNodeRule)
         {
-            get
-            {
-                return relate.ComputeIM();
-            }
+            RelateOp<TCoordinate> relOp = new RelateOp<TCoordinate>(a, b, boundaryNodeRule);
+            IntersectionMatrix im = relOp.IntersectionMatrix;
+            return im;
         }
     }
 }

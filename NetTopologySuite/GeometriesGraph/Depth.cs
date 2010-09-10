@@ -1,219 +1,265 @@
+using System;
 using GeoAPI.Geometries;
+using GisSharpBlog.NetTopologySuite.Geometries;
 
 namespace GisSharpBlog.NetTopologySuite.GeometriesGraph
 {
     /// <summary>
-    /// A Depth object records the topological depth of the sides
-    /// of an Edge for up to two Geometries.
+    /// A <see cref="Depth"/> records the topological depth of the sides
+    /// of an <see cref="Edge{TCoordinate}"/> for up to two 
+    /// <see cref="Geometry{TCoordinate}"/> instances.
     /// </summary>
-    public class Depth 
+    public class Depth
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        private const int Null = -1;
+        private Int32? _depth00;
+        private Int32? _depth01;
+        private Int32? _depth02;
+        private Int32? _depth10;
+        private Int32? _depth11;
+        private Int32? _depth12;
+
+        //[Obsolete("V2.0: Use indexer instead.")]
+        //public Int32? GetDepth(Int32 geometryIndex, Positions position)
+        //{
+        //    return this[geometryIndex, position];
+        //}
+
+        //[Obsolete("V2.0: Use indexer instead.")]
+        //public void SetDepth(Int32 geometryIndex, Positions position, Int32? depthValue)
+        //{
+        //    this[geometryIndex, position] = depthValue;
+        //}
 
         /// <summary>
-        /// 
+        /// Gets or sets the depth for the given <paramref name="geometryIndex"/>
+        /// at the given <paramref name="position"/>.
         /// </summary>
-        /// <param name="location"></param>
-        /// <returns></returns>
-        public static int DepthAtLocation(Locations location)
-        {
-            if (location == Locations.Exterior) 
-                return 0;
-
-            if (location == Locations.Interior) 
-                return 1;
-
-            return Null;
-        }
-
-        private int[,] depth = new int[2,3];
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public Depth() 
-        {
-            // initialize depth array to a sentinel value
-            for (int i = 0; i < 2; i++) 
-                for (int j = 0; j < 3; j++)                 
-                    depth[i,j] = Null;                
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public int GetDepth(int geomIndex, Positions posIndex)
-        {
-            return depth[geomIndex, (int)posIndex];
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <param name="depthValue"></param>
-        public void SetDepth(int geomIndex, Positions posIndex, int depthValue)
-        {
-            depth[geomIndex, (int)posIndex] = depthValue;
-        }
-
-        /// <summary>
-        /// Calls GetDepth and SetDepth.
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public int this[int geomIndex, Positions posIndex]
+        /// <param name="geometryIndex">The index of the geometry: 0 or 1.</param>
+        /// <param name="position">The position relative to the given geometry.</param>
+        /// <returns>
+        /// The depth stored for the geometry at the position, or <see langword="null"/>
+        /// if none is stored.
+        /// </returns>
+        public Int32? this[Int32 geometryIndex, Positions position]
         {
             get
             {
-                return GetDepth(geomIndex, posIndex);
+                switch (geometryIndex)
+                {
+                    case 0:
+                        switch (position)
+                        {
+                            case Positions.On:
+                                return _depth00;
+                            case Positions.Left:
+                                return _depth01;
+                            case Positions.Right:
+                                return _depth02;
+                                //case Positions.Parallel:
+                            default:
+                                return null;
+                        }
+                    case 1:
+                        switch (position)
+                        {
+                            case Positions.On:
+                                return _depth10;
+                            case Positions.Left:
+                                return _depth11;
+                            case Positions.Right:
+                                return _depth12;
+                                //case Positions.Parallel:
+                            default:
+                                return null;
+                        }
+                    default:
+                        throw new ArgumentOutOfRangeException("geometryIndex", geometryIndex,
+                                                              "Geometry index must be 0 or 1.");
+                }
             }
             set
             {
-                SetDepth(geomIndex, posIndex, value);
+                switch (geometryIndex)
+                {
+                    case 0:
+                        switch (position)
+                        {
+                            case Positions.On:
+                                _depth00 = value;
+                                break;
+                            case Positions.Left:
+                                _depth01 = value;
+                                break;
+                            case Positions.Right:
+                                _depth02 = value;
+                                break;
+                            case Positions.Parallel:
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
+                    case 1:
+                        switch (position)
+                        {
+                            case Positions.On:
+                                _depth10 = value;
+                                break;
+                            case Positions.Left:
+                                _depth11 = value;
+                                break;
+                            case Positions.Right:
+                                _depth12 = value;
+                                break;
+                            case Positions.Parallel:
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException("geometryIndex", geometryIndex,
+                                                              "Geometry index must be 0 or 1.");
+                }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public Locations GetLocation(int geomIndex, Positions posIndex)
+        public static Int32? DepthAtLocation(Locations location)
         {
-            if (depth[geomIndex, (int)posIndex] <= 0) 
-                return Locations.Exterior;
-            return Locations.Interior;
+            if (location == Locations.Exterior)
+            {
+                return 0;
+            }
+
+            if (location == Locations.Interior)
+            {
+                return 1;
+            }
+
+            return null;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <param name="location"></param>
-        public void Add(int geomIndex, Positions posIndex, Locations location)
+        public Locations GetLocation(Int32 geometryIndex, Positions position)
+        {
+            return this[geometryIndex, position] <= 0
+                       ? Locations.Exterior
+                       : Locations.Interior;
+        }
+
+        public void Add(Int32 geometryIndex, Positions position, Locations location)
         {
             if (location == Locations.Interior)
-                depth[geomIndex, (int)posIndex]++;
+            {
+                this[geometryIndex, position]++;
+            }
         }
 
         /// <summary>
         /// A Depth object is null (has never been initialized) if all depths are null.
         /// </summary>
-        public bool IsNull()
-        {                        
-                for (int i = 0; i < 2; i++)
+        public Boolean IsNull()
+        {
+            for (Int32 i = 0; i < 2; i++)
+            {
+                for (Int32 j = 0; j < 3; j++)
                 {
-                    for (int j = 0; j < 3; j++)
+                    if (this[i, (Positions) j] != null)
                     {
-                        if (depth[i,j] != Null)
-                            return false;
+                        return false;
                     }
                 }
-                return true;            
+            }
+
+            return true;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <returns></returns>
-        public bool IsNull(int geomIndex)
+        public Boolean IsNull(Int32 geometryIndex)
         {
-            return depth[geomIndex,1] == Null;
+            return this[geometryIndex, (Positions) 1] == null;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <param name="posIndex"></param>
-        /// <returns></returns>
-        public bool IsNull(int geomIndex, Positions posIndex)
+        public Boolean IsNull(Int32 geometryIndex, Positions position)
         {
-            return depth[geomIndex,(int)posIndex] == Null;
+            return this[geometryIndex, position] == null;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="lbl"></param>
-        public void Add(Label lbl)
+        public void Add(Label label)
         {
-            for (int i = 0; i < 2; i++)
+            for (Int32 i = 0; i < 2; i++)
             {
-                for (int j = 1; j < 3; j++)
+                for (Int32 j = 1; j < 3; j++)
                 {
-                    Locations loc = lbl.GetLocation(i, (Positions)j);
+                    Locations loc = label[i, (Positions) j];
+
                     if (loc == Locations.Exterior || loc == Locations.Interior)
                     {
                         // initialize depth if it is null, otherwise add this location value
-                        if (IsNull(i, (Positions)j))
-                             depth[i,j]  = DepthAtLocation(loc);
-                        else depth[i,j] += DepthAtLocation(loc);
+                        if (IsNull(i, (Positions) j))
+                        {
+                            this[i, (Positions) j] = DepthAtLocation(loc);
+                        }
+                        else
+                        {
+                            this[i, (Positions) j] += DepthAtLocation(loc);
+                        }
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="geomIndex"></param>
-        /// <returns></returns>
-        public int GetDelta(int geomIndex)
+        public Int32? GetDelta(Int32 geometryIndex)
         {
-            return depth[geomIndex, (int)Positions.Right] - depth[geomIndex, (int)Positions.Left];
+            return this[geometryIndex, Positions.Right]
+                   - this[geometryIndex, Positions.Left];
         }
 
         /// <summary>
         /// Normalize the depths for each point, if they are non-null.
+        /// </summary>
+        /// <remarks>
         /// A normalized depth
         /// has depth values in the set { 0, 1 }.
         /// Normalizing the depths
         /// involves reducing the depths by the same amount so that at least
         /// one of them is 0.  If the remaining value is > 0, it is set to 1.
-        /// </summary>
+        /// </remarks>
         public void Normalize()
         {
-            for (int i = 0; i < 2; i++) 
+            for (Int32 i = 0; i < 2; i++)
             {
-                if (! IsNull(i)) 
+                if (!IsNull(i))
                 {
-                    int minDepth = depth[i,1];
-                    if (depth[i,2] < minDepth)
-                    minDepth = depth[i,2];
+                    Int32? minDepth = this[i, (Positions) 1];
 
-                    if (minDepth < 0) minDepth = 0;
-                    for (int j = 1; j < 3; j++) 
+                    if (this[i, (Positions) 2] < minDepth)
                     {
-                        int newValue = 0;
-                        if (depth[i,j] > minDepth)
+                        minDepth = this[i, (Positions) 2];
+                    }
+
+                    if (minDepth < 0)
+                    {
+                        minDepth = 0;
+                    }
+
+                    for (Int32 j = 1; j < 3; j++)
+                    {
+                        Int32 newValue = 0;
+
+                        if (this[i, (Positions) j] > minDepth)
+                        {
                             newValue = 1;
-                        depth[i,j] = newValue;
+                        }
+
+                        this[i, (Positions) j] = newValue;
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
         public override string ToString()
         {
-            return "A: " + depth[0,1] + "," + depth[0,2]
-                 +" B: " + depth[1,1] + "," + depth[1,2];
+            return "A: " + this[0, Positions.Left] + "," + this[0, Positions.Right] +
+                   " B: " + this[1, Positions.Left] + "," + this[1, Positions.Right];
         }
     }
 }
