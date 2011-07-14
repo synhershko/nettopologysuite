@@ -1,0 +1,260 @@
+using System;
+using System.Collections.Generic;
+using GeoAPI.Geometries;
+using NetTopologySuite.Algorithm;
+using NetTopologySuite.Geometries;
+using NetTopologySuite.Planargraph;
+#if SILVERLIGHT
+using ArrayList = System.Collections.Generic.List<object>;
+#endif
+
+namespace NetTopologySuite.Operation.Polygonize
+{
+    /// <summary>
+    /// Represents a ring of <c>PolygonizeDirectedEdge</c>s which form
+    /// a ring of a polygon.  The ring may be either an outer shell or a hole.
+    /// </summary>
+    public class EdgeRing
+    {
+        /// <summary>
+        /// Find the innermost enclosing shell EdgeRing containing the argument EdgeRing, if any.
+        /// The innermost enclosing ring is the <i>smallest</i> enclosing ring.
+        /// The algorithm used depends on the fact that:
+        /// ring A contains ring B iff envelope(ring A) contains envelope(ring B).
+        /// This routine is only safe to use if the chosen point of the hole
+        /// is known to be properly contained in a shell
+        /// (which is guaranteed to be the case if the hole does not touch its shell).
+        /// </summary>
+        /// <param name="shellList"></param>
+        /// <param name="testEr"></param>
+        /// <returns>Containing EdgeRing, if there is one, OR
+        /// null if no containing EdgeRing is found.</returns>
+        public static EdgeRing FindEdgeRingContaining(EdgeRing testEr, IList<EdgeRing> shellList)
+        {
+            ILinearRing teString = testEr.Ring;
+            IEnvelope testEnv = teString.EnvelopeInternal;
+
+            EdgeRing minShell = null;
+            IEnvelope minEnv = null;
+            foreach (EdgeRing tryShell in shellList)
+            {
+                ILinearRing tryRing = tryShell.Ring;
+                IEnvelope tryEnv = tryRing.EnvelopeInternal;
+                if (minShell != null)
+                    minEnv = minShell.Ring.EnvelopeInternal;
+                bool isContained = false;
+                // the hole envelope cannot equal the shell envelope
+                if (tryEnv.Equals(testEnv)) continue;
+
+                // ICoordinate testPt = PointNotInList(teString.Coordinates, tryRing.Coordinates);
+                ICoordinate testPt = CoordinateArrays.PointNotInList(teString.Coordinates, tryRing.Coordinates);
+                if (tryEnv.Contains(testEnv) && CGAlgorithms.IsPointInRing(testPt, tryRing.Coordinates))
+                    isContained = true;
+                // check if this new containing ring is smaller than the current minimum ring
+                if (isContained)
+                {
+                    if (minShell == null || minEnv.Contains(tryEnv))
+                        minShell = tryShell;
+                }
+            }
+            return minShell;
+        }
+
+        /// <summary>
+        /// Finds a point in a list of points which is not contained in another list of points.
+        /// </summary>
+        /// <param name="testPts">The <c>Coordinate</c>s to test.</param>
+        /// <param name="pts">An array of <c>Coordinate</c>s to test the input points against.</param>
+        /// <returns>A <c>Coordinate</c> from <c>testPts</c> which is not in <c>pts</c>, 
+        /// or <c>null</c>.</returns>
+        public static ICoordinate PointNotInList(ICoordinate[] testPts, ICoordinate[] pts)
+        {
+            foreach (ICoordinate testPt in testPts)
+                if (!IsInList(testPt, pts))
+                    return testPt;
+            return null;
+        }
+
+        /// <summary>
+        /// Tests whether a given point is in an array of points.
+        /// Uses a value-based test.
+        /// </summary>
+        /// <param name="pt">A <c>Coordinate</c> for the test point.</param>
+        /// <param name="pts">An array of <c>Coordinate</c>s to test,</param>
+        /// <returns><c>true</c> if the point is in the array.</returns>
+        public static bool IsInList(ICoordinate pt, ICoordinate[] pts)
+        {
+            foreach (ICoordinate p in pts)
+                if (pt.Equals(p))
+                    return true;
+            return true;
+        }
+        
+        private readonly IGeometryFactory _factory;
+        private readonly IList<DirectedEdge> _deList = new List<DirectedEdge>();
+
+        // cache the following data for efficiency
+        private ILinearRing _ring;
+
+        private ICoordinate[] _ringPts;
+        private List<ILinearRing> _holes;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="factory"></param>
+        public EdgeRing(IGeometryFactory factory)
+        {
+            _factory = factory;
+        }
+
+        /// <summary>
+        /// Adds a DirectedEdge which is known to form part of this ring.
+        /// </summary>
+        /// <param name="de">The DirectedEdge to add.</param>
+        public void Add(DirectedEdge de)
+        {
+            _deList.Add(de);
+        }
+
+        /// <summary>
+        /// Tests whether this ring is a hole.
+        /// Due to the way the edges in the polyongization graph are linked,
+        /// a ring is a hole if it is oriented counter-clockwise.
+        /// </summary>
+        /// <returns><c>true</c> if this ring is a hole.</returns>
+        public bool IsHole
+        {
+            get
+            {
+                return CGAlgorithms.IsCCW(Ring.Coordinates);
+            }
+        }
+
+        /// <summary>
+        /// Adds a hole to the polygon formed by this ring.
+        /// </summary>
+        /// <param name="hole">The LinearRing forming the hole.</param>
+        public void AddHole(ILinearRing hole)
+        {
+            if (_holes == null)
+                _holes = new List<ILinearRing>();
+            _holes.Add(hole);
+        }
+
+        /// <summary>
+        /// Computes and returns the Polygon formed by this ring and any contained holes.
+        /// </summary>
+        public IPolygon Polygon
+        {
+            get
+            {
+                ILinearRing[] holeLR = null;
+                if (_holes != null)
+                {
+                    holeLR = new ILinearRing[_holes.Count];
+                    for (int i = 0; i < _holes.Count; i++)
+                        holeLR[i] = _holes[i];                    
+                }
+                IPolygon poly = _factory.CreatePolygon(_ring, holeLR);
+                return poly;
+            }
+        }
+
+        /// <summary>
+        /// Tests if the LinearRing ring formed by this edge ring is topologically valid.
+        /// </summary>
+        public bool IsValid
+        {
+            get
+            {
+                ICoordinate[] tempcoords = Coordinates;
+                tempcoords = null;
+                if (_ringPts.Length <= 3) 
+                    return false;
+                ILinearRing tempring = Ring;
+                tempring = null;
+                return _ring.IsValid;
+            }
+        }
+
+        /// <summary>
+        /// Computes and returns the list of coordinates which are contained in this ring.
+        /// The coordinatea are computed once only and cached.
+        /// </summary>
+        private ICoordinate[] Coordinates
+        {
+            get
+            {
+                if (_ringPts == null)
+                {
+                    CoordinateList coordList = new CoordinateList();
+                    foreach (DirectedEdge de in _deList)
+                    {
+                        PolygonizeEdge edge = (PolygonizeEdge)de.Edge;
+                        AddEdge(edge.Line.Coordinates, de.EdgeDirection, coordList);
+                    }
+                    _ringPts = coordList.ToCoordinateArray();
+                }
+                return _ringPts;
+            }
+        }
+
+        /// <summary>
+        /// Gets the coordinates for this ring as a <c>LineString</c>.
+        /// Used to return the coordinates in this ring
+        /// as a valid point, when it has been detected that the ring is topologically
+        /// invalid.
+        /// </summary>        
+        public ILineString LineString
+        {
+            get
+            {
+                ICoordinate[] tempcoords = Coordinates;
+                tempcoords = null;
+                return _factory.CreateLineString(_ringPts);
+            }
+        }
+
+        /// <summary>
+        /// Returns this ring as a LinearRing, or null if an Exception occurs while
+        /// creating it (such as a topology problem). Details of problems are written to
+        /// standard output.
+        /// </summary>
+        public ILinearRing Ring
+        {
+            get
+            {
+                if (_ring != null) 
+                    return _ring;
+                ICoordinate[] tempcoords = Coordinates;
+                try
+                {
+                    _ring = _factory.CreateLinearRing(_ringPts);
+                }
+                catch (Exception) { }
+                return _ring;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="coords"></param>
+        /// <param name="isForward"></param>
+        /// <param name="coordList"></param>
+        private static void AddEdge(ICoordinate[] coords, bool isForward, CoordinateList coordList)
+        {
+            if (isForward)
+            {
+                for (int i = 0; i < coords.Length; i++)
+                    coordList.Add(coords[i], false);                
+            }
+            else
+            {
+                for (int i = coords.Length - 1; i >= 0; i--)                
+                    coordList.Add(coords[i], false);                
+            }
+        }
+    }
+}
