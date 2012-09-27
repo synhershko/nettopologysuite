@@ -78,7 +78,6 @@
     <Compile Include="Algorithm\CentroidArea.cs" />
     <Compile Include="Algorithm\CentroidLine.cs" />
     <Compile Include="Algorithm\CentroidPoint.cs" />
-    <Compile Include="Algorithm\CGAlgorithmsDD.cs" />
     <Compile Include="Algorithm\CGAlgorithms.cs" />
     <Compile Include="Algorithm\ConvexHull.cs" />
     <Compile Include="Algorithm\Distance\DistanceToPoint.cs" />
@@ -105,17 +104,10 @@
     <Compile Include="Algorithm\IPointInRing.cs" />
     <Compile Include="Algorithm\PointLocator.cs" />
     <Compile Include="Algorithm\RayCrossingCounter.cs" />
-    <Compile Include="Algorithm\RectangleLineIntersector.cs" />
     <Compile Include="Algorithm\RobustDeterminant.cs" />
     <Compile Include="Algorithm\RobustLineIntersector.cs" />
     <Compile Include="Algorithm\SimplePointInRing.cs" />
     <Compile Include="Algorithm\SIRtreePointInRing.cs" />
-    <Compile Include="CoordinateSystems\CRSBase.cs" />
-    <Compile Include="CoordinateSystems\CRSType.cs" />
-    <Compile Include="CoordinateSystems\ICRSObject.cs" />
-    <Compile Include="CoordinateSystems\LinkedCRS.cs" />
-    <Compile Include="CoordinateSystems\NamedCRS.cs" />
-    <Compile Include="Features\FeatureCollection.cs" />
     <Compile Include="Geometries\Geometry.cs" />
     <Compile Include="Geometries\GeometryComponentFilter.cs" />
     <Compile Include="Geometries\Utilities\GeometryMapper.cs" />

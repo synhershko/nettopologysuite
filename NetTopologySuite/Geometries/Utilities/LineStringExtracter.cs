@@ -14,11 +14,11 @@ namespace NetTopologySuite.Geometries.Utilities
         /// <param name="geom">The geometry from which to extract</param>
         /// <param name="lines">The list to add the extracted elements to</param>
         /// <returns>The <see cref="List{ILineString}"/></returns>
-        public static ICollection<IGeometry> GetLines(IGeometry geom, ICollection<IGeometry> lines)
+        public static IList<ILineString> GetLines(IGeometry geom, IList<ILineString> lines)
         {
             if (geom is ILineString)
             {
-                lines.Add(geom);
+                lines.Add((ILineString)geom);
             }
             else if (geom is IGeometryCollection)
             {
@@ -30,28 +30,28 @@ namespace NetTopologySuite.Geometries.Utilities
         }
 
         ///<summary>
-        /// Extracts the <see cref="ILineString"/> elements from a single <see cref="IGeometry"/> and returns them in a <see cref="ICollection{ILineString}"/>.
+        /// Extracts the <see cref="ILineString"/> elements from a single <see cref="IGeometry"/> and returns them in a <see cref="List{ILineString}"/>.
         ///</summary>
         /// <param name="geom"></param>
-        /// <returns>The <see cref="ICollection{ILineString}"/></returns>
-        public static ICollection<IGeometry> GetLines(IGeometry geom)
+        /// <returns>The <see cref="List{ILineString}"/></returns>
+        public static IList<ILineString> GetLines(IGeometry geom)
         {
-            return GetLines(geom, new List<IGeometry>());
+            return GetLines(geom, new List<ILineString>());
         }
 
-        private readonly ICollection<IGeometry> _comps;
+        private readonly IList<ILineString> _comps;
 
         ///<summary>
         /// Constructs a filter with a list in which to store the elements found.
         ///</summary>
-        public LineStringExtracter(ICollection<IGeometry> comps)
+        public LineStringExtracter(IList<ILineString> comps)
         {
             _comps = comps;
         }
 
         public void Filter(IGeometry geom)
         {
-            if (geom is ILineString) _comps.Add(geom);
+            if (geom is ILineString) _comps.Add((ILineString)geom);
         }
     }
 }

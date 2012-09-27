@@ -34,23 +34,6 @@ namespace NetTopologySuite.Tests.NUnit.Operation.Polygonize
             });
         }
 
-        public void test3()
-        {
-            DoTest(new String[]{
-        "LINESTRING (0 0, 4 0)",
-        "LINESTRING (4 0, 5 3)",
-"LINESTRING (5 3, 4 6, 6 6, 5 3)",
-"LINESTRING (5 3, 6 0)",
-"LINESTRING (6 0, 10 0, 5 10, 0 0)",
-"LINESTRING (4 0, 6 0)"
-    },
-            new String[]{
-"POLYGON ((5 3, 4 0, 0 0, 5 10, 10 0, 6 0, 5 3), (5 3, 6 6, 4 6, 5 3))",
-"POLYGON ((5 3, 4 6, 6 6, 5 3))",
-"POLYGON ((4 0, 5 3, 6 0, 4 0))"
-    });
-        }
-
         /*
                 [Test]
                 public void Test2() {
@@ -72,30 +55,28 @@ namespace NetTopologySuite.Tests.NUnit.Operation.Polygonize
 
         private void DoTest(String[] inputWKT, String[] expectedOutputWKT)
         {
-            var polygonizer = new Polygonizer();
+            Polygonizer polygonizer = new Polygonizer();
             polygonizer.Add(ToGeometries(inputWKT));
             Compare(ToGeometries(expectedOutputWKT), polygonizer.GetPolygons());
         }
 
-        private void Compare(ICollection<IGeometry> expectedGeometries,
-            ICollection<IGeometry> actualGeometries)
+        private void Compare(IList<IGeometry> expectedGeometries,
+            IList<IGeometry> actualGeometries)
         {
             Assert.AreEqual(expectedGeometries.Count, actualGeometries.Count,
-                "Geometry count - expected " + expectedGeometries.Count
-        + " but actual was " + actualGeometries.Count
-        + " in " + actualGeometries);
+                "Geometry count, " + actualGeometries);
             foreach (var expectedGeometry in expectedGeometries)
             {
                 Assert.IsTrue(Contains(actualGeometries, expectedGeometry),
-                    "Expected to find: " + expectedGeometry + " in Actual result:" + actualGeometries);
+                    "Not found: " + expectedGeometry + ", " + actualGeometries);
             }
         }
 
-        private static bool Contains(IEnumerable<IGeometry> geometries, IGeometry g)
+        private bool Contains(IList<IGeometry> geometries, IGeometry g)
         {
             foreach (var element in geometries)
             {
-                if (element.EqualsNormalized(g))
+                if (element.EqualsExact(g))
                 {
                     return true;
                 }

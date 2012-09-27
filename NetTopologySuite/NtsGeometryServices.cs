@@ -8,11 +8,11 @@ using NetTopologySuite.Geometries.Implementation;
 namespace NetTopologySuite
 {
     /// <summary>
-    /// A geometry service provider class
+    ///
     /// </summary>
     public class NtsGeometryServices : IGeometryServices
     {
-        private static volatile IGeometryServices _instance;
+        private static IGeometryServices _instance;
 
         private static readonly object LockObject1 = new object();
         private static readonly object LockObject2 = new object();
@@ -49,7 +49,6 @@ namespace NetTopologySuite
             }
         }
 
-        #region Key
         private struct GeometryFactoryKey
         {
             private readonly IPrecisionModel _precisionModel;
@@ -67,24 +66,8 @@ namespace NetTopologySuite
             {
                 return 889377 ^ _srid ^ _precisionModel.GetHashCode() ^ _factory.GetHashCode();
             }
-
-            public override bool Equals(object obj)
-            {
-                if (!(obj is GeometryFactoryKey))
-                    return false;
-                var other = (GeometryFactoryKey) obj;
-
-                if (_srid != other._srid)
-                    return false;
-                if (!_precisionModel.Equals(other._precisionModel))
-                    return false;
-
-                return _factory.Equals(other._factory);
-            }
         }
-        #endregion
 
-        private readonly object _factoriesLock = new object();
         private readonly Dictionary<GeometryFactoryKey, IGeometryFactory> _factories = new Dictionary<GeometryFactoryKey, IGeometryFactory>();
 
         /// <summary>
@@ -112,10 +95,22 @@ namespace NetTopologySuite
 
         #region Implementation of IGeometryServices
 
+        private int _defaultSRID;
+
         /// <summary>
         /// Gets the default spatial reference id
         /// </summary>
-        public int DefaultSRID { get; set; }
+        public int DefaultSRID
+        {
+            get { return _defaultSRID; }
+            set
+            {
+                if (value == _defaultSRID)
+                    return;
+
+                _defaultSRID = value;
+            }
+        }
 
         /// <summary>
         /// Gets or sets the coordiate sequence factory to use
@@ -210,14 +205,8 @@ namespace NetTopologySuite
             IGeometryFactory factory;
             if (!_factories.TryGetValue(gfkey, out factory))
             {
-                lock (_factoriesLock)
-                {
-                    if (!_factories.TryGetValue(gfkey, out factory))
-                    {
-                        factory = new GeometryFactory(precisionModel, srid, coordinateSequenceFactory);
-                        _factories.Add(gfkey, factory);
-                    }
-                }
+                factory = new GeometryFactory(precisionModel, srid, coordinateSequenceFactory);
+                _factories.Add(gfkey, factory);
             }
             return factory;
         }
@@ -303,10 +292,5 @@ namespace NetTopologySuite
         //    }
 
         //    #endregion
-
-        /// <summary>
-        /// Gets a value representing the number of geometry factories that have been stored in the cache
-        /// </summary>
-        public int NumFactories { get { lock (_factoriesLock) return _factories.Count; } }
     }
 }

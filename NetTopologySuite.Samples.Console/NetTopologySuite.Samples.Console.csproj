@@ -8,7 +8,7 @@
     <ProjectGuid>{39E8A390-5304-4447-99E2-3810941824AD}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>NetTopologySuite.Samples</RootNamespace>
+    <RootNamespace>NetTopologySuite</RootNamespace>
     <AssemblyName>NetTopologySuite.Samples.Console</AssemblyName>
     <SccProjectName>
     </SccProjectName>
@@ -61,15 +61,27 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="DotSpatial.Projections">
-      <HintPath>..\packages\DotSpatial.Projections.1.2\lib\net40-Client\DotSpatial.Projections.dll</HintPath>
-    </Reference>
     <Reference Include="nunit.framework, Version=2.5.10.11092, Culture=neutral, PublicKeyToken=96d09a1eb7f44a77, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\NUnit.2.5.10.11092\lib\nunit.framework.dll</HintPath>
     </Reference>
+    <Reference Include="nunit.mocks, Version=2.5.10.11092, Culture=neutral, PublicKeyToken=96d09a1eb7f44a77, processorArchitecture=MSIL">
+      <HintPath>..\packages\NUnit.2.5.10.11092\lib\nunit.mocks.dll</HintPath>
+    </Reference>
+    <Reference Include="pnunit.framework, Version=1.0.4109.34242, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\NUnit.2.5.10.11092\lib\pnunit.framework.dll</HintPath>
+    </Reference>
     <Reference Include="QuickGraph">
       <HintPath>..\packages\QuickGraph.3.6.61119.7\lib\net4\QuickGraph.dll</HintPath>
+    </Reference>
+    <Reference Include="QuickGraph.Data">
+      <HintPath>..\packages\QuickGraph.3.6.61119.7\lib\net4\QuickGraph.Data.dll</HintPath>
+    </Reference>
+    <Reference Include="QuickGraph.Graphviz">
+      <HintPath>..\packages\QuickGraph.3.6.61119.7\lib\net4\QuickGraph.Graphviz.dll</HintPath>
+    </Reference>
+    <Reference Include="QuickGraph.Serialization">
+      <HintPath>..\packages\QuickGraph.3.6.61119.7\lib\net4\QuickGraph.Serialization.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
@@ -92,11 +104,9 @@
     <Compile Include="Geometries\precisionmodelexample.cs" />
     <Compile Include="Geometries\simplemethodsexample.cs" />
     <Compile Include="LinearReferencing\LinearReferencingExample.cs" />
-    <Compile Include="Operation\Poligonize\SplitPolygonExample.cs" />
     <Compile Include="Tests\GeometryServicesTest.cs" />
     <Compile Include="Tests\IO\GmlTest.cs" />
     <Compile Include="Tests\IO\PostGisTest.cs" />
-    <Compile Include="Tests\IO\ShapeFileEncodingTest.cs" />
     <Compile Include="Tests\IO\ShapeFileInvalidHeaderTest.cs" />
     <Compile Include="Tests\IO\ShapeFileReadTest.cs" />
     <Compile Include="Tests\IO\ShapefileWriteTest.cs" />
@@ -107,7 +117,6 @@
     <Compile Include="Tests\Various\CascadedPolygonUnionFixture.cs" />
     <Compile Include="Tests\Various\Issue102Test.cs" />
     <Compile Include="Tests\Various\Issue103Tests.cs" />
-    <Compile Include="Tests\Various\Issue117Tests.cs" />
     <Compile Include="Tests\Various\Issue68Tests.cs" />
     <Compile Include="Tests\Various\CoversTest.cs" />
     <Compile Include="Tests\Various\DbfDateTest.cs" />
@@ -164,10 +173,6 @@
     <ProjectReference Include="..\GeoAPI\GeoAPI\GeoAPI.csproj">
       <Project>{FFB69466-79DE-466A-ADA7-5C47C5C5CA3A}</Project>
       <Name>GeoAPI</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\NetTopologySuite.CoordinateSystems.Transfromation\DotSpatial.Projections.Wrapper\DotSpatial.Projections.Wrapper.csproj">
-      <Project>{08759323-B999-405B-8688-80008A4190B0}</Project>
-      <Name>DotSpatial.Projections.Wrapper</Name>
     </ProjectReference>
     <ProjectReference Include="..\NetTopologySuite.IO\NetTopologySuite.IO.GDB\NetTopologySuite.IO.GDB.csproj">
       <Project>{548166D9-DF64-46FB-9EEC-212C7B7E7D85}</Project>

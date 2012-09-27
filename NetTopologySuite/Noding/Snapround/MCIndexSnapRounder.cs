@@ -60,7 +60,7 @@ namespace NetTopologySuite.Noding.Snapround
         {
             _nodedSegStrings = inputSegmentStrings;
             _noder = new MCIndexNoder();
-            _pointSnapper = new MCIndexPointSnapper(_noder.Index);
+            _pointSnapper = new MCIndexPointSnapper(_noder.MonotoneChains, _noder.Index);
             SnapRound(inputSegmentStrings, _li);
         }
 
@@ -111,20 +111,21 @@ namespace NetTopologySuite.Noding.Snapround
         }
 
         /// <summary>
-        /// Snaps segments to nodes created by segment intersections.
+        /// Computes nodes introduced as a result of snapping segments to snap points (hot pixels).
         /// </summary>
         /// <param name="snapPts"></param>
         private void ComputeIntersectionSnaps(IEnumerable<Coordinate> snapPts)
         {
-            foreach (var snapPt in snapPts)
+            foreach (Coordinate snapPt in snapPts)
             {
-                var hotPixel = new HotPixel(snapPt, _scaleFactor, _li);
+                HotPixel hotPixel = new HotPixel(snapPt, _scaleFactor, _li);
                 _pointSnapper.Snap(hotPixel);
             }
         }
 
         /// <summary>
-        /// Snaps segments to all vertices
+        /// Computes nodes introduced as a result of
+        /// snapping segments to vertices of other segments.
         /// </summary>
         /// <param name="edges">The list of segment strings to snap together</param>
         public void ComputeVertexSnaps(IList<ISegmentString> edges)
@@ -134,16 +135,17 @@ namespace NetTopologySuite.Noding.Snapround
         }
 
         /// <summary>
-        /// Snaps segments to the vertices of a Segment String.
+        /// Performs a brute-force comparison of every segment in each <see cref="INodableSegmentString" />.
+        /// This has n^2 performance.
         /// </summary>
         /// <param name="e"></param>
         private void ComputeVertexSnaps(INodableSegmentString e)
         {
-            var pts0 = e.Coordinates;
-            for (var i = 0; i < pts0.Length; i++)
+            Coordinate[] pts0 = e.Coordinates;
+            for (int i = 0; i < pts0.Length - 1; i++)
             {
-                var hotPixel = new HotPixel(pts0[i], _scaleFactor, _li);
-                var isNodeAdded = _pointSnapper.Snap(hotPixel, e, i);
+                HotPixel hotPixel = new HotPixel(pts0[i], _scaleFactor, _li);
+                bool isNodeAdded = _pointSnapper.Snap(hotPixel, e, i);
                 // if a node is created for a vertex, that vertex must be noded too
                 if (isNodeAdded)
                     e.AddIntersection(pts0[i], i);

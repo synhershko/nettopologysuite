@@ -1,5 +1,5 @@
-using System;
 using GeoAPI.Geometries;
+using NetTopologySuite.Geometries;
 using NetTopologySuite.Utilities;
 
 namespace NetTopologySuite.Index.Quadtree
@@ -9,7 +9,6 @@ namespace NetTopologySuite.Index.Quadtree
     /// It is centred at the origin,
     /// and does not have a defined extent.
     /// </summary>
-    [Serializable]
     public class Root<T> : NodeBase<T>
     {
         // the singleton root quad is centred at the origin.
@@ -25,7 +24,7 @@ namespace NetTopologySuite.Index.Quadtree
         /// </summary>
         public void Insert(Envelope itemEnv, T item)
         {
-            int index = GetSubnodeIndex(itemEnv, Origin.X, Origin.Y);
+            int index = GetSubnodeIndex(itemEnv, Origin);
             // if index is -1, itemEnv must cross the X or Y axis.
             if (index == -1) 
             {

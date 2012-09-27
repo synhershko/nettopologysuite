@@ -7,16 +7,11 @@ namespace NetTopologySuite.Triangulate.QuadEdge
 {
     /// <summary>
     /// Models a site (node) in a <see cref="QuadEdgeSubdivision"/>. 
-    /// The sites can be points on a line string representing a
-    /// linear site.<para/> 
+    /// The sites can be points on a lineString representing a
+    /// linear site. 
     /// The vertex can be considered as a vector with a norm, length, inner product, cross
     /// product, etc. Additionally, point relations (e.g., is a point to the left of a line, the circle
     /// defined by this point and two others, etc.) are also defined in this class.
-    /// <para/>
-    /// It is common to want to attach user-defined data to 
-    /// the vertices of a subdivision.  
-    /// One way to do this is to subclass <tt>Vertex</tt>
-    /// to carry any desired information (see <see cref="ConstraintVertex"/>.
     /// </summary>
     /// <author>David Skea</author>
     /// <author>Martin Davis</author>
@@ -343,7 +338,7 @@ namespace NetTopologySuite.Triangulate.QuadEdge
         }
 
         /// <summary>
-        /// For this vertex enclosed in a triangle defined by three vertices v0, v1 and v2, interpolate
+        /// For this vertex enclosed in a triangle defined by three verticies v0, v1 and v2, interpolate
         /// a z value from the surrounding vertices.
         /// </summary>
         public double InterpolateZValue(Vertex v0, Vertex v1, Vertex v2)
@@ -364,17 +359,8 @@ namespace NetTopologySuite.Triangulate.QuadEdge
         }
 
         /// <summary>
-        /// Interpolates the Z-value (height) of a point enclosed in a triangle
-        /// whose vertices all have Z values.
-        /// The containing triangle must not be degenerate
-        /// (in other words, the three vertices must enclose a 
-        /// non-zero area).
+        /// Interpolates the Z value of a point enclosed in a 3D triangle.
         /// </summary>
-        /// <param name="p">The point to interpolate the Z value of</param>
-        /// <param name="v0">A vertex of a triangle containing the <paramref name="p"/></param>
-        /// <param name="v1">A vertex of a triangle containing the <paramref name="p"/></param>
-        /// <param name="v2">A vertex of a triangle containing the <paramref name="p"/></param>
-        /// <returns>The interpolated Z-value (height) of the point</returns>
         public static double InterpolateZ(Coordinate p, Coordinate v0, Coordinate v1, Coordinate v2)
         {
             double x0 = v0.X;
@@ -395,10 +381,10 @@ namespace NetTopologySuite.Triangulate.QuadEdge
         /// <summary>
         /// Computes the interpolated Z-value for a point p lying on the segment p0-p1
         /// </summary>  
-        /// <param name="p">The point to interpolate the Z value of</param>
-        /// <param name="p0">A vertex of the segment <paramref name="p"/> is lying on</param>
-        /// <param name="p1">A vertex of the segment <paramref name="p"/> is lying on</param>
-        /// <returns>The interpolated Z-value (height) of the point</returns>
+        /// <param name="p" />
+        /// <param name="p0" />
+        /// <param name="p1" />
+        /// <returns />
         public static double InterpolateZ(Coordinate p, Coordinate p0, Coordinate p1)
         {
             double segLen = p0.Distance(p1);

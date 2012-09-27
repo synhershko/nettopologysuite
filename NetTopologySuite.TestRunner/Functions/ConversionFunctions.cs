@@ -6,29 +6,23 @@ namespace Open.Topology.TestRunner.Functions
 {
     public class ConversionFunctions
     {
-        public static IGeometry toGeometryCollection(IGeometry g, IGeometry g2)
-        {
-
-            var atomicGeoms = new List<IGeometry>();
-            if (g != null) addComponents(g, atomicGeoms);
-            if (g2 != null) addComponents(g2, atomicGeoms);
-            return g.Factory.CreateGeometryCollection(
-                GeometryFactory.ToGeometryArray(atomicGeoms));
-        }
-
-        private static void addComponents(IGeometry g, List<IGeometry> atomicGeoms)
+        public static IGeometry toGeometryCollection(IGeometry g)
         {
             if (!(g is IGeometryCollection))
             {
-                atomicGeoms.Add(g);
-                return;
+                return g.Factory.CreateGeometryCollection(new[] {g});
             }
 
-            foreach (var gi in (IGeometryCollection)g)
+            var atomicGeoms = new List<IGeometry>();
+            var it = new GeometryCollectionEnumerator(g as IGeometryCollection);
+            while (it.MoveNext())
             {
-                if (!(gi is IGeometryCollection))
-                    atomicGeoms.Add(gi);
+                var g2 = it.Current;
+                if (!(g2 is IGeometryCollection))
+                    atomicGeoms.Add(g2);
             }
+
+            return g.Factory.CreateGeometryCollection(GeometryFactory.ToGeometryArray(atomicGeoms));
         }
     }
 }

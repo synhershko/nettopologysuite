@@ -2,9 +2,6 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Text;
-#if SILVERLIGHT
-using NetTopologySuite.Encodings;
-#endif
 using NetTopologySuite.Utilities;
 
 namespace NetTopologySuite.IO
@@ -21,32 +18,17 @@ namespace NetTopologySuite.IO
         private bool _headerWritten;
         //private bool _recordsWritten;
         private DbaseFileHeader _header;
-        private Encoding _encoding;
 
         /// <summary>
         /// Initializes a new instance of the DbaseFileWriter class.
         /// </summary>
-        public DbaseFileWriter(string filename) :  this(filename, 
-#if !SILVERLIGHT
-            Encoding.GetEncoding(1252)
-#else
-            CP1252.Instance
-#endif
-            ) { }
-
-        /// <summary>
-        /// Initializes a new instance of the DbaseFileWriter class.
-        /// </summary>
-        public DbaseFileWriter(string filename, Encoding enc)
+        /// <param name="filename"></param>
+        public DbaseFileWriter(string filename)
         {
             if (filename == null)
                 throw new ArgumentNullException("filename");
-            if (enc == null) 
-                throw new ArgumentNullException("enc");
-
             FileStream filestream = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.Write);
-            _encoding = enc;
-            _writer = new BinaryWriter(filestream, _encoding);
+            _writer = new BinaryWriter(filestream);
         }
 
         /// <summary>
@@ -60,17 +42,6 @@ namespace NetTopologySuite.IO
             //if (_recordsWritten)
             //    throw new InvalidOperationException("Records have already been written. Header file needs to be written first.");
             _headerWritten = true;
-            
-#if !SILVERLIGHT
-            if (header.Encoding.WindowsCodePage != _encoding.WindowsCodePage)
-            {
-#else
-            if (header.Encoding.WebName != _encoding.WebName)
-            {
-#endif
-                header.Encoding = _encoding;
-            }
-
             header.WriteHeader(_writer);
             _header = header;
         }
@@ -226,20 +197,16 @@ namespace NetTopologySuite.IO
         /// <param name="length"></param>
         public void Write(string text, int length)
         {
-            // ensure string is not too big, multibyte encodings can cause more bytes to be written
-            byte[] bytes = _encoding.GetBytes(text);
-            int counter = 0;
-            foreach (char c in bytes)
-            {
-              _writer.Write(c);
-              counter++;
-              if (counter >= length)
-                break;
-            }
+            // ensure string is not too big
+            text = text.PadRight(length, ' ');
+            string dbaseString = text.Substring(0, length);
 
-            // pad the text after exact byte count is known
-            int padding = length - counter;
-            for (int i = 0; i < padding; i++)
+            // will extra chars get written??
+            foreach (char c in dbaseString)
+                _writer.Write(c);
+
+            int extraPadding = length - dbaseString.Length;
+            for (int i = 0; i < extraPadding; i++)
                 _writer.Write((byte)0x20);
         }
 

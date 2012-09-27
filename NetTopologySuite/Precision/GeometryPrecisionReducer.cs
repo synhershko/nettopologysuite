@@ -153,34 +153,24 @@ namespace NetTopologySuite.Precision
             var finalGeom = bufGeom;
             if (!_changePrecisionModel)
             {
-                // a slick way to copy the geometry with the original precision factory
-                finalGeom = geom.Factory.CreateGeometry(bufGeom);
+                var originalPrecModel = geom.Factory.PrecisionModel;
+                finalGeom = ChangePrecModel(bufGeom, originalPrecModel);
             }
             return finalGeom;
         }
 
-        /// <summary>
-        /// Duplicates a geometry to one that uses a different PrecisionModel,
-        /// without changing any coordinate values.
-        /// </summary>
-        /// <param name="geom">The geometry to duplicate</param>
-        /// <param name="pm">The precision model to use</param>
-        /// <returns>The geometry value with a new precision model</returns>
-        private static IGeometry ChangePrecModel(IGeometry geom, IPrecisionModel pm)
+        private IGeometry ChangePrecModel(IGeometry geom, IPrecisionModel pm)
         {
             var geomEditor = CreateEditor(geom.Factory, pm);
-            // this operation changes the PM for the entire geometry tree
             return geomEditor.Edit(geom, new GeometryEditor.NoOpGeometryOperation());
         }
 
-        private static GeometryEditor CreateEditor(IGeometryFactory geomFactory, IPrecisionModel newPrecModel)
+        private GeometryEditor CreateEditor(IGeometryFactory geomFactory, IPrecisionModel pm)
         {
-            // no need to change if precision model is the same
-            if (geomFactory.PrecisionModel == newPrecModel)
+            if (geomFactory.PrecisionModel == pm)
                 return new GeometryEditor();
-            
             // otherwise create a geometry editor which changes PrecisionModel
-            var newFactory = CreateFactory(geomFactory, newPrecModel);
+            var newFactory = CreateFactory(geomFactory, _targetPrecModel);
             var geomEdit = new GeometryEditor(newFactory);
             return geomEdit;
         }

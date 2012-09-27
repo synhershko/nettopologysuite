@@ -31,9 +31,9 @@ namespace NetTopologySuite.Geometries
         }
         
         /// <summary>
-        /// Creates a new sequence based on a deep copy of the given <see cref="ICoordinateSequence"/>.
+        /// 
         /// </summary>
-        /// <param name="coordSeq">The coordinate sequence that will be copied</param>
+        /// <param name="coordSeq"></param>
         public DefaultCoordinateSequence(ICoordinateSequence coordSeq)
         {
             coordinates = new Coordinate[coordSeq.Count];

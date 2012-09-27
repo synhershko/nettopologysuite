@@ -13,7 +13,7 @@ namespace NetTopologySuite.Noding
         /// <summary>
         /// 
         /// </summary>
-        public readonly Coordinate Coord;   // the point of intersection
+        public readonly Coordinate Coordinate;   // the point of intersection
         
         /// <summary>
         /// 
@@ -33,23 +33,13 @@ namespace NetTopologySuite.Noding
         /// <param name="segmentOctant"></param>
         public SegmentNode(INodableSegmentString segString, Coordinate coord, int segmentIndex, Octants segmentOctant) 
         {
-            Coord = null;
+            Coordinate = null;
             this.segString = segString;
-            Coord = new Coordinate(coord);
+            Coordinate = new Coordinate(coord);
             SegmentIndex = segmentIndex;
             _segmentOctant = segmentOctant;
             _isInterior = !coord.Equals2D(segString.Coordinates[segmentIndex]);
         }
-
-
-        /// <summary>
-        /// Gets the <see cref="GeoAPI.Geometries.Coordinate"/> giving the location of this node.
-        /// </summary>
-        public Coordinate Coordinate
-        {
-            get { return Coord; }
-        }
-  
 
         /// <summary>
         /// 
@@ -88,9 +78,9 @@ namespace NetTopologySuite.Noding
                 return -1;
             if (SegmentIndex > other.SegmentIndex) 
                 return 1;
-            if (Coord.Equals2D(other.Coord))
+            if (Coordinate.Equals2D(other.Coordinate))
                 return 0;
-            return SegmentPointComparator.Compare(_segmentOctant, Coord, other.Coord);
+            return SegmentPointComparator.Compare(_segmentOctant, Coordinate, other.Coordinate);
         }
 
         /// <summary>
@@ -99,7 +89,7 @@ namespace NetTopologySuite.Noding
         /// <param name="outstream"></param>
         public void Write(StreamWriter outstream)
         {
-            outstream.Write(Coord);
+            outstream.Write(Coordinate);
             outstream.Write(" seg # = " + SegmentIndex);
         }
     }

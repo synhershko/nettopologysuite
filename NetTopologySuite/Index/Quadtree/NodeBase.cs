@@ -1,36 +1,37 @@
-using System;
 using System.Collections.Generic;
 using GeoAPI.Geometries;
 
 namespace NetTopologySuite.Index.Quadtree
 {
+    //public abstract class NodeBase : NodeBase<object>
+    //{}
+
     /// <summary>
     /// The base class for nodes in a <c>Quadtree</c>.
     /// </summary>
-    [Serializable]
     public abstract class NodeBase<T> 
     {        
         /// <summary> 
-        /// Gets the index of the subquad that wholly contains the given envelope.
+        /// Returns the index of the subquad that wholly contains the given envelope.
         /// If none does, returns -1.
         /// </summary>
-        /// <returns>The index of the subquad that wholly contains the given envelope</returns>
-        /// <returns>-1 if no subquad wholly contains the envelope</returns>
-        public static int GetSubnodeIndex(Envelope env, double centreX, double centreY)
+        /// <param name="env"></param>
+        /// <param name="centre"></param>
+        public static int GetSubnodeIndex(Envelope env, Coordinate centre)
         {
             int subnodeIndex = -1;
-            if (env.MinX >= centreX)
+            if (env.MinX >= centre.X)
             {
-                if (env.MinY >= centreY) 
+                if (env.MinY >= centre.Y) 
                     subnodeIndex = 3;
-                if (env.MaxY <= centreY) 
+                if (env.MaxY <= centre.Y) 
                     subnodeIndex = 1;
             }
-            if (env.MaxX <= centreX)
+            if (env.MaxX <= centre.X)
             {
-                if (env.MinY >= centreY) 
+                if (env.MinY >= centre.Y) 
                     subnodeIndex = 2;
-                if (env.MaxY <= centreY) 
+                if (env.MaxY <= centre.Y) 
                     subnodeIndex = 0;
             }
             return subnodeIndex;
@@ -119,7 +120,7 @@ namespace NetTopologySuite.Index.Quadtree
 
             // if item was found lower down, don't need to search for it here
             if (found) 
-                return true;
+                return found;
 
             // otherwise, try and remove the item from the list of items in this node
             if(_items.Contains(item))

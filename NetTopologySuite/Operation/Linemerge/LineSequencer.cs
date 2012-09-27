@@ -203,14 +203,14 @@ namespace NetTopologySuite.Operation.Linemerge
                 return;
             _isRun = true;
 
-            var sequences = FindSequences();
+            IList<IEnumerable<DirectedEdge>> sequences = FindSequences();
             if (sequences == null)
                 return;
 
             _sequencedGeometry = BuildSequencedGeometry(sequences);
             _isSequenceable = true;
 
-            var finalLineCount = _sequencedGeometry.NumGeometries;
+            int finalLineCount = _sequencedGeometry.NumGeometries;
             Assert.IsTrue(_lineCount == finalLineCount, "Lines were missing from result");
             Assert.IsTrue(_sequencedGeometry is ILineString || _sequencedGeometry is IMultiLineString, "Result is not lineal");
         }
@@ -259,18 +259,17 @@ namespace NetTopologySuite.Operation.Linemerge
         {            
             GraphComponent.SetVisited(graph.GetEdgeEnumerator(), false);
 
-            var startNode = FindLowestDegreeNode(graph);
+            Node startNode = FindLowestDegreeNode(graph);
 
-            var list = startNode.OutEdges.Edges;
-            
-            var ie = list.GetEnumerator();
+            IList<DirectedEdge> list = startNode.OutEdges.Edges;
+            IEnumerator<DirectedEdge> ie = list.GetEnumerator();
             ie.MoveNext();
 
-            var startDE = ie.Current;            
-            var startDESym = startDE.Sym;
+            DirectedEdge startDE = ie.Current;            
+            DirectedEdge startDESym = startDE.Sym;
             
-            var seq = new LinkedList<DirectedEdge>();
-            var pos = AddReverseSubpath(startDESym, null, seq, false);            
+            LinkedList<DirectedEdge> seq = new LinkedList<DirectedEdge>();
+            LinkedListNode<DirectedEdge> pos = AddReverseSubpath(startDESym, null, seq, false);            
             while (pos != null)
             {
                 DirectedEdge prev = pos.Value;
@@ -381,20 +380,20 @@ namespace NetTopologySuite.Operation.Linemerge
         /// <returns>
         /// A <see cref="IList{DirectedEdge}" /> of <see cref="DirectedEdge" />s oriented appropriately.
         /// </returns>
-        private static List<DirectedEdge> Orient(LinkedList<DirectedEdge> seq)
+        private static IList<DirectedEdge> Orient(LinkedList<DirectedEdge> seq)
         {
-            var startEdge = seq.First.Value;
-            var endEdge = seq.Last.Value;
+            DirectedEdge startEdge = seq.First.Value;
+            DirectedEdge endEdge = seq.Last.Value
+                ;
+            Node startNode = startEdge.FromNode;
+            Node endNode = endEdge.ToNode;
 
-            var startNode = startEdge.FromNode;
-            var endNode = endEdge.ToNode;
-
-            var flipSeq = false;
-            var hasDegree1Node = (startNode.Degree == 1 || endNode.Degree == 1);
+            bool flipSeq = false;
+            bool hasDegree1Node = (startNode.Degree == 1 || endNode.Degree == 1);
 
             if (hasDegree1Node)
             {
-                var hasObviousStartNode = false;
+                bool hasObviousStartNode = false;
 
                 // test end edge before start edge, to make result stable
                 // (ie. if both are good starts, pick the actual start
@@ -436,9 +435,9 @@ namespace NetTopologySuite.Operation.Linemerge
         /// in sequential order.
         /// </param>
         /// <returns>The reversed sequence.</returns>
-        private static List<DirectedEdge> Reverse(IEnumerable<DirectedEdge> seq)
+        private static IList<DirectedEdge> Reverse(IEnumerable<DirectedEdge> seq)
         {
-            var tmp = new Stack<DirectedEdge>(seq);
+            Stack<DirectedEdge> tmp = new Stack<DirectedEdge>(seq);
             return new List<DirectedEdge>(tmp);
             /*
             LinkedList<DirectedEdge> newSeq = new LinkedList<DirectedEdge>();

@@ -10,7 +10,6 @@ namespace NetTopologySuite.Tests.NUnit.Algorithm
     public class IndexedPointInAreaStressTest
     {
         [Test]
-        [Category("Stress")]
         public void TestGrid()
         {
             // Use fixed PM to try and get at least some points hitting the boundary

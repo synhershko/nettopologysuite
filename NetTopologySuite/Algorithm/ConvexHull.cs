@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using GeoAPI.Geometries;
 using NetTopologySuite.Geometries;
@@ -15,8 +16,8 @@ namespace NetTopologySuite.Algorithm
     /// </summary>
     public class ConvexHull
     {
-        private readonly IGeometryFactory _geomFactory;
-        private readonly Coordinate[] _inputPts;
+        private IGeometryFactory geomFactory = null;
+        private Coordinate[] inputPts = null;
 
         /// <summary> 
         /// Create a new convex hull construction for the input <c>Geometry</c>.
@@ -32,8 +33,8 @@ namespace NetTopologySuite.Algorithm
         /// <param name="geomFactory"></param>   
         public ConvexHull(Coordinate[] pts, IGeometryFactory geomFactory)
         {
-            _inputPts = pts;
-            _geomFactory = geomFactory;
+            inputPts = pts;
+            this.geomFactory = geomFactory;
         }
 
         /// <summary>
@@ -43,7 +44,7 @@ namespace NetTopologySuite.Algorithm
         /// <returns></returns>
         private static Coordinate[] ExtractCoordinates(IGeometry geom)
         {
-            var filter = new UniqueCoordinateArrayFilter();
+            UniqueCoordinateArrayFilter filter = new UniqueCoordinateArrayFilter();
             geom.Apply(filter);
             return filter.Coordinates;
         }
@@ -62,32 +63,32 @@ namespace NetTopologySuite.Algorithm
         /// </returns>
         public IGeometry GetConvexHull()
         {
-            if (_inputPts.Length == 0)
-                return _geomFactory.CreateGeometryCollection(null);
+            if (inputPts.Length == 0)
+                return geomFactory.CreateGeometryCollection(null);
             
-            if (_inputPts.Length == 1)
-                return _geomFactory.CreatePoint(_inputPts[0]);
+            if (inputPts.Length == 1)
+                return geomFactory.CreatePoint(inputPts[0]);
 
-            if (_inputPts.Length == 2)
-                return _geomFactory.CreateLineString(_inputPts);
+            if (inputPts.Length == 2)
+                return geomFactory.CreateLineString(inputPts);
             
 
-            var reducedPts = _inputPts;
+            Coordinate[] reducedPts = inputPts;
             // use heuristic to reduce points, if large
-            if (_inputPts.Length > 50)
-                reducedPts = Reduce(_inputPts);
+            if (inputPts.Length > 50)
+                reducedPts = Reduce(inputPts);
             
             // sort points for Graham scan.
-            var sortedPts = PreSort(reducedPts);
+            Coordinate[] sortedPts = PreSort(reducedPts);
 
             // Use Graham scan to find convex hull.
-            var convexHullStack = GrahamScan(sortedPts);
+            Stack<Coordinate> cHS = GrahamScan(sortedPts);
 
             // Convert stack to an array.
-            var convexHull = convexHullStack.ToArray();
+            Coordinate[] cH = cHS.ToArray();
 
             // Convert array to appropriate output geometry.
-            return LineOrPolygon(convexHull);
+            return LineOrPolygon(cH);
         }
           
         /// <summary>
@@ -107,16 +108,16 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="pts">The coordinates to reduce</param>
         /// <returns>The reduced array of coordinates</returns>
-        private static Coordinate[] Reduce(Coordinate[] pts)
+        private Coordinate[] Reduce(Coordinate[] pts)
         {
-            var polyPts = ComputeOctRing(pts/*_inputPts*/);
+            Coordinate[] polyPts = ComputeOctRing(inputPts);
             
             // unable to compute interior polygon for some reason
             if(polyPts == null)
-                return pts;
+                return inputPts;
             
             // add points defining polygon
-            var reducedSet = new OrderedSet<Coordinate>();
+            OrderedSet<Coordinate> reducedSet = new OrderedSet<Coordinate>();
             for (int i = 0; i < polyPts.Length; i++)
                 reducedSet.Add(polyPts[i]);
             
@@ -126,11 +127,11 @@ namespace NetTopologySuite.Algorithm
              * but this doesn't matter since the points of the interior polygon
              * are forced to be in the reduced set.
              */
-            for (var i = 0; i < pts.Length; i++)
-                if (!CGAlgorithms.IsPointInRing(pts[i], polyPts))                
-                    reducedSet.Add(pts[i]);
+            for (int i = 0; i < inputPts.Length; i++)
+                if (!CGAlgorithms.IsPointInRing(inputPts[i], polyPts))                
+                    reducedSet.Add(inputPts[i]);
 
-            var reducedPts = CoordinateArrays.ToCoordinateArray((ICollection<Coordinate>)reducedSet);// new Coordinate[reducedSet.Count];
+            Coordinate[] reducedPts = CoordinateArrays.ToCoordinateArray((ICollection<Coordinate>)reducedSet);// new Coordinate[reducedSet.Count];
 
             // ensure that computed array has at least 3 points (not necessarily unique)  
             if (reducedPts.Length < 3)
@@ -139,9 +140,9 @@ namespace NetTopologySuite.Algorithm
             return reducedPts;
         }
 
-        private static Coordinate[] PadArray3(Coordinate[] pts)
+        private Coordinate[] PadArray3(Coordinate[] pts)
         {
-            var pad = new Coordinate[3];
+            Coordinate[] pad = new Coordinate[3];
             for (int i = 0; i < pad.Length; i++)
             {
                 if (i < pts.Length)
@@ -156,12 +157,14 @@ namespace NetTopologySuite.Algorithm
     
 
         /// <summary>
-        /// Pre sorts the coordinates
+        /// 
         /// </summary>
         /// <param name="pts"></param>
         /// <returns></returns>
-        private static Coordinate[] PreSort(Coordinate[] pts)
+        private Coordinate[] PreSort(Coordinate[] pts)
         {
+            Coordinate t;
+
             // find the lowest point in the set. If two or more points have
             // the same minimum y coordinate choose the one with the minimu x.
             // This focal point is put in array location pts[0].
@@ -170,7 +173,7 @@ namespace NetTopologySuite.Algorithm
                 if ((pts[i].Y < pts[0].Y) || ((pts[i].Y == pts[0].Y) 
                      && (pts[i].X < pts[0].X)))
                 {
-                    var t = pts[0];
+                    t = pts[0];
                     pts[0] = pts[i];
                     pts[i] = t;
                 }
@@ -186,19 +189,18 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="c"></param>
         /// <returns></returns>        
-        private static Stack<Coordinate> GrahamScan(Coordinate[] c)
+        private Stack<Coordinate> GrahamScan(Coordinate[] c)
         {
-            var ps = new Stack<Coordinate>(c.Length);
+            Coordinate p;
+            Stack<Coordinate> ps = new Stack<Coordinate>(c.Length);
             ps.Push(c[0]);
             ps.Push(c[1]);
             if(c.Length > 2)
             ps.Push(c[2]);
             for (int i = 3; i < c.Length; i++)
             {
-                var p = ps.Pop();
-                while (
-                    ps.Count > 0 /*(IsEmpty Hack)*/ &&
-                    CGAlgorithms.ComputeOrientation(ps.Peek(), p, c[i]) > 0)
+                p = ps.Pop();
+                while (CGAlgorithms.ComputeOrientation(ps.Peek(), p, c[i]) > 0)
                     p = ps.Pop();
                 ps.Push(p);
                 ps.Push(c[i]);
@@ -207,7 +209,6 @@ namespace NetTopologySuite.Algorithm
             return ps;
         }
 
-        /*
         /// <summary>
         /// 
         /// </summary>
@@ -217,16 +218,15 @@ namespace NetTopologySuite.Algorithm
         {        
             // Do a manual reverse of the stack
             int size = ps.Count;
-            var tempArray = new Coordinate[size];
+            Coordinate[] tempArray = new Coordinate[size];
             for (int i = 0; i < size; i++)
                 tempArray[i] = ps.Pop();
-            var returnStack = new Stack<Coordinate>(size);
+            Stack<Coordinate> returnStack = new Stack<Coordinate>(size);
             foreach (Coordinate obj in tempArray)
                 returnStack.Push(obj);
             return returnStack;                        
         }               
-        */
-
+       
         /// <summary>
         /// 
         /// </summary>
@@ -237,7 +237,7 @@ namespace NetTopologySuite.Algorithm
         /// Whether the three coordinates are collinear 
         /// and c2 lies between c1 and c3 inclusive.
         /// </returns>        
-        private static bool IsBetween(Coordinate c1, Coordinate c2, Coordinate c3)
+        private bool IsBetween(Coordinate c1, Coordinate c2, Coordinate c3)
         {
             if (CGAlgorithms.ComputeOrientation(c1, c2, c3) != 0)
                 return false;
@@ -263,10 +263,10 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="inputPts"></param>
         /// <returns></returns>
-        private static Coordinate[] ComputeOctRing(Coordinate[] inputPts)
+        private Coordinate[] ComputeOctRing(Coordinate[] inputPts)
         {
-            var octPts = ComputeOctPts(inputPts);
-            var coordList = new CoordinateList();
+            Coordinate[] octPts = ComputeOctPts(inputPts);
+            CoordinateList coordList = new CoordinateList();
             coordList.Add(octPts, false);
 
             // points must all lie in a line
@@ -282,9 +282,9 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="inputPts"></param>
         /// <returns></returns>
-        private static Coordinate[] ComputeOctPts(Coordinate[] inputPts)
+        private Coordinate[] ComputeOctPts(Coordinate[] inputPts)
         {
-            var pts = new Coordinate[8];
+            Coordinate[] pts = new Coordinate[8];
             for (int j = 0; j < pts.Length; j++)
                 pts[j] = inputPts[0];
             
@@ -328,9 +328,9 @@ namespace NetTopologySuite.Algorithm
         {
             coordinates = CleanRing(coordinates);
             if (coordinates.Length == 3)
-                return _geomFactory.CreateLineString(new[] { coordinates[0], coordinates[1] });
-            var linearRing = _geomFactory.CreateLinearRing(coordinates);
-            return _geomFactory.CreatePolygon(linearRing, null);
+                return geomFactory.CreateLineString(new Coordinate[] { coordinates[0], coordinates[1] });
+            ILinearRing linearRing = geomFactory.CreateLinearRing(coordinates);
+            return geomFactory.CreatePolygon(linearRing, null);
         }
 
         /// <summary>
@@ -338,15 +338,15 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         /// <param name="original">The vertices of a linear ring, which may or may not be flattened (i.e. vertices collinear).</param>
         /// <returns>The coordinates with unnecessary (collinear) vertices removed.</returns>
-        private static Coordinate[] CleanRing(Coordinate[] original)
+        private Coordinate[] CleanRing(Coordinate[] original)
         {
-            Assert.IsEquals(original[0], original[original.Length - 1]);
-            var cleanedRing = new List<Coordinate>();
+            Equals(original[0], original[original.Length - 1]);
+            List<Coordinate> cleanedRing = new List<Coordinate>();
             Coordinate previousDistinctCoordinate = null;
             for (int i = 0; i <= original.Length - 2; i++)
             {
-                var currentCoordinate = original[i];
-                var nextCoordinate = original[i + 1];
+                Coordinate currentCoordinate = original[i];
+                Coordinate nextCoordinate = original[i + 1];
                 if (currentCoordinate.Equals(nextCoordinate))
                     continue;
                 if (previousDistinctCoordinate != null &&
@@ -365,7 +365,7 @@ namespace NetTopologySuite.Algorithm
         /// </summary>
         private class RadialComparator : IComparer<Coordinate>
         {
-            private readonly Coordinate _origin;
+            private Coordinate origin = null;
 
             /// <summary>
             /// Initializes a new instance of the <see cref="RadialComparator"/> class.
@@ -373,7 +373,7 @@ namespace NetTopologySuite.Algorithm
             /// <param name="origin"></param>
             public RadialComparator(Coordinate origin)
             {
-                _origin = origin;
+                this.origin = origin;
             }
 
             /// <summary>
@@ -384,7 +384,7 @@ namespace NetTopologySuite.Algorithm
             /// <returns></returns>
             public int Compare(Coordinate p1, Coordinate p2)
             {                
-                return PolarCompare(_origin, p1, p2);
+                return PolarCompare(origin, p1, p2);
             }
 
             /// <summary>

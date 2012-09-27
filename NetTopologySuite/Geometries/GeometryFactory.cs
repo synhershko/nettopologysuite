@@ -47,7 +47,7 @@ namespace NetTopologySuite.Geometries
         /// </summary>
 		public static readonly IGeometryFactory Fixed = new GeometryFactory(new PrecisionModel(PrecisionModels.Fixed));
            
-        private readonly IPrecisionModel _precisionModel;
+        private readonly IPrecisionModel precisionModel;
 
         /// <summary>
         /// Returns the PrecisionModel that Geometries created by this factory
@@ -55,27 +55,27 @@ namespace NetTopologySuite.Geometries
         /// </summary>
         public IPrecisionModel PrecisionModel
         {
-            get { return _precisionModel; }
+            get { return precisionModel; }
         }
 
-        private readonly ICoordinateSequenceFactory _coordinateSequenceFactory;
+        private readonly ICoordinateSequenceFactory coordinateSequenceFactory;
 
         /// <summary>
         /// 
         /// </summary>
         public ICoordinateSequenceFactory CoordinateSequenceFactory
         {
-            get { return _coordinateSequenceFactory; }
+            get { return coordinateSequenceFactory; }
         }
 
-        private readonly int _srid;
+        private int srid;
 
         /// <summary>
         /// 
         /// </summary>
         public int SRID
         {
-            get { return _srid; }
+            get { return srid; }
         }        
 
         /// <summary>
@@ -94,11 +94,11 @@ namespace NetTopologySuite.Geometries
         /// Constructs a GeometryFactory that generates Geometries having the given
         /// PrecisionModel, spatial-reference ID, and CoordinateSequence implementation.
         /// </summary>        
-        public GeometryFactory(IPrecisionModel precisionModel, int srid, ICoordinateSequenceFactory coordinateSequenceFactory) 
+        public GeometryFactory(IPrecisionModel precisionModel, int SRID, ICoordinateSequenceFactory coordinateSequenceFactory) 
         {
-            _precisionModel = precisionModel;
-            _coordinateSequenceFactory = coordinateSequenceFactory;
-            _srid = srid;
+            this.precisionModel = precisionModel;
+            this.coordinateSequenceFactory = coordinateSequenceFactory;
+            this.srid = SRID;
         }
 
         /// <summary>
@@ -124,9 +124,9 @@ namespace NetTopologySuite.Geometries
         /// implementation.
         /// </summary>
         /// <param name="precisionModel">The PrecisionModel to use.</param>
-        /// <param name="srid">The SRID to use.</param>
-        public GeometryFactory(IPrecisionModel precisionModel, int srid) : 
-            this(precisionModel, srid, GetDefaultCoordinateSequenceFactory()) { }
+        /// <param name="SRID">The SRID to use.</param>
+        public GeometryFactory(IPrecisionModel precisionModel, int SRID) : 
+            this(precisionModel, SRID, GetDefaultCoordinateSequenceFactory()) { }
 
         /// <summary>
         /// Constructs a GeometryFactory that generates Geometries having a floating
@@ -141,8 +141,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IPoint[] ToPointArray(ICollection<IGeometry> points) 
         {
-            var list = new IPoint[points.Count];
-            var i = 0;
+            IPoint[] list = new IPoint[points.Count];
+            int i = 0;
             foreach (IPoint p in points)
                 list[i++] = p;
             return list;            
@@ -155,9 +155,9 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IGeometry[] ToGeometryArray(ICollection<IGeometry> geometries) 
         {
-            var list = new IGeometry[geometries.Count];
-            var i = 0;
-            foreach (var g in geometries)
+            IGeometry[] list = new IGeometry[geometries.Count];
+            int i = 0;
+            foreach (IGeometry g in geometries)
                 list[i++] = g;
             return list;            
         }
@@ -169,8 +169,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static ILineString[] ToLineStringArray(ICollection<IGeometry> lineStrings)
         {
-            var list = new ILineString[lineStrings.Count];
-            var i = 0;
+            ILineString[] list = new ILineString[lineStrings.Count];
+            int i = 0;
             foreach (ILineString ls in lineStrings)
                 list[i++] = ls;
             return list;
@@ -183,8 +183,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static ILinearRing[] ToLinearRingArray(ICollection<IGeometry> linearRings) 
         {
-            var list = new ILinearRing[linearRings.Count];
-            var i = 0;
+            ILinearRing[] list = new ILinearRing[linearRings.Count];
+            int i = 0;
             foreach (ILinearRing lr in linearRings)
                 list[i++] = lr;
             return list;
@@ -197,8 +197,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IPolygon[] ToPolygonArray(ICollection<IGeometry> polygons)
         {
-            var list = new IPolygon[polygons.Count];
-            var i = 0;
+            IPolygon[] list = new IPolygon[polygons.Count];
+            int i = 0;
             foreach (IPolygon p in polygons)
                 list[i++] = p;
             return list;
@@ -211,8 +211,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IMultiPoint[] ToMultiPointArray(ICollection<IGeometry> multiPoints)
         {
-            var list = new IMultiPoint[multiPoints.Count];
-            var i = 0;
+            IMultiPoint[] list = new IMultiPoint[multiPoints.Count];
+            int i = 0;
             foreach (IMultiPoint mp in multiPoints)
                 list[i++] = mp;
             return list;
@@ -225,8 +225,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IMultiLineString[] ToMultiLineStringArray(ICollection<IGeometry> multiLineStrings)
         {
-            var list = new IMultiLineString[multiLineStrings.Count];
-            var i = 0;
+            IMultiLineString[] list = new IMultiLineString[multiLineStrings.Count];
+            int i = 0;
             foreach (IMultiLineString mls in multiLineStrings)
                 list[i++] = mls;
             return list;
@@ -239,8 +239,8 @@ namespace NetTopologySuite.Geometries
         /// <returns>The <c>ICollection</c> in array format.</returns>
         public static IMultiPolygon[] ToMultiPolygonArray(ICollection<IGeometry> multiPolygons)
         {
-            var list = new IMultiPolygon[multiPolygons.Count];
-            var i = 0;
+            IMultiPolygon[] list = new IMultiPolygon[multiPolygons.Count];
+            int i = 0;
             foreach (IMultiPolygon mp in multiPolygons)
                 list[i++] = mp;
             return list;
@@ -282,7 +282,7 @@ namespace NetTopologySuite.Geometries
             if (envelope.MinX == envelope.MaxX
                     || envelope.MinY == envelope.MaxY)
             {
-                return CreateLineString(new[] 
+                return CreateLineString(new Coordinate[] 
                     {
                         new Coordinate(envelope.MinX, envelope.MinY),
                         new Coordinate(envelope.MaxX, envelope.MaxY)
@@ -290,13 +290,13 @@ namespace NetTopologySuite.Geometries
             }
 
 
-            var ring = CreateLinearRing(new[]
+            ILinearRing ring = this.CreateLinearRing(new Coordinate[]
             {
                 new Coordinate(envelope.MinX, envelope.MinY),
                 new Coordinate(envelope.MinX, envelope.MaxY),
                 new Coordinate(envelope.MaxX, envelope.MaxY),
                 new Coordinate(envelope.MaxX, envelope.MinY),
-                new Coordinate(envelope.MinX, envelope.MinY)
+                new Coordinate(envelope.MinX, envelope.MinY),
             });
             return CreatePolygon(ring, null);
         }
@@ -385,47 +385,6 @@ namespace NetTopologySuite.Geometries
             return new Polygon(shell, holes, this);
         }
 
-        /// <summary>
-        /// Constructs a <c>Polygon</c> with the given exterior boundary.
-        /// </summary>
-        /// <param name="coordinates">the outer boundary of the new <c>Polygon</c>, or
-        /// <c>null</c> or an empty <c>LinearRing</c> if
-        /// the empty geometry is to be created.</param>
-        /// <returns>The polygon</returns>
-        /// <exception cref="ArgumentException">If the boundary ring is invalid</exception>
-
-        public IPolygon CreatePolygon(ICoordinateSequence coordinates)
-        {
-            return CreatePolygon(CreateLinearRing(coordinates));
-        }
-
-        /// <summary>
-        /// Constructs a <c>Polygon</c> with the given exterior boundary.
-        /// </summary>
-        /// <param name="coordinates">the outer boundary of the new <c>Polygon</c>, or
-        /// <c>null</c> or an empty <c>LinearRing</c> if
-        /// the empty geometry is to be created.</param>
-        /// <returns>The polygon</returns>
-        /// <exception cref="ArgumentException">If the boundary ring is invalid</exception>
-        public IPolygon CreatePolygon(Coordinate[] coordinates)
-        {
-            return CreatePolygon(CreateLinearRing(coordinates));
-        }
-
-
-        /// <summary>
-        /// Constructs a <c>Polygon</c> with the given exterior boundary.
-        /// </summary>
-        /// <param name="shell">the outer boundary of the new <c>Polygon</c>, or
-        /// <c>null</c> or an empty <c>LinearRing</c> if
-        /// the empty geometry is to be created.</param>
-        /// <returns>The polygon</returns>
-        /// <exception cref="ArgumentException">If the boundary ring is invalid</exception>
-        public IPolygon CreatePolygon(ILinearRing shell)
-        {
-            return CreatePolygon(shell, null);
-        }
-
         /// <summary> 
         /// Creates a <see cref="IMultiPoint"/> using the given Points.
         /// A null or empty array will  create an empty MultiPoint.
@@ -458,7 +417,7 @@ namespace NetTopologySuite.Geometries
             if (coordinates == null)
                 coordinates = CoordinateSequenceFactory.Create(new Coordinate[] { });
 
-            var points = new List<IPoint>();
+            List<IPoint> points = new List<IPoint>();
             for (int i = 0; i < coordinates.Count; i++)
                 points.Add(CreatePoint(coordinates.GetCoordinate(i)));
             return CreateMultiPoint(points.ToArray());
@@ -500,21 +459,21 @@ namespace NetTopologySuite.Geometries
         /// Build an appropriate <c>Geometry</c>, <c>MultiGeometry</c>, or
         /// <c>GeometryCollection</c> to contain the <c>Geometry</c>s in
         /// it.
-        /// </summary>
-        /// <remarks>
+        /// <example>
         ///  If <c>geomList</c> contains a single <c>Polygon</c>,
-        /// the <c>Polygon</c> is returned.<br/>
+        /// the <c>Polygon</c> is returned.
         ///  If <c>geomList</c> contains several <c>Polygon</c>s, a
-        /// <c>MultiPolygon</c> is returned.<br/>
+        /// <c>MultiPolygon</c> is returned.
         ///  If <c>geomList</c> contains some <c>Polygon</c>s and
         /// some <c>LineString</c>s, a <c>GeometryCollection</c> is
-        /// returned.<br/>
+        /// returned.
         ///  If <c>geomList</c> is empty, an empty <c>GeometryCollection</c>
         /// is returned.
         /// Note that this method does not "flatten" Geometries in the input, and hence if
         /// any MultiGeometries are contained in the input a GeometryCollection containing
         /// them will be returned.
-        /// </remarks>
+        /// </example>
+        /// </summary>
         /// <param name="geomList">The <c>Geometry</c> to combine.</param>
         /// <returns>
         /// A <c>Geometry</c> of the "smallest", "most type-specific" 
@@ -526,16 +485,12 @@ namespace NetTopologySuite.Geometries
              * Determine some facts about the geometries in the list
              */
             Type geomClass = null;
-            var isHeterogeneous = false;
-            var hasGeometryCollection = false;
+            bool isHeterogeneous = false;
+            bool hasGeometryCollection = false;
 
-            IGeometry geom0 = null;
-            foreach (var geom in geomList)
-            {
-                if (geom == null) continue;
-                geom0 = geom;
-
-                var partClass = geom.GetType();
+            foreach (IGeometry geom in geomList)
+            {                
+                Type partClass = geom.GetType();
                 if (geomClass == null) 
                     geomClass = partClass;                
                 if (partClass != geomClass) 
@@ -547,19 +502,20 @@ namespace NetTopologySuite.Geometries
             /**
              * Now construct an appropriate geometry to return
              */
-
             // for the empty point, return an empty GeometryCollection
             if (geomClass == null) 
                 return CreateGeometryCollection(null);
 
-            // for heterogenous collection of geometries or if it contains a GeometryCollection, return a GeometryCollection
             if (isHeterogeneous || hasGeometryCollection)             
                 return CreateGeometryCollection(ToGeometryArray(geomList));            
 
-            // at this point we know the collection is homogenous.
+            // at this point we know the collection is hetereogenous.
             // Determine the type of the result from the first Geometry in the list
             // this should always return a point, since otherwise an empty collection would have already been returned
-            var isCollection = geomList.Count > 1;
+            IEnumerator<IGeometry> ienum = geomList.GetEnumerator();
+            ienum.MoveNext();
+            IGeometry geom0 = ienum.Current;
+            bool isCollection = geomList.Count > 1;
 
             if (isCollection) 
             {
@@ -575,39 +531,19 @@ namespace NetTopologySuite.Geometries
         }       
 
         /// <summary>
-        /// Creates a deep copy of the input <see cref="IGeometry"/>.
-        /// The <see cref="ICoordinateSequenceFactory"/> defined for this factory
-        /// is used to copy the <see cref="ICoordinateSequence"/>s
-        /// of the input geometry.
-        /// <para/>
-        /// This is a convenient way to change the <tt>CoordinateSequence</tt>
-        /// used to represent a geometry, or to change the 
-        /// factory used for a geometry.
-        /// <para/>
-        /// <see cref="IGeometry.Clone()"/> can also be used to make a deep copy,
-        /// but it does not allow changing the CoordinateSequence type.
+        /// Returns a clone of g based on a CoordinateSequence created by this
+        /// GeometryFactory's CoordinateSequenceFactory.        
         /// </summary>
-        /// <param name="g">The geometry</param>
-        /// <returns>A deep copy of the input geometry, using the CoordinateSequence type of this factory</returns>
-        /// <seealso cref="IGeometry.Clone"/>
         public IGeometry CreateGeometry(IGeometry g)
-        {
-            var editor = new GeometryEditor(this);
-    //        return editor.Edit(g, new GeometryEditor.CoordinateSequenceOperation() {
-    //  public CoordinateSequence edit(CoordinateSequence coordSeq, Geometry geometry) {
-    //              return coordinateSequenceFactory.create(coordSeq);
-    //      }
-    //});
-            return editor.Edit(g, new GeometryEditor.CoordinateSequenceOperation(
-                                      (x, y) => _coordinateSequenceFactory.Create(x)));
-        }
-
-        /*
-        public Geometry OLDcreateGeometry(Geometry g)
         {
             // could this be cached to make this more efficient? Or maybe it isn't enough overhead to bother
             GeometryEditor editor = new GeometryEditor(this);
             return editor.Edit(g, new AnonymousCoordinateOperationImpl());            
+        }
+
+        private static ICoordinateSequenceFactory GetDefaultCoordinateSequenceFactory()
+        {
+            return CoordinateArraySequenceFactory.Instance;
         }
 
         private class AnonymousCoordinateOperationImpl : GeometryEditor.CoordinateOperation
@@ -616,12 +552,6 @@ namespace NetTopologySuite.Geometries
             {
                 return coordinates;
             }
-        }
-         */
-
-        private static ICoordinateSequenceFactory GetDefaultCoordinateSequenceFactory()
-        {
-            return CoordinateArraySequenceFactory.Instance;
         }
     }
 }

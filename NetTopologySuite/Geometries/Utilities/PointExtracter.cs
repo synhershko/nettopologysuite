@@ -15,11 +15,11 @@ namespace NetTopologySuite.Geometries.Utilities
         /// <param name="geom">The geometry from which to extract</param>
         /// <param name="list">The list to add the extracted elements to</param>
         /// <returns></returns>
-        public static ICollection<IGeometry> GetPoints(IGeometry geom, List<IGeometry> list)
+        public static IList<IPoint> GetPoints(IGeometry geom, List<IPoint> list)
         {
             if (geom is IPoint)
             {
-                list.Add(geom);
+                list.Add((IPoint)geom);
             }
             else if (geom is IGeometryCollection)
             {
@@ -34,18 +34,18 @@ namespace NetTopologySuite.Geometries.Utilities
         /// Extracts the <see cref="IPoint"/> elements from a single <see cref="IGeometry"/> and returns them in a <see cref="IList{IPoint}"/>.
         /// </summary>
         /// <param name="geom">the geometry from which to extract</param>
-        public static ICollection<IGeometry> GetPoints(IGeometry geom)
+        public static IList<IPoint> GetPoints(IGeometry geom)
         {
-            return GetPoints(geom, new List<IGeometry>());
+            return GetPoints(geom, new List<IPoint>());
         }
 
-        private readonly List<IGeometry> _pts;
+        private readonly List<IPoint> _pts;
 
         /// <summary> 
         /// Constructs a PointExtracterFilter with a list in which to store Points found.
         /// </summary>
         /// <param name="pts"></param>
-        public PointExtracter(List<IGeometry> pts)
+        public PointExtracter(List<IPoint> pts)
         {
             _pts = pts;
         }
@@ -57,7 +57,7 @@ namespace NetTopologySuite.Geometries.Utilities
         public void Filter(IGeometry geom)
         {
             if (geom is IPoint)
-                _pts.Add(geom);
+                _pts.Add((IPoint)geom);
         }
     }
 }

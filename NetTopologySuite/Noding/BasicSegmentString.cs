@@ -1,8 +1,6 @@
 using System;
 using GeoAPI.Geometries;
 using NetTopologySuite.Geometries;
-using NetTopologySuite.Geometries.Implementation;
-using NetTopologySuite.IO;
 
 namespace NetTopologySuite.Noding
 {
@@ -86,11 +84,6 @@ namespace NetTopologySuite.Noding
                 throw new NotSupportedException(
                     "Setting line segments in a ISegmentString not supported.");
             }
-        }
-
-        public override string ToString()
-        {
-            return WKTWriter.ToLineString(new CoordinateArraySequence(_pts));
         }
     }
 }

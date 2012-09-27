@@ -1,12 +1,9 @@
-using System;
-
 namespace NetTopologySuite.Index.Strtree
 {
     /// <summary>
     /// Boundable wrapper for a non-Boundable spatial object. Used internally by
     /// AbstractSTRtree.
     /// </summary>
-    [Serializable]
     public class ItemBoundable : IBoundable 
     {
         private readonly object _bounds;

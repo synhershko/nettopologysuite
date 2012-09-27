@@ -1,15 +1,22 @@
 using System;
 using GeoAPI.Geometries;
+using NetTopologySuite.Geometries;
 using NetTopologySuite.Utilities;
 
 namespace NetTopologySuite.Index.Quadtree
 {
+    //public class Node : Node<object>
+    //{
+    //    public Node(Envelope env, int level) : base(env, level)
+    //    {
+    //    }
+    //}
+
     /// <summary>
     /// Represents a node of a <c>Quadtree</c>.  Nodes contain
     /// items which have a spatial extent corresponding to the node's position
     /// in the quadtree.
     /// </summary>
-    [Serializable]
     public class Node<T> : NodeBase<T>
     {
         /// <summary>
@@ -43,8 +50,7 @@ namespace NetTopologySuite.Index.Quadtree
         }
 
         private readonly Envelope _env;
-        //private readonly Coordinate _centre;
-        private readonly double _centreX, _centreY;
+        private readonly Coordinate _centre;
         private readonly int _level;
 
         /// <summary>
@@ -56,8 +62,9 @@ namespace NetTopologySuite.Index.Quadtree
         {
             _env = env;
             _level = level;
-            _centreX = (env.MinX + env.MaxX) / 2;
-            _centreY = (env.MinY + env.MaxY) / 2;
+            _centre = new Coordinate();
+            _centre.X = (env.MinX + env.MaxX) / 2;
+            _centre.Y = (env.MinY + env.MaxY) / 2;
         }
 
         /// <summary>
@@ -82,15 +89,14 @@ namespace NetTopologySuite.Index.Quadtree
         }
 
         /// <summary> 
-        /// Returns the subquad containing the envelope <paramref name="searchEnv"/>.
+        /// Returns the subquad containing the envelope.
         /// Creates the subquad if
         /// it does not already exist.
         /// </summary>
-        /// <param name="searchEnv">The envelope to search for</param>
-        /// <returns>The subquad containing the search envelope.</returns>
+        /// <param name="searchEnv"></param>
         public Node<T> GetNode(Envelope searchEnv)
         {
-            int subnodeIndex = GetSubnodeIndex(searchEnv, _centreX, _centreY);            
+            int subnodeIndex = GetSubnodeIndex(searchEnv, _centre);            
             // if subquadIndex is -1 searchEnv is not contained in a subquad
             if (subnodeIndex != -1) 
             {
@@ -109,7 +115,7 @@ namespace NetTopologySuite.Index.Quadtree
         /// <param name="searchEnv"></param>
         public NodeBase<T> Find(Envelope searchEnv)
         {
-            int subnodeIndex = GetSubnodeIndex(searchEnv, _centreX, _centreY);
+            int subnodeIndex = GetSubnodeIndex(searchEnv, _centre);
             if (subnodeIndex == -1)
                 return this;
             if (Subnode[subnodeIndex] != null) 
@@ -129,7 +135,7 @@ namespace NetTopologySuite.Index.Quadtree
         public void InsertNode(Node<T> node)
         {
             Assert.IsTrue(_env == null || _env.Contains(node.Envelope));        
-            int index = GetSubnodeIndex(node._env, _centreX, _centreY);        
+            int index = GetSubnodeIndex(node._env, _centre);        
             if (node._level == _level - 1)             
                 Subnode[index] = node;                    
             else 
@@ -171,29 +177,29 @@ namespace NetTopologySuite.Index.Quadtree
             {
                 case 0:
                     minx = _env.MinX;
-                    maxx = _centreX;
+                    maxx = _centre.X;
                     miny = _env.MinY;
-                    maxy = _centreY;
+                    maxy = _centre.Y;
                     break;
 
                 case 1:
-                    minx = _centreX;
+                    minx = _centre.X;
                     maxx = _env.MaxX;
                     miny = _env.MinY;
-                    maxy = _centreY;
+                    maxy = _centre.Y;
                     break;
 
                 case 2:
                     minx = _env.MinX;
-                    maxx = _centreX;
-                    miny = _centreY;
+                    maxx = _centre.X;
+                    miny = _centre.Y;
                     maxy = _env.MaxY;
                     break;
 
                 case 3:
-                    minx = _centreX;
+                    minx = _centre.X;
                     maxx = _env.MaxX;
-                    miny = _centreY;
+                    miny = _centre.Y;
                     maxy = _env.MaxY;
                     break;
 

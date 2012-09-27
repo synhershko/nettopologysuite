@@ -438,20 +438,6 @@ namespace NetTopologySuite.GeometriesGraph
             return true;
         }
 
-        public override String ToString()
-        {
-            var buf = new StringBuilder();
-            buf.Append("edge " + _name + ": ");
-            buf.Append("LINESTRING (");
-            for (int i = 0; i < _pts.Length; i++)
-            {
-                if (i > 0) buf.Append(",");
-                buf.Append(_pts[i].X + " " + _pts[i].Y);
-            }
-            buf.Append(")  " + Label + " " + _depthDelta);
-            return buf.ToString();
-        }
-
         /// <summary>
         /// 
         /// </summary>
@@ -478,6 +464,24 @@ namespace NetTopologySuite.GeometriesGraph
             for (var i = Points.Length - 1; i >= 0; i--) 
                 outstream.Write(Points[i] + " ");            
             outstream.WriteLine(String.Empty);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.Append("edge " + _name + ": ");
+            sb.Append("LINESTRING (");
+            for (var i = 0; i < Points.Length; i++)
+            {
+                if (i > 0) sb.Append(",");
+                sb.Append(Points[i].X + " " + Points[i].Y);
+            }
+            sb.Append(")  " + Label + " " + _depthDelta);
+            return sb.ToString();
         }
     }
 }

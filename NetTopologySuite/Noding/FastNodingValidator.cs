@@ -14,14 +14,12 @@ namespace NetTopologySuite.Noding
     /// <remarks>
     /// <para>
     /// In the most common use case, validation stops after a single
-    /// non-noded intersection is detected,
-    /// but the class can be requested to detect all intersections
-    /// by using the <see cref="FindAllIntersections"/> property.
-    /// <para/>
-    /// The validator does not check for a-b-a topology collapse situations.
-    /// <para/> 
-    /// The validator does not check for endpoint-interior vertex intersections.
-    /// This should not be a problem, since the JTS noders should be
+    /// non-noded intersection is detected.
+    /// </para>
+    /// <para>Does NOT check a-b-a collapse situations.</para>
+    /// <para>
+    /// Also does not check for endpt-interior vertex intersections.
+    /// This should not be a problem, since the noders should be
     /// able to compute intersections between vertices correctly.
     /// </para>
     /// <para>
@@ -34,6 +32,7 @@ namespace NetTopologySuite.Noding
         private readonly LineIntersector _li = new RobustLineIntersector();
 
         private readonly List<ISegmentString> _segStrings = new List<ISegmentString>();
+        private bool _findAllIntersections;
         private InteriorIntersectionFinder _segInt;
         private Boolean _isValid = true;
 
@@ -46,19 +45,7 @@ namespace NetTopologySuite.Noding
             _segStrings.AddRange(segStrings);
         }
 
-        /// <summary>
-        /// Gets or sets whether all intersections should be found.
-        /// </summary>
-        public bool FindAllIntersections { get; set; }
-
-
-        /// <summary>
-        /// Gets the list of intersections
-        /// </summary>
-        public IList<Coordinate> Intersections
-        {
-            get { return _segInt.Intersections; }
-        }
+        public bool FindAllIntersections { get { return _findAllIntersections; } set { _findAllIntersections = value; } }
 
         ///<summary>
         /// Checks for an intersection and reports if one is found.
@@ -115,7 +102,7 @@ namespace NetTopologySuite.Noding
              */
             _isValid = true;
             _segInt = new InteriorIntersectionFinder(_li);
-            _segInt.FindAllIntersections = FindAllIntersections;
+            _segInt.FindAllIntersections = _findAllIntersections;
             MCIndexNoder noder = new MCIndexNoder(_segInt);
             noder.ComputeNodes(_segStrings); //.ComputeNodes(segStrings);
             if (_segInt.HasIntersection)

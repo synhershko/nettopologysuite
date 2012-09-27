@@ -13,7 +13,7 @@ namespace NetTopologySuite.Planargraph
         /// <summary>
         /// The underlying list of outgoing DirectedEdges.
         /// </summary>
-        private readonly BigList<DirectedEdge> _outEdges = new BigList<DirectedEdge>();
+        private readonly BigList<DirectedEdge> outEdges = new BigList<DirectedEdge>();
 
         private bool _sorted;
 
@@ -29,7 +29,7 @@ namespace NetTopologySuite.Planargraph
         /// <param name="de"></param>
         public void Add(DirectedEdge de)
         {            
-            _outEdges.Add(de);
+            outEdges.Add(de);
             _sorted = false;
         }
 
@@ -39,7 +39,7 @@ namespace NetTopologySuite.Planargraph
         /// <param name="de"></param>
         public void Remove(DirectedEdge de)
         {
-            _outEdges.Remove(de);
+            outEdges.Remove(de);
         }
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace NetTopologySuite.Planargraph
         public IEnumerator<DirectedEdge> GetEnumerator()
         {            
             SortEdges();
-            return _outEdges.GetEnumerator();
+            return outEdges.GetEnumerator();
         }
         
         /// <summary>
@@ -58,7 +58,7 @@ namespace NetTopologySuite.Planargraph
         {
             get
             {
-                return _outEdges.Count;
+                return outEdges.Count;
             }
         }
 
@@ -69,9 +69,9 @@ namespace NetTopologySuite.Planargraph
         {
             get
             {
-                if (_outEdges.Count == 0 || _outEdges[0] == null)
+                if (outEdges.Count == 0 || outEdges[0] == null)
                     return null;
-                return _outEdges[0].Coordinate;
+                return outEdges[0].Coordinate;
             }
         }
 
@@ -83,7 +83,7 @@ namespace NetTopologySuite.Planargraph
             get
             {
                 SortEdges();
-                return _outEdges;
+                return outEdges;
             }
         }
 
@@ -94,7 +94,7 @@ namespace NetTopologySuite.Planargraph
         {
             if (!_sorted)
             {
-                _outEdges.Sort();
+                outEdges.Sort();
                 _sorted = true;                
             }
         }
@@ -108,9 +108,9 @@ namespace NetTopologySuite.Planargraph
         public int GetIndex(Edge edge)
         {
             SortEdges();
-            for (int i = 0; i < _outEdges.Count; i++)
+            for (int i = 0; i < outEdges.Count; i++)
             {
-                DirectedEdge de = _outEdges[i];
+                DirectedEdge de = outEdges[i];
                 if (de.Edge == edge)
                     return i;
             }
@@ -126,9 +126,9 @@ namespace NetTopologySuite.Planargraph
         public int GetIndex(DirectedEdge dirEdge)
         {
             SortEdges();
-            for (int i = 0; i < _outEdges.Count; i++)
+            for (int i = 0; i < outEdges.Count; i++)
             {
-                DirectedEdge de = _outEdges[i];
+                DirectedEdge de = outEdges[i];
                 if (de == dirEdge)
                     return i;
             }
@@ -143,10 +143,10 @@ namespace NetTopologySuite.Planargraph
         /// <returns></returns>
         public int GetIndex(int i)
         {
-            int modi = i % _outEdges.Count;
+            int modi = i % outEdges.Count;
             //I don't think modi can be 0 (assuming i is positive) [Jon Aquino 10/28/2003] 
             if (modi < 0) 
-                modi += _outEdges.Count;
+                modi += outEdges.Count;
             return modi;
         }
 
@@ -159,7 +159,7 @@ namespace NetTopologySuite.Planargraph
         public DirectedEdge GetNextEdge(DirectedEdge dirEdge)
         {
             int i = GetIndex(dirEdge);
-            return _outEdges[GetIndex(i + 1)];
+            return outEdges[GetIndex(i + 1)];
         }
     }
 }
