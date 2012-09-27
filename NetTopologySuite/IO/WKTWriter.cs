@@ -27,26 +27,26 @@ namespace NetTopologySuite.IO
     public class WKTWriter : ITextGeometryWriter
     {
         /// <summary>
-        /// Generates the WKT for a <c>Point</c> specified by a <see cref="Coordinate"/>.
+        /// Generates the WKT for a <c>Point</c>.
         /// </summary>
         /// <param name="p0">The point coordinate.</param>
-        /// <returns>The WKT</returns>
+        /// <returns></returns>
         public static String ToPoint(Coordinate p0)
         {
 #if LikeJTS
-            return String.Format(CultureInfo.InvariantCulture, "POINT({0} {1})", p0.X, p0.Y);
+			return "POINT(" + p0.X + " " + p0.Y + ")";
 #else
             if (double.IsNaN(p0.Z))
-				return String.Format(CultureInfo.InvariantCulture, "POINT({0} {1})", p0.X, p0.Y);
-            return String.Format(CultureInfo.InvariantCulture, "POINT({0} {1} {2})", p0.X, p0.Y, p0.Z);
+				return "POINT(" + p0.X + " " + p0.Y + ")";
+            return "POINT(" + p0.X + " " + p0.Y + " " + p0.Z + ")";
 #endif
         }
 
         /// <summary>
-        /// Generates the WKT for a N-point <c>LineString</c> specified by a <see cref="ICoordinateSequence"/>.
+        /// Generates the WKT for a N-point <c>LineString</c>.
         /// </summary>
-        /// <param name="seq">The sequence to write.</param>
-        /// <returns>The WKT</returns>
+        /// <param name="seq">The sequence to output.</param>
+        /// <returns></returns>
         public static String ToLineString(ICoordinateSequence seq)
         {
             var buf = new StringBuilder();
@@ -60,7 +60,7 @@ namespace NetTopologySuite.IO
                 {
                     if (i > 0)
                         buf.Append(", ");
-                    buf.Append(String.Format(CultureInfo.InvariantCulture, "{0} {1}", seq.GetX(i), seq.GetY(i)));
+                    buf.Append(seq.GetX(i) + " " + seq.GetY(i));
               }
               buf.Append(")");
             }
@@ -68,19 +68,19 @@ namespace NetTopologySuite.IO
         }
 
         /// <summary>
-        /// Generates the WKT for a <c>LineString</c> specified by two <see cref="Coordinate"/>s.
+        /// Generates the WKT for a 2-point <c>LineString</c>.
         /// </summary>
         /// <param name="p0">The first coordinate.</param>
         /// <param name="p1">The second coordinate.</param>
-        /// <returns>The WKT</returns>
+        /// <returns></returns>
         public static String ToLineString(Coordinate p0, Coordinate p1)
         {
 #if LikeJTS
-            return String.Format(CultureInfo.InvariantCulture, "LINESTRING({0} {1}, {2} {3})", p0.X, p0.Y, p1.X, p1.Y);
+			return "LINESTRING(" + p0.X + " " + p0.Y + ", " + p1.X + " " + p1.Y + ")";
 #else
             if (double.IsNaN(p0.Z))
-				return String.Format(CultureInfo.InvariantCulture, "LINESTRING({0} {1}, {2} {3})", p0.X, p0.Y, p1.X, p1.Y);
-            return String.Format(CultureInfo.InvariantCulture, "LINESTRING({0} {1} {2}, {3} {4} {5})", p0.X, p0.Y, p0.Z, p1.X, p1.Y, p1.Z);
+				return "LINESTRING(" + p0.X + " " + p0.Y + ", " + p1.X + " " + p1.Y + ")";
+            return "LINESTRING(" + p0.X + " " + p0.Y + " " + p0.Z + ", " + p1.X + " " + p1.Y + " " + p1.Z + ")";
 #endif
         }
 

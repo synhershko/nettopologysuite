@@ -72,9 +72,6 @@
     <Compile Include="..\..\NetTopologySuite\Algorithm\CGAlgorithms.cs">
       <Link>Algorithm\CGAlgorithms.cs</Link>
     </Compile>
-    <Compile Include="..\..\NetTopologySuite\Algorithm\CGAlgorithmsDD.cs">
-      <Link>Algorithm\CGAlgorithmsDD.cs</Link>
-    </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\ConvexHull.cs">
       <Link>Algorithm\ConvexHull.cs</Link>
     </Compile>
@@ -152,9 +149,6 @@
     </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\RayCrossingCounter.cs">
       <Link>Algorithm\RayCrossingCounter.cs</Link>
-    </Compile>
-    <Compile Include="..\..\NetTopologySuite\Algorithm\RectangleLineIntersector.cs">
-      <Link>Algorithm\RectangleLineIntersector.cs</Link>
     </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\RobustDeterminant.cs">
       <Link>Algorithm\RobustDeterminant.cs</Link>

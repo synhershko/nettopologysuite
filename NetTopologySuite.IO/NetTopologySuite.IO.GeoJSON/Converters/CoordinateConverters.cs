@@ -1,41 +1,38 @@
-﻿namespace NetTopologySuite.IO.Converters
+﻿using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using GeoAPI.Geometries;
+
+namespace NetTopologySuite.IO.Converters
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
-
-    using GeoAPI.Geometries;
-
-    using Newtonsoft.Json;
-
     public class CoordinateConverter : JsonConverter
     {
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
             writer.WritePropertyName("coordinates");
 
-            List<List<Coordinate[]>> coordinatesss = value as List<List<Coordinate[]>>;
+            var coordinatesss = value as List<List<Coordinate[]>>;
             if (coordinatesss != null)
             {
                 WriteJsonCoordinatesEnumerable2(writer, coordinatesss, serializer);
                 return;
             }
 
-            List<Coordinate[]> coordinatess = value as List<Coordinate[]>;
+            var coordinatess = value as List<Coordinate[]>;
             if (coordinatess != null)
             {
                 WriteJsonCoordinatesEnumerable(writer, coordinatess, serializer);
                 return;
             }
 
-            IEnumerable<Coordinate> coordinates = value as IEnumerable<Coordinate>;
+            var coordinates = value as IEnumerable<Coordinate>;
             if (coordinates != null)
             {
                 WriteJsonCoordinates(writer, coordinates, serializer);
                 return;
             }
 
-            Coordinate coordinate = value as Coordinate;
+            var coordinate = value as Coordinate;
             if (coordinate != null)
             {
                 WriteJsonCoordinate(writer, coordinate, serializer);
@@ -59,7 +56,7 @@
         private static void WriteJsonCoordinates(JsonWriter writer, IEnumerable<Coordinate> coordinates, JsonSerializer serializer)
         {
             writer.WriteStartArray();
-            foreach (Coordinate coordinate in coordinates)
+            foreach (var coordinate in coordinates)
                 WriteJsonCoordinate(writer, coordinate, serializer);
             writer.WriteEndArray();
         }
@@ -67,14 +64,14 @@
         private static void WriteJsonCoordinatesEnumerable(JsonWriter writer, IEnumerable<Coordinate[]> coordinates, JsonSerializer serializer)
         {
             writer.WriteStartArray();
-            foreach (Coordinate[] coordinate in coordinates)
+            foreach (var coordinate in coordinates)
                 WriteJsonCoordinates(writer, coordinate, serializer);
             writer.WriteEndArray();
         }
         private static void WriteJsonCoordinatesEnumerable2(JsonWriter writer, List<List<Coordinate[]>> coordinates, JsonSerializer serializer)
         {
             writer.WriteStartArray();
-            foreach (List<Coordinate[]> coordinate in coordinates)
+            foreach (var coordinate in coordinates)
                 WriteJsonCoordinatesEnumerable(writer, coordinate, serializer);
             writer.WriteEndArray();
         }
@@ -83,8 +80,8 @@
         {
             reader.Read();
             
-            Debug.Assert(reader.TokenType == JsonToken.PropertyName);
-            Debug.Assert((string)reader.Value == "coordinates");
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.PropertyName);
+            System.Diagnostics.Debug.Assert((string)reader.Value == "coordinates");
 
             if (objectType == typeof(Coordinate))
             {
@@ -114,12 +111,12 @@
             reader.Read();
             if (reader.TokenType != JsonToken.StartArray) return null;
 
-            Coordinate c = new Coordinate();
+            var c = new Coordinate();
             reader.Read();
-            Debug.Assert(reader.TokenType == JsonToken.Float);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.Float);
             c.X = (Double)reader.Value;
             reader.Read();
-            Debug.Assert(reader.TokenType == JsonToken.Float);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.Float);
             c.Y = (Double)reader.Value;
             reader.Read();
             if (reader.TokenType == JsonToken.Float)
@@ -127,7 +124,7 @@
                 c.Z = (Double)reader.Value;
                 reader.Read();
             }
-            Debug.Assert(reader.TokenType == JsonToken.EndArray);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.EndArray);
 
             return c;
         }
@@ -137,14 +134,14 @@
             reader.Read();
             if (reader.TokenType != JsonToken.StartArray) return null;
 
-            List<Coordinate> coordinates = new List<Coordinate>();
+            var coordinates = new List<Coordinate>();
             while (true)
             {
-                Coordinate c = ReadJsonCoordinate(reader);
+                var c = ReadJsonCoordinate(reader);
                 if (c == null) break;
                 coordinates.Add(c);
             }
-            Debug.Assert(reader.TokenType == JsonToken.EndArray);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.EndArray);
             return coordinates.ToArray();
         }
 
@@ -153,14 +150,14 @@
             reader.Read();
             if (reader.TokenType != JsonToken.StartArray) return null;
 
-            List<Coordinate[]> coordinates = new List<Coordinate[]>();
+            var coordinates = new List<Coordinate[]>();
             while (true)
             {
-                Coordinate[] res = ReadJsonCoordinates(reader);
+                var res = ReadJsonCoordinates(reader);
                 if (res == null)break;
                 coordinates.Add(res);
             }
-            Debug.Assert(reader.TokenType == JsonToken.EndArray);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.EndArray);
             return coordinates;
         }
 
@@ -168,15 +165,15 @@
         {
             reader.Read();
             if (reader.TokenType != JsonToken.StartArray) return null;
-            List<List<Coordinate[]>> coordinates = new List<List<Coordinate[]>>();
+            var coordinates = new List<List<Coordinate[]>>();
 
             while (true)
             {
-                List<Coordinate[]> res = ReadJsonCoordinatesEnumerable(reader);
+                var res = ReadJsonCoordinatesEnumerable(reader);
                 if (res == null) break;
                 coordinates.Add(res);
             }
-            Debug.Assert(reader.TokenType == JsonToken.EndArray);
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.EndArray);
             return coordinates;
         }
 

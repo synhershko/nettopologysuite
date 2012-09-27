@@ -234,13 +234,20 @@ namespace NetTopologySuite.GeometriesGraph
             outstream.Write("  " + name + ": " + _p0 + " - " + _p1 + " " + _quadrant + ":" + angle + "   " + _label);
         }
 
-        public override String ToString()
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
         {
-            var angle = Math.Atan2(_dy, _dx);
-            var className = GetType().Name;
-            //var lastDotPos = className.LastIndexOf('.');
-            //var name = className.Substring(lastDotPos + 1);
-            return "  " + className + ": " + _p0 + " - " + _p1 + " " + _quadrant + ":" + angle + "   " + _label;
-        }
+            StringBuilder sb = new StringBuilder();
+            sb.Append(('['));
+            sb.Append(_p0.X);
+            sb.Append((' '));
+            sb.Append(_p1.Y);
+            sb.Append(("]:" ));
+            sb.Append(Label);
+            return sb.ToString();
+        }  
     }
 }

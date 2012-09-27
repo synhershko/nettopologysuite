@@ -525,49 +525,31 @@ namespace NetTopologySuite.Operation.Overlay
             geomList.AddRange(resultLiList);
             geomList.AddRange(resultPlList);
 
+            /*
             if (geomList.Count == 0)
-                return CreateEmptyResult(opCode, arg[0].Geometry, arg[1].Geometry, _geomFact);
-            
+                return CreateEmptyResult(opCode);
+            */
+
             // build the most specific point possible
             return _geomFact.BuildGeometry(geomList);
         }
 
-        /// <summary>
-        /// Creates an empty result geometry of the appropriate dimension,
-        /// based on the dimensions of the inputs.
-        /// The created geometry is always an atomic geometry, 
-        /// not a collection.
-        /// <para/>
-        /// Implements the following rules:
-        /// <list type="Bullet">
-        /// <item><c>intersection</c> - result has the dimension of the lowest input dimension</item>
-        /// <item><c>union</c> - result has the dimension of the highest input dimension</item>
-        /// <item><c>difference</c> - result has the dimension of the left-hand input</item>
-        /// <item><c>symDifference</c> - result has the dimension of the highest input dimension
-        /// (since symDifference is the union of the differences).</item>
-        /// </list>
-        /// </summary>
-        /// <param name="opCode">The overlay operation being performed</param>
-        /// <param name="a">An input geometry</param>
-        /// <param name="b">An input geometry</param>
-        /// <param name="geomFact">The geometry factory being used for the operation</param>
-        /// <returns>An empty atomic geometry of the appropriate dimension</returns>
-        public static IGeometry CreateEmptyResult(SpatialFunction opCode, IGeometry a, IGeometry b, IGeometryFactory geomFact)
+        private IGeometry CreateEmptyResult(SpatialFunction opCode)
         {
             IGeometry result = null;
-            switch (ResultDimension(opCode, a, b))
+            switch (ResultDimension(opCode, arg[0].Geometry, arg[1].Geometry))
             {
                 case Dimension.Dontcare:
-                    result = geomFact.CreateGeometryCollection(new IGeometry[0]);
+                    result = _geomFact.CreateGeometryCollection(new Geometry[0]);
                     break;
                 case Dimension.Point:
-                    result = geomFact.CreatePoint((Coordinate)null);
+                    result = _geomFact.CreatePoint((Coordinate)null);
                     break;
                 case Dimension.Curve:
-                    result = geomFact.CreateLineString((Coordinate[])null);
+                    result = _geomFact.CreateLineString((Coordinate[])null);
                     break;
                 case Dimension.Surface:
-                    result = geomFact.CreatePolygon(null, null);
+                    result = _geomFact.CreatePolygon(null, null);
                     break;
             }
             return result;
@@ -578,7 +560,7 @@ namespace NetTopologySuite.Operation.Overlay
             var dim0 = (int)g0.Dimension;
             var dim1 = (int)g1.Dimension;
 
-            var resultDimension = -1;
+            int resultDimension = -1;
             switch (opCode)
             {
                 case SpatialFunction.Intersection:
@@ -591,13 +573,6 @@ namespace NetTopologySuite.Operation.Overlay
                     resultDimension = dim0;
                     break;
                 case SpatialFunction.SymDifference:
-                    /**
-                     * This result is chosen because
-                     * <pre>
-                     * SymDiff = Union(Diff(A, B), Diff(B, A)
-                     * </pre>
-                     * and Union has the dimension of the highest-dimension argument.
-                     */
                     resultDimension = Math.Max(dim0, dim1);
                     break;
             }

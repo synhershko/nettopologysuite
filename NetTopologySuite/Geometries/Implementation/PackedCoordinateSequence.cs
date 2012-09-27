@@ -347,15 +347,6 @@ namespace NetTopologySuite.Geometries.Implementation
         }
 
         /// <summary>
-        /// Gets the underlying array containing the coordinate values.
-        /// </summary>
-        /// <returns>The array of coordinate values</returns>
-        public double[] GetRawCoordinates()
-        {
-            return _coords;
-        }
-
-        /// <summary>
         /// Returns the number of coordinates in this sequence.
         /// </summary>
         /// <value></value>
@@ -508,15 +499,6 @@ namespace NetTopologySuite.Geometries.Implementation
             double y = _coords[index * Dimension + 1];
             double z = Dimension == 2 ? 0.0 : _coords[index * Dimension + 2];
             return new Coordinate(x, y, z);
-        }
-
-        /// <summary>
-        /// Gets the underlying array containing the coordinate values.
-        /// </summary>
-        /// <returns>The array of coordinate values</returns>
-        public float[] GetRawCoordinates()
-        {
-            return _coords;
         }
 
         /// <summary>

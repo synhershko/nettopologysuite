@@ -12,12 +12,6 @@ namespace NetTopologySuite.Noding
     /// This is intended for use with Snap-Rounding noders,
     /// which typically are only intended to work in the integer domain.
     /// Offsets can be provided to increase the number of digits of available precision.
-    /// <para>
-    /// Clients should be aware that rescaling can involve loss of precision,
-    /// which can cause zero-length line segments to be created.
-    /// These in turn can cause problems when used to build a planar graph.
-    /// This situation should be checked for and collapsed segments removed if necessary.
-    /// </para>
     /// </summary>
     public class ScaledNoder : INoder
     {
@@ -109,8 +103,7 @@ namespace NetTopologySuite.Noding
             Coordinate[] roundPts = new Coordinate[pts.Length];
             for (int i = 0; i < pts.Length; i++)
                 roundPts[i] = new Coordinate(Math.Round((pts[i].X - _offsetX) * _scaleFactor),
-                                             Math.Round((pts[i].Y - _offsetY) * _scaleFactor),
-                                             pts[i].Z);
+                                             Math.Round((pts[i].Y - _offsetY) * _scaleFactor));
             Coordinate[] roundPtsNoDup = CoordinateArrays.RemoveRepeatedPoints(roundPts);
             return roundPtsNoDup;
         }      
@@ -131,27 +124,11 @@ namespace NetTopologySuite.Noding
         /// <param name="pts"></param>
         private void Rescale(Coordinate[] pts)
         {
-            Coordinate p0 = null;
-            Coordinate p1 = null;
-
-            if (pts.Length == 2)
-            {
-                p0 = new Coordinate(pts[0]);
-                p1 = new Coordinate(pts[1]);
-            }
-
             for (int i = 0; i < pts.Length; i++) 
             {
                 pts[i].X = pts[i].X / _scaleFactor + _offsetX;
                 pts[i].Y = pts[i].Y / _scaleFactor + _offsetY;
             }
-
-            if (pts.Length == 2 && pts[0].Equals2D(pts[1]))
-            {
-                Console.WriteLine(pts[0]);
-                Console.WriteLine(pts[1]);
-            }
-
         }
     }
 }

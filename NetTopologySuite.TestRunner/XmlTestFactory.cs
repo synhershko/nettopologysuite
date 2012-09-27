@@ -143,7 +143,7 @@ namespace Open.Topology.TestRunner
             
             else if (testType == "equals")
                 xmlTestItem.TestType = XmlTestType.Equals;
-            
+
             else if (testType == "getinteriorpoint")
                 xmlTestItem.TestType = XmlTestType.InteriorPoint;
             
@@ -200,7 +200,7 @@ namespace Open.Topology.TestRunner
 
             else if (testType == "coveredby")
                 xmlTestItem.TestType = XmlTestType.CoveredBy;
-            
+
             else if (testType == "equalsexact")
                 xmlTestItem.TestType = XmlTestType.EqualsExact;
 
@@ -289,7 +289,7 @@ namespace Open.Topology.TestRunner
                 case XmlTestType.Contains:
                 case XmlTestType.Crosses:
                 case XmlTestType.Disjoint:
-                case XmlTestType.Equals:
+                case XmlTestType.Equals:                
                 case XmlTestType.Intersects:
                 case XmlTestType.IsEmpty:
                 case XmlTestType.IsSimple:
@@ -315,7 +315,7 @@ namespace Open.Topology.TestRunner
                         return false;
                     }
                 }
-
+                
                 default:
                     string format = String.Format("Test not implemented: {0}",  xmlTestItem.TestType);
                     throw new NotImplementedException(format);

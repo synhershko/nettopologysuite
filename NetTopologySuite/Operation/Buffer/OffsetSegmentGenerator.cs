@@ -11,7 +11,7 @@ namespace NetTopologySuite.Operation.Buffer
     /// Generates segments which form an offset curve.
     /// Supports all end cap and join options
     /// provided for buffering.
-    /// This algorithm implements various heuristics to
+    /// Implements various heuristics to
     /// produce smoother, simpler curves which are
     /// still within a reasonable tolerance of the
     /// true curve.
@@ -142,8 +142,7 @@ namespace NetTopologySuite.Operation.Buffer
 
         public Coordinate[] GetCoordinates()
         {
-            var pts = _segList.GetCoordinates();
-            return pts;
+            return _segList.GetCoordinates();
         }
 
         public void CloseRing()

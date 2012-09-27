@@ -1,4 +1,8 @@
-﻿using System.Text;
+﻿using System;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Text;
 
 namespace NetTopologySuite.Encodings
 {
@@ -11,19 +15,19 @@ namespace NetTopologySuite.Encodings
             return EncodingRegistry.ASCII;
         }
 
-        /*
+        private static readonly Func<Encoding, int> Accessor = GetAccessor();
+
         private static Func<Encoding, int> GetAccessor()
         {
-            var pex = Expression.Parameter(typeof(Encoding));
+            ParameterExpression pex = Expression.Parameter(typeof(Encoding));
             MemberInfo member =
                 typeof(Encoding).GetProperties(BindingFlags.Instance | BindingFlags.NonPublic |
-                                               BindingFlags.GetProperty).First(a => a.Name == "CodePage");
+                                                BindingFlags.GetProperty).Where(a => a.Name == "CodePage").First();
 
             return Expression.Lambda<Func<Encoding, int>>(
                 Expression.MakeMemberAccess(pex, member), pex
                 ).Compile();
         }
-        */
 
         public static int CodePage(this Encoding self)
         {

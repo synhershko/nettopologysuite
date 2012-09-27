@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Xml;
@@ -106,22 +105,6 @@ namespace NetTopologySuite.IO.GML2
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="coordinates"></param>
-        /// <param name="writer"></param>        
-        protected void WriteCoordinates(Coordinate[] coordinates, XmlTextWriter writer)
-        {
-            writer.WriteStartElement(GMLElements.gmlPrefix, "coordinates", GMLElements.gmlNS);
-            var elements = new List<string>(coordinates.Length);
-            foreach (var coordinate in coordinates)
-                elements.Add(string.Format(NumberFormatter, "{0},{1}", coordinate.X, coordinate.Y));
-
-            writer.WriteString(string.Join(" ", elements.ToArray()));
-            writer.WriteEndElement();
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         /// <param name="geometry"></param>
         /// <param name="writer"></param>
         protected void Write(IGeometry geometry, XmlTextWriter writer)
@@ -163,7 +146,7 @@ namespace NetTopologySuite.IO.GML2
         protected void Write(ILineString lineString, XmlTextWriter writer)
         {
             writer.WriteStartElement("LineString", GMLElements.gmlNS);
-            WriteCoordinates(lineString.Coordinates, writer);
+            Write(lineString.Coordinates, writer);
             writer.WriteEndElement();
         }
 
@@ -175,7 +158,7 @@ namespace NetTopologySuite.IO.GML2
         protected void Write(ILinearRing linearRing, XmlTextWriter writer)
         {
             writer.WriteStartElement("LinearRing", GMLElements.gmlNS);
-            WriteCoordinates(linearRing.Coordinates, writer);
+            Write(linearRing.Coordinates, writer);
             writer.WriteEndElement();
         }
 

@@ -115,7 +115,6 @@
     <Compile Include="Functions\AffineTransformationFunctions.cs" />
     <Compile Include="Functions\BaseGeometryFunction.cs" />
     <Compile Include="Functions\BufferFunctions.cs" />
-    <Compile Include="Functions\CGAlgorithmFunctions.cs" />
     <Compile Include="Functions\ConstructionFunctions.cs" />
     <Compile Include="Functions\ConversionFunctions.cs" />
     <Compile Include="Functions\CreateGeometryFunctions.cs" />
@@ -124,7 +123,6 @@
     <Compile Include="Functions\GeometryFunctionRegistry.cs" />
     <Compile Include="Functions\GeometryFunctions.cs" />
     <Compile Include="Functions\IGeometryFunction.cs" />
-    <Compile Include="Functions\LinearReferencingFunctions.cs" />
     <Compile Include="Functions\NodingFunctions.cs" />
     <Compile Include="Functions\NTSFunctions.cs" />
     <Compile Include="Functions\OverlayFunctions.cs" />
@@ -132,10 +130,8 @@
     <Compile Include="Functions\PrecisionFunctions.cs" />
     <Compile Include="Functions\SelectionFunctions.cs" />
     <Compile Include="Functions\SimplificationFunctions.cs" />
-    <Compile Include="Functions\SortingFunctions.cs" />
     <Compile Include="Functions\StaticMethodGeometryFunction.cs" />
     <Compile Include="Functions\TestCaseGeometryFunctions.cs" />
-    <Compile Include="Functions\ValidationFunctions.cs" />
     <Compile Include="Operations\ArgumentConverter.cs" />
     <Compile Include="Operations\BufferValidatedGeometryOperation.cs" />
     <Compile Include="Operations\GeometryFunctionOperation.cs" />

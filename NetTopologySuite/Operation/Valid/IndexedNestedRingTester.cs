@@ -47,7 +47,7 @@ namespace NetTopologySuite.Operation.Valid
                 var innerRing = (ILinearRing)_rings[i];
                 Coordinate[] innerRingPts = innerRing.Coordinates;
 
-                var results = _index.Query(innerRing.EnvelopeInternal);
+                var results = _index.Query(innerRing.EnvelopeInternal);                
                 for (int j = 0; j < results.Count; j++)
                 {
                     var searchRing = (ILinearRing)results[j];

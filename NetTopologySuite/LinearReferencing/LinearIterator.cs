@@ -28,10 +28,9 @@ namespace NetTopologySuite.LinearReferencing
         private readonly IGeometry _linearGeom;
         private readonly int _numLines;
 
-        /// <summary>
-        /// Invariant: currentLine &lt;&gt; null if the iterator is pointing at a valid coordinate
-        /// </summary>
-        /// <exception cref="ArgumentException">Thrown if <see cref="_linearGeom"/> is not <see cref="ILineal"/></exception>
+        /*
+         * Invariant: currentLine <> null if the iterator is pointing at a valid coordinate
+         */
         private ILineString _currentLine;
         private int _componentIndex;
         private int _vertexIndex;
@@ -97,11 +96,10 @@ namespace NetTopologySuite.LinearReferencing
         }
 
         /// <summary>
-        /// Tests whether there are any vertices left to iterator over.
-        /// Specifically, <c>HasNext()</c> returns <tt>true</tt> if the
-        /// current state of the iterator represents a valid location
-        /// on the linear geometry. 
+        /// Evaluate if the iterator could step over.
+        /// Does not perform the step at all.
         /// </summary>
+        /// <returns></returns>
         /// <returns><c>true</c> if there are more vertices to scan.</returns>
         public bool HasNext()
         {
@@ -132,7 +130,7 @@ namespace NetTopologySuite.LinearReferencing
 
         /// <summary>
         /// Checks whether the iterator cursor is pointing to the
-        /// endpoint of a component <see cref="ILineString"/>.
+        /// endpoint of a linestring.
         /// </summary>
         public bool IsEndOfLine
         {

@@ -1,22 +1,19 @@
 using System;
 using System.Collections.Generic;
 using GeoAPI.Geometries;
-using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using NUnit.Framework;
 using NetTopologySuite.Operation.Linemerge;
 
+/*
+ * Test LineSequencer
+ */
 namespace NetTopologySuite.Tests.NUnit.Operation.LineMerge
 {
-    /// <summary>
-    /// LineSequencer tests
-    /// </summary>
     [TestFixture]
     public class LineSequencerTest
     {
-        private static readonly WKTReader Rdr = 
-            new WKTReader();
-            //new WKTReader(new GeometryFactory(new PrecisionModel(PrecisionModels.Fixed)));
+        private static WKTReader rdr = new WKTReader();
 
         [Test]
         public void TestSimple()
@@ -57,7 +54,7 @@ namespace NetTopologySuite.Tests.NUnit.Operation.LineMerge
             RunLineSequencer(wkt, result);
         }
 
-        [Test /*, Ignore("Degenerate loop")*/]
+        [Test]
         public void Test2SimpleLoops()
         {
             String[] wkt = {
@@ -68,20 +65,6 @@ namespace NetTopologySuite.Tests.NUnit.Operation.LineMerge
             };
             String result =
                 "MULTILINESTRING ((0 10, 0 0), (0 0, 0 20), (0 20, 0 0), (0 0, 0 10))";
-            RunLineSequencer(wkt, result);
-        }
-
-        [Test]
-        public void Test2SimpleLoops2()
-        {
-            String[] wkt = {
-                "LINESTRING ( 0 0, 0 10 )",
-                "LINESTRING ( 20 10, 20 0 )",
-                "LINESTRING ( 20 0, 0 0 )",
-                "LINESTRING ( 0 10, 20 10 )",
-            };
-            String result =
-                "MULTILINESTRING ((0 0, 0 10), (0 10, 20 10), (20 10, 20 0), (20 0, 0 0))";
             RunLineSequencer(wkt, result);
         }
 
@@ -191,48 +174,43 @@ namespace NetTopologySuite.Tests.NUnit.Operation.LineMerge
 
         //==========================================================
 
-        private static void RunLineSequencer(String[] inputWKT, String expectedWKT)
+        private void RunLineSequencer(String[] inputWKT, String expectedWKT)
         {
             var inputGeoms = FromWKT(inputWKT);
-            var sequencer = new LineSequencer();
+            LineSequencer sequencer = new LineSequencer();
             sequencer.Add(inputGeoms);
 
-            var isCorrect = false;
+            bool isCorrect = false;
             if (!sequencer.IsSequenceable())
             {
                 Assert.IsTrue(expectedWKT == null);
             }
             else
             {
-                var expected = Rdr.Read(expectedWKT);
-                var result = sequencer.GetSequencedLineStrings();
-                var isOK = expected.EqualsNormalized(result);
-                if (! isOK) {
-                    Console.WriteLine("ERROR - Expected: " + expected);
-                    Console.WriteLine("          Actual: " + result);
-                }
+                IGeometry expected = rdr.Read(expectedWKT);
+                IGeometry result = sequencer.GetSequencedLineStrings();
+                Assert.IsTrue(expected.EqualsExact(result));
 
-                var isSequenced = LineSequencer.IsSequenced(result);
-                Assert.IsTrue(isOK, "Result does not match expected (using EqualsNormalized)!");
-                Assert.IsTrue(isSequenced, "Result geometry is not sequenced!");
+                bool isSequenced = LineSequencer.IsSequenced(result);
+                Assert.IsTrue(isSequenced);
             }
         }
 
-        private static void RunIsSequenced(String inputWKT, bool expected)
+        private void RunIsSequenced(String inputWKT, bool expected)
         {
-            var g = Rdr.Read(inputWKT);
-            var isSequenced = LineSequencer.IsSequenced(g);
+            IGeometry g = rdr.Read(inputWKT);
+            bool isSequenced = LineSequencer.IsSequenced(g);
             Assert.IsTrue(isSequenced == expected);
         }
 
-        private static List<IGeometry> FromWKT(String[] wkts)
+        IList<IGeometry> FromWKT(String[] wkts)
         {
             var geomList = new List<IGeometry>();
             foreach (var wkt in wkts)
             {
                 try
                 {
-                    geomList.Add(Rdr.Read(wkt));
+                    geomList.Add(rdr.Read(wkt));
                 }
                 catch (Exception ex)
                 {

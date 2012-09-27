@@ -71,9 +71,6 @@
     <Compile Include="..\..\NetTopologySuite\Algorithm\CGAlgorithms.cs">
       <Link>Algorithm\CGAlgorithms.cs</Link>
     </Compile>
-    <Compile Include="..\..\NetTopologySuite\Algorithm\CGAlgorithmsDD.cs">
-      <Link>Algorithm\CGAlgorithmsDD.cs</Link>
-    </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\ConvexHull.cs">
       <Link>Algorithm\ConvexHull.cs</Link>
     </Compile>
@@ -151,9 +148,6 @@
     </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\RayCrossingCounter.cs">
       <Link>Algorithm\RayCrossingCounter.cs</Link>
-    </Compile>
-    <Compile Include="..\..\NetTopologySuite\Algorithm\RectangleLineIntersector.cs">
-      <Link>Algorithm\RectangleLineIntersector.cs</Link>
     </Compile>
     <Compile Include="..\..\NetTopologySuite\Algorithm\RobustDeterminant.cs">
       <Link>Algorithm\RobustDeterminant.cs</Link>
@@ -1321,9 +1315,4 @@
   </ItemGroup> -->
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\Silverlight for Phone\$(TargetFrameworkVersion)\Microsoft.Silverlight.$(TargetFrameworkProfile).Overrides.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\Silverlight for Phone\$(TargetFrameworkVersion)\Microsoft.Silverlight.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties ProjectLinkReference="5770daa9-84e5-4770-af43-f6b815894368" ProjectLinkerExcludeFilter="\\?desktop(\\.*)?$;\\?silverlight(\\.*)?$;\.desktop;\.silverlight;\.xaml;^service references(\\.*)?$;\.clientconfig;^web references(\\.*)?$" />
-    </VisualStudio>
-  </ProjectExtensions>
 </Project>

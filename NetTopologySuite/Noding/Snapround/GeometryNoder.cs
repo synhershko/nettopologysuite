@@ -57,7 +57,6 @@ namespace NetTopologySuite.Noding.Snapround
             sr.ComputeNodes(segStrings);
             var nodedLines = sr.GetNodedSubstrings();
 
-            //TODO: improve this to check for full snap-rounded correctness
             if (IsValidityChecked)
             {
                 NodingValidator nv = new NodingValidator(nodedLines);
@@ -80,20 +79,20 @@ namespace NetTopologySuite.Noding.Snapround
             return lines;
         }
 
-        private static IEnumerable<IGeometry> ExtractLines(IEnumerable<IGeometry> geoms)
+        private IEnumerable<ILineString> ExtractLines(IEnumerable<IGeometry> geoms)
         {
-            var lines = new List<IGeometry>();
+            IList<ILineString> lines = new List<ILineString>();
             var lce = new LinearComponentExtracter(lines);
-            foreach (var geom in geoms)
+            foreach (IGeometry geom in geoms)
             {
                 geom.Apply(lce);
             }
             return lines;
         }
 
-        private static IList<ISegmentString> ToSegmentStrings(IEnumerable<IGeometry> lines)
+        private static IList<ISegmentString> ToSegmentStrings(IEnumerable<ILineString> lines)
         {
-            var segStrings = new List<ISegmentString>();
+            IList<ISegmentString> segStrings = new List<ISegmentString>();
             foreach (ILineString line in lines)
             {
                 segStrings.Add(new NodedSegmentString(line.Coordinates, null));

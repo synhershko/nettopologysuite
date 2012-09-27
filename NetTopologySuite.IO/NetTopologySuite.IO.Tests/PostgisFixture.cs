@@ -5,8 +5,6 @@
     using Npgsql;
     using NpgsqlTypes;
 
-    [NUnit.Framework.TestFixture]
-    [NUnit.Framework.Category("Database.IO")]
     public class PostgisFixture : AbstractIOFixture
     {
         protected override void AddAppConfigSpecificItems(KeyValueConfigurationCollection kvcc)
@@ -21,34 +19,18 @@
             this.ConnectionString = (string)asr.GetValue("PostGisConnectionString", typeof(string));
         }
 
-        private string PostGisVersion()
-        {
-            using (var conn = new NpgsqlConnection(this.ConnectionString))
-            {
-                conn.Open();
-                using (var cmd = conn.CreateCommand())
-                {
-                    cmd.CommandText = "SELECT postgis_version();";
-                    var res = cmd.ExecuteScalar();
-                    return res.ToString();
-                }
-            }
-        }
-
-
         protected override void CreateTestStore()
         {
             using (var conn = new NpgsqlConnection(this.ConnectionString))
             {
                 conn.Open();
-                using (var cmd = conn.CreateCommand())
+                using (NpgsqlCommand cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = PostGisVersion().StartsWith("1.") 
-                        ? "DELETE FROM \"geometry_columns\" WHERE \"f_table_name\" = 'nts_io_postgis_2d'; "
-                        :""
-                        + "DROP TABLE IF EXISTS \"nts_io_postgis_2d\";";
+                    cmd.CommandText =
+                        "DELETE FROM \"geometry_columns\" WHERE \"f_table_name\" = 'nts_io_postgis_2d'; " 
+                      + "DROP TABLE IF EXISTS \"nts_io_postgis_2d\";"
+                        ;
                     cmd.ExecuteNonQuery();
-
                     cmd.CommandText = 
                         "CREATE TABLE \"nts_io_postgis_2d\" (id int primary key, wkt text);" 
                       + "SELECT AddGeometryColumn('nts_io_postgis_2d', 'the_geom', " + 4326 + ",'GEOMETRY', 2);"                        

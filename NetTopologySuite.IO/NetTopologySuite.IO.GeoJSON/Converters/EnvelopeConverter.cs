@@ -1,18 +1,15 @@
-﻿namespace NetTopologySuite.IO.Converters
+﻿using System;
+using GeoAPI.Geometries;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace NetTopologySuite.IO.Converters
 {
-    using System;
-    using System.Diagnostics;
-
-    using GeoAPI.Geometries;
-
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
-
     public class EnvelopeConverter : JsonConverter
     {
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            Envelope envelope = value as Envelope;
+            var envelope = value as Envelope;
             if (envelope == null) return;
 
             writer.WritePropertyName("bbox");
@@ -26,19 +23,19 @@
 
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            Debug.Assert(reader.TokenType == JsonToken.PropertyName);
-            Debug.Assert((string)reader.Value == "bbox");
+            System.Diagnostics.Debug.Assert(reader.TokenType == JsonToken.PropertyName);
+            System.Diagnostics.Debug.Assert((string)reader.Value == "bbox");
 
-            JArray envelope = serializer.Deserialize<JArray>(reader);
-            Debug.Assert(envelope.Count == 4);
+            var envelope = serializer.Deserialize<JArray>(reader);
+            System.Diagnostics.Debug.Assert(envelope.Count == 4);
 
-            double minX = Double.Parse((string)envelope[0]);
-            double minY = Double.Parse((string)envelope[1]);
-            double maxX = Double.Parse((string)envelope[2]);
-            double maxY = Double.Parse((string)envelope[3]);
+            var minX = Double.Parse((string)envelope[0]);
+            var minY = Double.Parse((string)envelope[1]);
+            var maxX = Double.Parse((string)envelope[2]);
+            var maxY = Double.Parse((string)envelope[3]);
 
-            Debug.Assert(minX <= maxX);
-            Debug.Assert(minY <= maxY);
+            System.Diagnostics.Debug.Assert(minX <= maxX);
+            System.Diagnostics.Debug.Assert(minY <= maxY);
 
             return new Envelope(minX, minY, maxX, maxY);
         }

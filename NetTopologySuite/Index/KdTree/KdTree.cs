@@ -44,20 +44,6 @@ namespace NetTopologySuite.Index.KdTree
         }
 
         /// <summary>
-        /// Tests whether the index contains any items.
-        /// </summary>
-        public bool IsEmpty
-        {
-            get
-            {
-                if (_root == null) return true;
-                return false;
-            }
-        }
-  
-
-
-        /// <summary>
         /// Inserts a new point in the kd-tree, with no data.
         /// </summary>
         /// <param name="p">The point to insert</param>
@@ -90,26 +76,9 @@ namespace NetTopologySuite.Index.KdTree
             bool isOddLevel = true;
             bool isLessThan = true;
 
-            /**
-             * Traverse the tree,
-             * first cutting the plane left-right (by X ordinate)
-             * then top-bottom (by Y ordinate)
-             */
+            // traverse the tree first cutting the plane left-right the top-bottom
             while (currentNode != last)
             {
-                // test if point is already a node
-                if (currentNode != null)
-                {
-                    var isInTolerance = p.Distance(currentNode.Coordinate) <= _tolerance;
-
-                    // check if point is already in tree (up to tolerance) and if so simply
-                    // return existing node
-                    if (isInTolerance)
-                    {
-                        currentNode.Increment();
-                        return currentNode;
-                    }
-                }
                 if (isOddLevel)
                 {
                     isLessThan = p.X < currentNode.X;
@@ -126,6 +95,25 @@ namespace NetTopologySuite.Index.KdTree
                 else
                 {
                     currentNode = currentNode.Right;
+                }
+                // test if point is already a node
+                if (currentNode != null)
+                {
+                    bool isInTolerance = p.Distance(currentNode.Coordinate) <= _tolerance;
+
+                    // if (isInTolerance && ! p.equals2D(currentNode.getCoordinate())) {
+                    // System.out.println("KDTree: Snapped!");
+                    // System.out.println(WKTWriter.toPoint(p));
+                    // }
+
+                    // check if point is already in tree (up to tolerance) and if so simply
+                    // return
+                    // existing node
+                    if (isInTolerance)
+                    {
+                        currentNode.Increment();
+                        return currentNode;
+                    }
                 }
                 isOddLevel = !isOddLevel;
             }

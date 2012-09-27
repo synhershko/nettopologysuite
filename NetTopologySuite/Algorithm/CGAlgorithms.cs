@@ -1,7 +1,6 @@
 using System;
 using GeoAPI.Geometries;
 using NetTopologySuite.Geometries;
-using NetTopologySuite.Mathematics;
 
 namespace NetTopologySuite.Algorithm
 {
@@ -14,29 +13,29 @@ namespace NetTopologySuite.Algorithm
         /// <summary> 
         /// A value that indicates an orientation of clockwise, or a right turn.
         /// </summary>
-        public const int Clockwise          = -1;
+        public const int Clockwise      = -1;
         /// <summary> 
         /// A value that indicates an orientation of clockwise, or a right turn.
         /// </summary>
-        public const int Right              = Clockwise;
+        public const int Right         = Clockwise;
 
         /// <summary>
         /// A value that indicates an orientation of counterclockwise, or a left turn.
         /// </summary>
-        public const int CounterClockwise   = 1;
+        public const int CounterClockwise  = 1;
         /// <summary>
         /// A value that indicates an orientation of counterclockwise, or a left turn.
         /// </summary>
-        public const int Left               = CounterClockwise;
+        public const int Left              = CounterClockwise;
 
         /// <summary>
         /// A value that indicates an orientation of collinear, or no turn (straight).
         /// </summary>
-        public const int Collinear          = 0;
+        public const int Collinear         = 0;
         /// <summary>
         /// A value that indicates an orientation of collinear, or no turn (straight).
         /// </summary>
-        public const int Straight           = Collinear;
+        public const int Straight = Collinear;
         
         /// <summary> 
         /// Returns the index of the direction of the point <c>q</c>
@@ -81,9 +80,11 @@ namespace NetTopologySuite.Algorithm
                if (p2.x < p1.x || (p2.x == p1.x && p2.y < p1.y))
                     return -orientationIndex(p2, p1, q);
              */
-            //return ShewchuksDeterminant.OrientationIndex(p1, p2, q);
-            return CGAlgorithmsDD.OrientationIndex(p1, p2, q);
-            //return RobustDeterminant.OrientationIndex(p1, p2, q);
+            double dx1 = p2.X - p1.X;
+            double dy1 = p2.Y - p1.Y;
+            double dx2 = q.X - p2.X;
+            double dy2 = q.Y - p2.Y;
+            return RobustDeterminant.SignOfDet2x2(dx1, dy1, dx2, dy2);
         }        
 
         /// <summary> 
@@ -270,13 +271,12 @@ namespace NetTopologySuite.Algorithm
 		                0<r<1 Point is interior to AB
 	        */
 
-            var len2 = ((B.X - A.X)*(B.X - A.X) + (B.Y - A.Y)*(B.Y - A.Y));
-            var r = ((p.X - A.X)*(B.X - A.X) + (p.Y - A.Y)*(B.Y - A.Y))/len2;
+            double r =  ( (p.X - A.X) * (B.X - A.X) + (p.Y - A.Y) * (B.Y - A.Y) )
+                        /
+                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
 
-            if (r <= 0.0) 
-                return p.Distance(A);
-            if (r >= 1.0) 
-                return p.Distance(B);
+            if (r <= 0.0) return p.Distance(A);
+            if (r >= 1.0) return p.Distance(B);
 
 
             /*(2)
@@ -285,14 +285,13 @@ namespace NetTopologySuite.Algorithm
 		             	                Curve^2
 
 		                Then the distance from C to Point = |s|*Curve.
-      
-                        This is the same calculation as {@link #distancePointLinePerpendicular}.
-                        Unrolled here for performance.
 	        */
 
-            var s = ((A.Y - p.Y)*(B.X - A.X) - (A.X - p.X)*(B.Y - A.Y))/len2;
+            double s =  ( (A.Y - p.Y) * (B.X - A.X) - (A.X - p.X) * (B.Y - A.Y) )
+                        /
+                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
 
-            return Math.Abs(s) * Math.Sqrt(len2);
+            return System.Math.Abs(s) * System.Math.Sqrt(((B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y)));
         }
 
         /// <summary> 
@@ -313,11 +312,12 @@ namespace NetTopologySuite.Algorithm
 
                         Then the distance from C to Point = |s|*Curve.
             */
-            var len2 = ((B.X - A.X)*(B.X - A.X) + (B.Y - A.Y)*(B.Y - A.Y));
-            var s = ((A.Y - p.Y)*(B.X - A.X) - (A.X - p.X)*(B.Y - A.Y))/len2;
 
+            double s =  ( (A.Y - p.Y) * (B.X - A.X) - (A.X - p.X) * (B.Y - A.Y) )
+                        /
+                        ( (B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y) );
 
-            return Math.Abs(s)*Math.Sqrt(len2);
+            return System.Math.Abs(s) * System.Math.Sqrt(((B.X - A.X) * (B.X - A.X) + (B.Y - A.Y) * (B.Y - A.Y)));
         }
 
         /// <summary>
@@ -365,66 +365,51 @@ namespace NetTopologySuite.Algorithm
 
             // AB and CD are line segments
             /* from comp.graphics.algo
-             *
-	         *  Solving the above for r and s yields
-             * 
-             *     (Ay-Cy)(Dx-Cx)-(Ax-Cx)(Dy-Cy) 
-             * r = ----------------------------- (eqn 1) 
-             *     (Bx-Ax)(Dy-Cy)-(By-Ay)(Dx-Cx)
-             * 
-             *     (Ay-Cy)(Bx-Ax)-(Ax-Cx)(By-Ay)  
-             * s = ----------------------------- (eqn 2)
-             *     (Bx-Ax)(Dy-Cy)-(By-Ay)(Dx-Cx) 
-             *     
-             * Let P be the position vector of the
-             * intersection point, then 
-             *   P=A+r(B-A) or 
-             *   Px=Ax+r(Bx-Ax) 
-             *   Py=Ay+r(By-Ay) 
-             * By examining the values of r & s, you can also determine some other limiting
-             * conditions: 
-             *   If 0<=r<=1 & 0<=s<=1, intersection exists 
-             *      r<0 or r>1 or s<0 or s>1 line segments do not intersect 
-             *   If the denominator in eqn 1 is zero, AB & CD are parallel 
-             *   If the numerator in eqn 1 is also zero, AB & CD are collinear.
-	         */
-            var noIntersection = false;
-            if (!Envelope.Intersects(A, B, C, D))
-            {
-                noIntersection = true;
-            }
-            else
-            {
-                var denom = (B.X - A.X) * (D.Y - C.Y) - (B.Y - A.Y) * (D.X - C.X);
 
-                if (denom == 0)
-                {
-                    noIntersection = true;
-                }
-                else
-                {
-                    var r_num = (A.Y - C.Y) * (D.X - C.X) - (A.X - C.X) * (D.Y - C.Y);
-                    var s_num = (A.Y - C.Y) * (B.X - A.X) - (A.X - C.X) * (B.Y - A.Y);
+	            Solving the above for r and s yields
+				            (Ay-Cy)(Dx-Cx)-(Ax-Cx)(Dy-Cy)
+	                    r = ----------------------------- (eqn 1)
+				            (Bx-Ax)(Dy-Cy)-(By-Ay)(Dx-Cx)
 
-                    var s = s_num / denom;
-                    var r = r_num / denom;
+		 	                (Ay-Cy)(Bx-Ax)-(Ax-Cx)(By-Ay)
+		                s = ----------------------------- (eqn 2)
+			                (Bx-Ax)(Dy-Cy)-(By-Ay)(Dx-Cx)
+	            Let Point be the position vector of the intersection point, then
+		            Point=A+r(B-A) or
+		            Px=Ax+r(Bx-Ax)
+		            Py=Ay+r(By-Ay)
+	            By examining the values of r & s, you can also determine some other
+                limiting conditions:
+		            If 0<=r<=1 & 0<=s<=1, intersection exists
+		            r<0 or r>1 or s<0 or s>1 line segments do not intersect
+		            If the denominator in eqn 1 is zero, AB & CD are parallel
+		            If the numerator in eqn 1 is also zero, AB & CD are collinear.
 
-                    if ((r < 0) || (r > 1) || (s < 0) || (s > 1))
-                    {
-                        noIntersection = true;
-                    }
-                }
-            }
-            if (noIntersection)
-            {
-                return MathUtil.Min(
-                      DistancePointLine(A, C, D),
-                      DistancePointLine(B, C, D),
-                      DistancePointLine(C, A, B),
-                      DistancePointLine(D, A, B));
-            }
-            // segments intersect
-            return 0.0;
+	        */
+            double r_top = (A.Y - C.Y) * (D.X - C.X) - (A.X - C.X) * (D.Y - C.Y);
+            double r_bot = (B.X - A.X) * (D.Y - C.Y) - (B.Y - A.Y) * (D.X - C.X);
+
+            double s_top = (A.Y - C.Y) * (B.X - A.X) - (A.X - C.X) * (B.Y - A.Y);
+            double s_bot = (B.X - A.X) * (D.Y - C.Y) - (B.Y - A.Y) * (D.X - C.X);
+
+            if ((r_bot==0) || (s_bot == 0))             
+                return  Math.Min(DistancePointLine(A,C,D),
+	                    Math.Min(DistancePointLine(B,C,D),
+	                    Math.Min(DistancePointLine(C,A,B),
+	                    DistancePointLine(D,A,B) ) ) );
+
+            
+            double s = s_top/s_bot;
+            double r = r_top/r_bot;
+
+            if ((r < 0) || ( r > 1) || (s < 0) || (s > 1))	
+                //no intersection
+                return  Math.Min(DistancePointLine(A,C,D),
+	                    Math.Min(DistancePointLine(B,C,D),
+	                    Math.Min(DistancePointLine(C,A,B),
+	                    DistancePointLine(D,A,B) ) ) );
+            
+            return 0.0; //intersection exists
         }
 
         /// <summary>
@@ -447,20 +432,16 @@ namespace NetTopologySuite.Algorithm
             if (ring.Length < 3) 
                 return 0.0;
 
-            var sum = 0.0;
-            /**
-             * Based on the Shoelace formula.
-             * http://en.wikipedia.org/wiki/Shoelace_formula
-             */
-            var x0 = ring[0].X;
-            for (var i = 1; i < ring.Length - 1; i++)
+            double sum = 0.0;
+            for (int i = 0; i < ring.Length - 1; i++) 
             {
-                var x = ring[i].X - x0;
-                var y1 = ring[i + 1].Y;
-                var y2 = ring[i == 0 ? ring.Length - 1 : i - 1].Y;
-                sum += x * (y2 - y1);
+                double bx = ring[i].X;
+                double by = ring[i].Y;
+                double cx = ring[i + 1].X;
+                double cy = ring[i + 1].Y;
+                sum += (bx + cx) * (cy - by);
             }
-            return sum / 2.0;
+            return -sum  / 2.0;
         }
 
         /// <summary>
@@ -480,31 +461,23 @@ namespace NetTopologySuite.Algorithm
         /// <returns>The signed area of the ring</returns>
         public static double SignedArea(ICoordinateSequence ring)
         {
-            var n = ring.Count;
-            if (n < 3)
-                return 0.0;
-            /**
-             * Based on the Shoelace formula.
-             * http://en.wikipedia.org/wiki/Shoelace_formula
-             */
-            var p0 = new Coordinate();
-            var p1 = new Coordinate();
-            var p2 = new Coordinate();
-            ring.GetCoordinate(0, p1);
-            ring.GetCoordinate(1, p2);
-            var x0 = p1.X;
-            p2.X -= x0;
-            var sum = 0.0;
-            for (var i = 1; i < n - 1; i++)
+            int n = ring.Count;
+            if (n < 3) return 0.0;
+            double sum = 0.0;
+            var p = new Coordinate();
+            ring.GetCoordinate(0, p);
+            double bx = p.X;
+            double by = p.Y;
+            for (int i = 1; i < n; i++)
             {
-                p0.Y = p1.Y;
-                p1.X = p2.X;
-                p1.Y = p2.Y;
-                ring.GetCoordinate(i + 1, p2);
-                p2.X -= x0;
-                sum += p1.X * (p0.Y - p2.Y);
+                ring.GetCoordinate(i, p);
+                double cx = p.X;
+                double cy = p.Y;
+                sum += (bx + cx) * (cy - by);
+                bx = cx;
+                by = cy;
             }
-            return sum / 2.0;
+            return -sum / 2.0;
         }
 
         /// <summary>

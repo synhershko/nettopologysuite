@@ -7,15 +7,8 @@ using NetTopologySuite.Operation.Valid;
 namespace NetTopologySuite.Geometries
 {
     /// <summary>
-    /// Represents a single point.
-    /// <para/>
-    /// A <c>Point</c> is topologically valid if and only if:
-    /// <list type="Bullet">
-    /// <item>The coordinate which defines it if any) is a valid coordinate 
-    /// (i.e. does not have an <c>NaN</c> X- or Y-ordinate</item>
-    /// </list>
+    /// Basic implementation of <c>Point</c>.
     /// </summary>
-    /// 
 //#if !SILVERLIGHT
     [Serializable]
 //#endif
@@ -31,7 +24,7 @@ namespace NetTopologySuite.Geometries
         /// <summary>  
         /// The <c>Coordinate</c> wrapped by this <c>Point</c>.
         /// </summary>
-        private ICoordinateSequence _coordinates;        
+        private ICoordinateSequence coordinates;        
 
         /// <summary>
         /// 
@@ -40,7 +33,7 @@ namespace NetTopologySuite.Geometries
         {
             get
             {
-                return _coordinates;
+                return coordinates;
             }
         }             
 
@@ -69,7 +62,7 @@ namespace NetTopologySuite.Geometries
             if (coordinates == null) 
                 coordinates = factory.CoordinateSequenceFactory.Create(new Coordinate[] { });
             NetTopologySuite.Utilities.Assert.IsTrue(coordinates.Count <= 1);
-            this._coordinates = (ICoordinateSequence) coordinates;
+            this.coordinates = (ICoordinateSequence) coordinates;
         }        
 
         /// <summary>
@@ -186,7 +179,7 @@ namespace NetTopologySuite.Geometries
         {
             get
             {
-                return _coordinates.Count != 0 ? _coordinates.GetCoordinate(0) : null;
+                return coordinates.Count != 0 ? coordinates.GetCoordinate(0) : null;
             }
         }
 
@@ -237,7 +230,7 @@ namespace NetTopologySuite.Geometries
         internal override int  GetHashCodeInternal(int baseValue, Func<int,int> operation)
         {
             if (!IsEmpty)
-                baseValue = operation(baseValue) + _coordinates.GetX(0).GetHashCode();
+                baseValue = operation(baseValue) + coordinates.GetX(0).GetHashCode();
             return baseValue;
         }
 
@@ -253,9 +246,6 @@ namespace NetTopologySuite.Geometries
                 return false;            
             if (IsEmpty && other.IsEmpty) 
                 return true;
-            if (IsEmpty != other.IsEmpty)
-                return false;
-
             return Equal(other.Coordinate, Coordinate, tolerance);
         }
 
@@ -274,7 +264,7 @@ namespace NetTopologySuite.Geometries
         {
             if (IsEmpty)
                 return;
-            filter.Filter(_coordinates, 0);
+            filter.Filter(coordinates, 0);
             if (filter.GeometryChanged)
                 GeometryChanged();
         }
@@ -304,7 +294,7 @@ namespace NetTopologySuite.Geometries
         public override object Clone() 
         {
             Point p = (Point) base.Clone();
-            p._coordinates = (ICoordinateSequence) _coordinates.Clone();
+            p.coordinates = (ICoordinateSequence) coordinates.Clone();
             return p; 
         }
 

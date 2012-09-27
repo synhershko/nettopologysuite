@@ -32,39 +32,67 @@ namespace NetTopologySuite.Operation.Polygonize
         /// </summary>
         private class LineStringAdder : IGeometryComponentFilter
         {
-            private readonly Polygonizer _container;
+            private readonly Polygonizer container;
 
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="container"></param>
             public LineStringAdder(Polygonizer container)
             {
-                _container = container;
+                this.container = container;
             }
 
             /// <summary>
-            /// Filters all <see cref="ILineString"/> geometry instances
+            /// 
             /// </summary>
-            /// <param name="g">The geometry instance</param>
-            public void Filter(IGeometry g)
+            /// <param name="g"></param>
+            public void Filter(IGeometry g) 
             {
-                var lineString = g as ILineString;
-                if (lineString != null)
-                    _container.Add(lineString);
+                if (g is ILineString)
+					container.Add((ILineString)g);
             }
         }
 
         /// <summary>
-        /// Default linestring adder.
+        /// Default factory.
         /// </summary>
         private readonly LineStringAdder _lineStringAdder;
 
-        private PolygonizeGraph _graph;
+        /// <summary>
+        /// 
+        /// </summary>
+        protected PolygonizeGraph graph;
 
-        // Initialized with empty collections, in case nothing is computed
-        private ICollection<ILineString> _dangles = new List<ILineString>();
-        private ICollection<ILineString> _cutEdges = new List<ILineString>();
-        private IList<IGeometry> _invalidRingLines = new List<IGeometry>();
-        private IList<EdgeRing> _holeList;
-        private IList<EdgeRing> _shellList;
-        private ICollection<IGeometry> _polyList;
+        /// <summary>
+        /// Initialized with empty collections, in case nothing is computed
+        /// </summary>
+        protected ICollection<ILineString> dangles = new List<ILineString>();
+
+        /// <summary>
+        /// 
+        /// </summary>
+        protected ICollection<ILineString> cutEdges = new List<ILineString>();
+
+        /// <summary>
+        /// 
+        /// </summary>
+        protected IList<IGeometry> invalidRingLines = new List<IGeometry>();
+
+        /// <summary>
+        /// 
+        /// </summary>
+        protected IList<EdgeRing> holeList;
+        
+        /// <summary>
+        /// 
+        /// </summary>        
+        protected IList<EdgeRing> shellList;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        protected IList<IGeometry> polyList;
 
         /// <summary>
         /// Create a polygonizer with the same {GeometryFactory}
@@ -82,9 +110,9 @@ namespace NetTopologySuite.Operation.Polygonize
         /// the constituent linework will be extracted and used.
         /// </summary>
         /// <param name="geomList">A list of <c>Geometry</c>s with linework to be polygonized.</param>
-        public void Add(ICollection<IGeometry> geomList)
+        public void Add(IList<IGeometry> geomList)
         {
-            foreach (var geometry in geomList)
+            foreach (IGeometry geometry in geomList)
                 Add(geometry);
         }
 
@@ -107,18 +135,18 @@ namespace NetTopologySuite.Operation.Polygonize
         private void Add(ILineString line)
         {
             // create a new graph using the factory from the input Geometry
-            if (_graph == null)
-				_graph = new PolygonizeGraph(line.Factory);
-            _graph.AddEdge(line);
+            if (graph == null)
+				graph = new PolygonizeGraph(line.Factory);
+            graph.AddEdge(line);
         }
 
         /// <summary>
         /// Gets the list of polygons formed by the polygonization.
         /// </summary>        
-        public ICollection<IGeometry> GetPolygons()
+        public IList<IGeometry> GetPolygons()
         {
             Polygonize();
-            return _polyList;
+            return polyList;
         }
 
         /// <summary> 
@@ -127,7 +155,7 @@ namespace NetTopologySuite.Operation.Polygonize
         public ICollection<ILineString> GetDangles()
         {
             Polygonize();
-            return _dangles;
+            return dangles;
         }
 
         /// <summary>
@@ -136,7 +164,7 @@ namespace NetTopologySuite.Operation.Polygonize
         public ICollection<ILineString> GetCutEdges()
         {
             Polygonize();
-            return _cutEdges;
+            return cutEdges;
         }
 
         /// <summary>
@@ -145,7 +173,7 @@ namespace NetTopologySuite.Operation.Polygonize
         public IList<IGeometry> GetInvalidRingLines()
         {
             Polygonize();
-            return _invalidRingLines;
+            return invalidRingLines;
         }
 
         /// <summary>
@@ -154,35 +182,36 @@ namespace NetTopologySuite.Operation.Polygonize
         private void Polygonize()
         {
             // check if already computed
-            if (_polyList != null) 
+            if (polyList != null) 
                 return;
 
-            _polyList = new List<IGeometry>();
+            polyList = new List<IGeometry>();
 
             // if no geometries were supplied it's possible that graph is null
-            if (_graph == null) 
+            if (graph == null) 
                 return;
 
-            _dangles = _graph.DeleteDangles();
-            _cutEdges = _graph.DeleteCutEdges();
-            var edgeRingList = _graph.GetEdgeRings();
+            dangles = graph.DeleteDangles();
+            cutEdges = graph.DeleteCutEdges();
+            var edgeRingList = graph.GetEdgeRings();
 
-            var validEdgeRingList = new List<EdgeRing>();
-            _invalidRingLines = new List<IGeometry>();
-            FindValidRings(edgeRingList, validEdgeRingList, _invalidRingLines);
+            IList<EdgeRing> validEdgeRingList = new List<EdgeRing>();
+            invalidRingLines = new List<IGeometry>();
+            FindValidRings(edgeRingList, validEdgeRingList, invalidRingLines);
 
             FindShellsAndHoles(validEdgeRingList);
-            AssignHolesToShells(_holeList, _shellList);
+            AssignHolesToShells(holeList, shellList);
 
-            _polyList = new List<IGeometry>();
-            foreach (EdgeRing er in _shellList)
-                _polyList.Add(er.Polygon);
+            polyList = new List<IGeometry>();
+            foreach (EdgeRing er in shellList)
+                polyList.Add(er.Polygon);
         }
 
-        private static void FindValidRings(IEnumerable<EdgeRing> edgeRingList, ICollection<EdgeRing> validEdgeRingList, ICollection<IGeometry> invalidRingList)
+        private static void FindValidRings(IEnumerable<EdgeRing> edgeRingList, IList<EdgeRing> validEdgeRingList, IList<IGeometry> invalidRingList)
         {
-            foreach (var er in edgeRingList)
+            for (var i = edgeRingList.GetEnumerator(); i.MoveNext(); ) 
             {
+                var er = i.Current;
                 if (er.IsValid)
                      validEdgeRingList.Add(er);
                 else invalidRingList.Add(er.LineString);
@@ -191,28 +220,28 @@ namespace NetTopologySuite.Operation.Polygonize
 
         private void FindShellsAndHoles(IEnumerable<EdgeRing> edgeRingList)
         {
-            _holeList = new List<EdgeRing>();
-            _shellList = new List<EdgeRing>();
-            foreach (var er in edgeRingList)
+            holeList = new List<EdgeRing>();
+            shellList = new List<EdgeRing>();
+            foreach (EdgeRing er in edgeRingList)
             {
                 if (er.IsHole)
-                     _holeList.Add(er);
-                else _shellList.Add(er);
+                     holeList.Add(er);
+                else shellList.Add(er);
 
             }
         }
 
         private static void AssignHolesToShells(IEnumerable<EdgeRing> holeList, IList<EdgeRing> shellList)
         {
-            foreach (EdgeRing holeEdgeRing in holeList)
-                AssignHoleToShell(holeEdgeRing, shellList);
+            foreach (EdgeRing holeER in holeList)
+                AssignHoleToShell(holeER, shellList);
         }
 
-        private static void AssignHoleToShell(EdgeRing holeEdgeRing, IList<EdgeRing> shellList)
+        private static void AssignHoleToShell(EdgeRing holeER, IList<EdgeRing> shellList)
         {
-            var shell = EdgeRing.FindEdgeRingContaining(holeEdgeRing, shellList);
+            var shell = EdgeRing.FindEdgeRingContaining(holeER, shellList);
             if (shell != null)
-                shell.AddHole(holeEdgeRing.Ring);
+                shell.AddHole(holeER.Ring);
         }
     }
 }
