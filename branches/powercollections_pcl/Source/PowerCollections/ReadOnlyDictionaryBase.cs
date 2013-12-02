@@ -24,7 +24,7 @@ namespace Wintellect.PowerCollections
     /// </remarks>
     /// <typeparam name="TKey">The key type of the dictionary.</typeparam>
     /// <typeparam name="TValue">The value type of the dictionary.</typeparam>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
     [DebuggerDisplay("{DebuggerDisplayString()}")]
@@ -408,7 +408,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;TKey&gt; and ICollection for the
         /// Keys collection. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class KeysCollection : ReadOnlyCollectionBase<TKey>
@@ -445,7 +445,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;TKey&gt; and ICollection for the
         /// Values collection. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class ValuesCollection : ReadOnlyCollectionBase<TValue>
@@ -476,7 +476,7 @@ namespace Wintellect.PowerCollections
         /// enumerates KeyValuePairs. This is useful in implementing IDictionary, because
         /// IEnumerator can be implemented with an iterator, but IDictionaryEnumerator cannot.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private class DictionaryEnumeratorWrapper : IDictionaryEnumerator

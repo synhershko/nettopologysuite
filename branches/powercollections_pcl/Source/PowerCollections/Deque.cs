@@ -36,11 +36,11 @@ namespace Wintellect.PowerCollections
     /// elements.</para>
     /// </remarks>
     /// <typeparam name="T">The type of items stored in the Deque.</typeparam>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
     public class Deque<T> : ListBase<T>
-#if !SILVERLIGHT
+#if !PCL
         , ICloneable
 #endif
     {
@@ -885,7 +885,7 @@ namespace Wintellect.PowerCollections
             return new Deque<T>(this);
         }
         
-#if !SILVERLIGHT
+#if !PCL
 
         /// <summary>
         /// Creates a new Deque that is a copy of this one.

@@ -32,11 +32,11 @@ namespace Wintellect.PowerCollections
     /// the items in sorted order, and stores distinct copies of items that compare equal.</p>
     ///</remarks>
     ///<seealso cref="OrderedBag&lt;T&gt;"/>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
     public class Bag<T> : CollectionBase<T>
-#if !SILVERLIGHT
+#if !PCL
         , ICloneable
 #endif
     {
@@ -163,7 +163,7 @@ namespace Wintellect.PowerCollections
             return newBag;
         }
         
-#if !SILVERLIGHT
+#if !PCL
 
         /// <summary>
         /// Makes a shallow clone of this bag; i.e., if items of the
