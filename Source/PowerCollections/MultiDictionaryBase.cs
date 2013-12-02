@@ -28,7 +28,7 @@ namespace Wintellect.PowerCollections
     /// </remarks>
     /// <typeparam name="TKey">The key type of the dictionary.</typeparam>
     /// <typeparam name="TValue">The value type of the dictionary.</typeparam>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
     [DebuggerDisplay("{DebuggerDisplayString()}")]
@@ -551,7 +551,7 @@ namespace Wintellect.PowerCollections
         /// that is returned from the indexer. The collections is read-write, live, and can be used to add, remove,
         /// etc. values from the multi-dictionary.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class ValuesForKeyCollection : CollectionBase<TValue>
@@ -645,7 +645,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;TKey&gt; and ICollection for the
         /// Keys collection. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class KeysCollection : ReadOnlyCollectionBase<TKey>
@@ -681,7 +681,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;TValue&gt; and ICollection for the
         /// Values collection. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class ValuesCollection : ReadOnlyCollectionBase<TValue>
@@ -728,7 +728,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;ICollection&lt;TValue&gt;&gt; and ICollection for the
         /// Values collection on IDictionary. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class EnumerableValuesCollection : ReadOnlyCollectionBase<ICollection<TValue>>
@@ -791,7 +791,7 @@ namespace Wintellect.PowerCollections
         /// A private class that implements ICollection&lt;KeyValuePair&lt;TKey,TValue&gt;&gt; and ICollection for the
         /// KeyValuePairs collection. The collection is read-only.
         /// </summary>
-#if !SILVERLIGHT
+#if !PCL
     [Serializable]
 #endif
         private sealed class KeyValuePairsCollection : ReadOnlyCollectionBase<KeyValuePair<TKey,TValue>>
