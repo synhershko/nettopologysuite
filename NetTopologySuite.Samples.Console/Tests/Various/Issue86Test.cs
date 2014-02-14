@@ -8,7 +8,7 @@ namespace NetTopologySuite.Tests.Various
     [TestFixture]
     public class Issue86Test
     {
-        [Test, Category("Issue86")]
+        [Test]
         [Ignore("Different conversion methods produce different lengths")]
         public void Test()
         {

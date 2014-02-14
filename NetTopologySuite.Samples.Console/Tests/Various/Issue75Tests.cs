@@ -8,7 +8,7 @@ namespace NetTopologySuite.Tests.Various
     [TestFixture]
     internal class Issue75Tests
     {
-        [Test, Category("Issue75")]
+        [Test]
         public void EqualsThrowsInvalidCastExceptionBugFix()
         {
             Point point = new Point(1.0, 1.0);

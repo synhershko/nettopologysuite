@@ -50,6 +50,7 @@ namespace NetTopologySuite.Tests.NUnit.Mathematics
             CheckSqrt(new DD(999.0), 1e-28);
         }
 
+        [Test]
         private void CheckSqrt(DD x, double errBound)
         {
             DD sqrt = x.Sqrt();

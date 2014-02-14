@@ -19,7 +19,7 @@ namespace NetTopologySuite.Tests.Various
             writer = new WKTWriter();
         }
 
-        [Test, Category("Issue56")]
+        [Test]
         public void IntMinValueTest()
         {
             var coord = new Coordinate(300000, Int32.MinValue);
@@ -29,7 +29,7 @@ namespace NetTopologySuite.Tests.Various
             Assert.AreEqual("POINT (300000 -2147483648)", text);
         }
 
-        [Test, Category("Issue56")]
+        [Test]
         public void DoubleMinValueTest()
         {
             var coord = new Coordinate(300000, Double.MinValue);

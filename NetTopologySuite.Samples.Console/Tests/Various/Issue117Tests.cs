@@ -8,7 +8,7 @@ namespace NetTopologySuite.Tests.Various
 {
     public class Issue117Tests
     {
-        [Test, Category("Issue117")]
+        [Test]
         public void Issue117()
         {
             var geometryNts = new WKTReader().Read("POLYGON((0 0,100 0,100 100, 0 100, 0 0 )))");

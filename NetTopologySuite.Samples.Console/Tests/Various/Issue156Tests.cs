@@ -13,7 +13,7 @@ namespace NetTopologySuite.Samples.Tests.Various
     [TestFixture]
     public class Issue156Tests
     {
-        [Test, Category("Issue156")]
+        [Test]
         public void TestTransform()
         {
             CoordinateSystemFactory csFactory = new CoordinateSystemFactory();
